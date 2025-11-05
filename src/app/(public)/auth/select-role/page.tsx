@@ -28,11 +28,13 @@ export default function SelectRolePage() {
         return;
       }
 
-      toast.success('Role set successfully! Redirecting to onboarding...');
-      
-      // Full page reload to clear all caches and let proxy handle redirect
-      // This is cleaner than router.refresh() + router.push() which causes multiple proxy runs
-      window.location.href = '/auth/signin';
+      toast.success('Role set successfully! Redirecting...');
+
+      // Small delay to ensure DB update is committed, then hard reload
+      // This clears all caches and forces proxy to read fresh session from DB
+      setTimeout(() => {
+        window.location.href = '/auth/signin';
+      }, 500);
     } catch (error) {
       console.error('Set role error:', error);
       toast.error('Something went wrong. Please try again.');
