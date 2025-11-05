@@ -141,6 +141,9 @@ export const user = pgTable(
     status: userStatusEnum('status').notNull().default('active'),
     profileComplete: boolean('profileComplete').notNull().default(false),
     lastLoginAt: timestamp('lastLoginAt'),
+    platformFeePercentage: decimal('platformFeePercentage', { precision: 5, scale: 2 })
+      .notNull()
+      .default('15.00'),
 
     // Soft delete support
     deletedAt: timestamp('deletedAt'),
