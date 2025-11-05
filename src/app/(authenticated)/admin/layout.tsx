@@ -32,6 +32,12 @@ export default function AdminLayout({
               Users
             </Link>
             <Link
+              href="/admin/conversations"
+              className="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 rounded-lg"
+            >
+              Conversations
+            </Link>
+            <Link
               href="/admin/bookings"
               className="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 rounded-lg"
             >
