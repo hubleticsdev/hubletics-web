@@ -1,0 +1,106 @@
+/**
+ * Pusher client-side setup
+ *
+ * Provides hooks and utilities for real-time messaging in React components
+ */
+
+'use client';
+
+import { useEffect, useState, useRef } from 'react';
+import PusherJS from 'pusher-js';
+import { clientEnv } from '@/lib/env';
+
+let pusherInstance: PusherJS | null = null;
+
+/**
+ * Get or create Pusher client instance (singleton)
+ */
+export function getPusherClient(): PusherJS {
+  if (!pusherInstance) {
+    pusherInstance = new PusherJS(clientEnv.PUSHER_KEY, {
+      cluster: clientEnv.PUSHER_CLUSTER,
+    });
+  }
+  return pusherInstance;
+}
+
+/**
+ * Hook to subscribe to a Pusher channel
+ */
+export function usePusherChannel(channelName: string) {
+  const [channel, setChannel] = useState<ReturnType<PusherJS['subscribe']> | null>(null);
+  const pusher = useRef<PusherJS | null>(null);
+
+  useEffect(() => {
+    pusher.current = getPusherClient();
+    const subscribedChannel = pusher.current.subscribe(channelName);
+    setChannel(subscribedChannel);
+
+    return () => {
+      subscribedChannel.unsubscribe();
+    };
+  }, [channelName]);
+
+  return channel;
+}
+
+/**
+ * Hook to listen for events on a Pusher channel
+ */
+export function usePusherEvent<T = unknown>(
+  channelName: string,
+  eventName: string,
+  callback: (data: T) => void
+) {
+  const channel = usePusherChannel(channelName);
+
+  useEffect(() => {
+    if (!channel) return;
+
+    channel.bind(eventName, callback);
+
+    return () => {
+      channel.unbind(eventName, callback);
+    };
+  }, [channel, eventName, callback]);
+}
+
+/**
+ * Hook for conversation messages with real-time updates
+ */
+export function useConversationMessages(conversationId: string) {
+  const [messages, setMessages] = useState<unknown[]>([]);
+  const channelName = `conversation-${conversationId}`;
+
+  usePusherEvent(channelName, 'new-message', (newMessage: unknown) => {
+    setMessages((prev) => [...prev, newMessage]);
+  });
+
+  return { messages, setMessages };
+}
+
+/**
+ * Hook for typing indicators
+ */
+export function useTypingIndicator(conversationId: string) {
+  const [typingUsers, setTypingUsers] = useState<Record<string, string>>({});
+  const channelName = `conversation-${conversationId}`;
+
+  usePusherEvent<{ userId: string; userName: string; isTyping: boolean }>(
+    channelName,
+    'user-typing',
+    (data) => {
+      setTypingUsers((prev) => {
+        const next = { ...prev };
+        if (data.isTyping) {
+          next[data.userId] = data.userName;
+        } else {
+          delete next[data.userId];
+        }
+        return next;
+      });
+    }
+  );
+
+  return typingUsers;
+}

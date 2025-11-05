@@ -128,20 +128,21 @@ function BookingForm({
         <DialogHeader>
           <DialogTitle>Book Session with {coachName}</DialogTitle>
           <DialogDescription>
-            <div className="flex items-center gap-4 mt-2 text-sm">
-              <span className={step === 'datetime' ? 'text-[#FF6B4A] font-semibold' : ''}>
-                1. Date & Time
-              </span>
-              <span className="text-gray-300">→</span>
-              <span className={step === 'details' ? 'text-[#FF6B4A] font-semibold' : ''}>
-                2. Details
-              </span>
-              <span className="text-gray-300">→</span>
-              <span className={step === 'payment' ? 'text-[#FF6B4A] font-semibold' : ''}>
-                3. Payment
-              </span>
-            </div>
+            Complete the 3-step booking process to secure your session
           </DialogDescription>
+          <div className="flex items-center gap-4 mt-2 text-sm text-muted-foreground">
+            <span className={step === 'datetime' ? 'text-[#FF6B4A] font-semibold' : ''}>
+              1. Date & Time
+            </span>
+            <span className="text-gray-300">→</span>
+            <span className={step === 'details' ? 'text-[#FF6B4A] font-semibold' : ''}>
+              2. Details
+            </span>
+            <span className="text-gray-300">→</span>
+            <span className={step === 'payment' ? 'text-[#FF6B4A] font-semibold' : ''}>
+              3. Payment
+            </span>
+          </div>
         </DialogHeader>
 
         <div className="space-y-6">
@@ -199,6 +200,7 @@ function BookingForm({
 
               <div className="flex gap-3 mt-6">
                 <Button
+                  type="button"
                   onClick={onClose}
                   variant="outline"
                   className="flex-1"
@@ -206,6 +208,7 @@ function BookingForm({
                   Cancel
                 </Button>
                 <Button
+                  type="button"
                   onClick={() => setStep('details')}
                   disabled={!canProceedToDetails}
                   className="flex-1 bg-gradient-to-r from-[#FF6B4A] to-[#FF8C5A] hover:opacity-90"
@@ -270,6 +273,7 @@ function BookingForm({
 
               <div className="flex gap-3 mt-6">
                 <Button
+                  type="button"
                   onClick={() => setStep('datetime')}
                   variant="outline"
                   className="flex-1"
@@ -277,6 +281,7 @@ function BookingForm({
                   Back
                 </Button>
                 <Button
+                  type="button"
                   onClick={() => setStep('payment')}
                   disabled={!canProceedToPayment}
                   className="flex-1 bg-gradient-to-r from-[#FF6B4A] to-[#FF8C5A] hover:opacity-90"
@@ -320,6 +325,7 @@ function BookingForm({
 
               <div className="flex gap-3 mt-6">
                 <Button
+                  type="button"
                   onClick={() => setStep('details')}
                   disabled={isProcessing}
                   variant="outline"
@@ -328,6 +334,7 @@ function BookingForm({
                   Back
                 </Button>
                 <Button
+                  type="button"
                   onClick={handleSubmit}
                   disabled={isProcessing || !stripe || !elements}
                   className="flex-1 bg-gradient-to-r from-[#FF6B4A] to-[#FF8C5A] hover:opacity-90"
@@ -379,6 +386,9 @@ export function BookingModal(props: BookingModalProps) {
     return (
       <Dialog open={true} onOpenChange={props.onClose}>
         <DialogContent className="sm:max-w-md" showCloseButton={false}>
+          <DialogHeader>
+            <DialogTitle>Loading...</DialogTitle>
+          </DialogHeader>
           <div className="flex flex-col items-center justify-center py-8">
             <Loader2 className="h-12 w-12 animate-spin text-[#FF6B4A]" />
             <p className="mt-4 text-gray-600">Preparing booking form...</p>

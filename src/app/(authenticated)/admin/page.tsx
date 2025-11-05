@@ -2,6 +2,8 @@ import { getPendingCoaches } from '@/actions/admin/coach-approval';
 import { db } from '@/lib/db';
 import Link from 'next/link';
 
+export const dynamic = 'force-dynamic';
+
 export default async function AdminDashboard() {
   const { coaches: pendingCoaches } = await getPendingCoaches();
 

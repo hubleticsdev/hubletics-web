@@ -3,11 +3,14 @@
 import { useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 
+import { cn } from '@/lib/utils';
+
 interface SearchFiltersProps {
   specialties: string[];
+  className?: string;
 }
 
-export function SearchFilters({ specialties }: SearchFiltersProps) {
+export function SearchFilters({ specialties, className }: SearchFiltersProps) {
   const router = useRouter();
   const searchParams = useSearchParams();
 
@@ -42,7 +45,12 @@ export function SearchFilters({ specialties }: SearchFiltersProps) {
   };
 
   return (
-    <div className="bg-white rounded-xl shadow-md border border-gray-100 p-6 mb-8">
+    <div
+      className={cn(
+        'rounded-3xl border border-slate-200/70 bg-white/95 p-6 shadow-sm backdrop-blur-sm',
+        className,
+      )}
+    >
       <h2 className="text-xl font-bold text-gray-900 mb-4">Filter Coaches</h2>
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mb-4">
@@ -150,16 +158,16 @@ export function SearchFilters({ specialties }: SearchFiltersProps) {
       </div>
 
       {/* Action Buttons */}
-      <div className="flex gap-3">
+      <div className="flex flex-col gap-3 sm:flex-row">
         <button
           onClick={handleSearch}
-          className="px-6 py-2 bg-gradient-to-r from-[#FF6B4A] to-[#FF8C5A] text-white font-semibold rounded-lg hover:shadow-lg transition-all duration-200"
+          className="inline-flex items-center justify-center rounded-full bg-gradient-to-r from-[#FF6B4A] via-[#FF8C5A] to-[#FFB84D] px-6 py-2 text-sm font-semibold uppercase tracking-[0.32em] text-white shadow-[0_12px_30px_-18px_rgba(255,107,74,0.8)] transition hover:scale-[1.02]"
         >
           Apply Filters
         </button>
         <button
           onClick={handleReset}
-          className="px-6 py-2 bg-gray-100 text-gray-700 font-semibold rounded-lg hover:bg-gray-200 transition-colors"
+          className="inline-flex items-center justify-center rounded-full border border-slate-200 bg-white px-6 py-2 text-sm font-semibold text-slate-600 transition hover:border-[#FF6B4A]/40 hover:text-[#FF6B4A]"
         >
           Reset
         </button>
@@ -167,4 +175,3 @@ export function SearchFilters({ specialties }: SearchFiltersProps) {
     </div>
   );
 }
-

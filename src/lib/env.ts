@@ -35,6 +35,10 @@ const serverSchema = z.object({
   // File uploads
   UPLOADTHING_TOKEN: z.string().min(1, 'UPLOADTHING_TOKEN is required'),
 
+  // Pusher (real-time messaging)
+  PUSHER_APP_ID: z.string().min(1, 'PUSHER_APP_ID is required'),
+  PUSHER_SECRET: z.string().min(1, 'PUSHER_SECRET is required'),
+
   // Node environment
   NODE_ENV: z.enum(['development', 'test', 'production']).default('development'),
 });
@@ -48,6 +52,8 @@ const clientSchema = z.object({
   NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY: z
     .string()
     .startsWith('pk_', 'NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY must start with pk_'),
+  NEXT_PUBLIC_PUSHER_KEY: z.string().min(1, 'NEXT_PUBLIC_PUSHER_KEY is required'),
+  NEXT_PUBLIC_PUSHER_CLUSTER: z.string().min(1, 'NEXT_PUBLIC_PUSHER_CLUSTER is required'),
 });
 
 /**
@@ -110,6 +116,20 @@ export const clientEnv = {
     const value = process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY;
     if (!value) {
       throw new Error('NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY is not defined');
+    }
+    return value;
+  },
+  get PUSHER_KEY() {
+    const value = process.env.NEXT_PUBLIC_PUSHER_KEY;
+    if (!value) {
+      throw new Error('NEXT_PUBLIC_PUSHER_KEY is not defined');
+    }
+    return value;
+  },
+  get PUSHER_CLUSTER() {
+    const value = process.env.NEXT_PUBLIC_PUSHER_CLUSTER;
+    if (!value) {
+      throw new Error('NEXT_PUBLIC_PUSHER_CLUSTER is not defined');
     }
     return value;
   },

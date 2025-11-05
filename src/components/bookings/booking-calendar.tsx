@@ -114,33 +114,58 @@ export function BookingCalendar({
 
   return (
     <div className="space-y-6">
+      {/* Development Debug Info */}
+      {process.env.NODE_ENV === 'development' && availableDates.length === 0 && (
+        <div className="p-4 bg-yellow-50 border border-yellow-200 rounded-lg text-sm">
+          <p className="font-semibold text-yellow-900 mb-2">Debug Info:</p>
+          <pre className="text-xs text-yellow-800 overflow-auto">
+            {JSON.stringify({
+              availabilityKeys: Object.keys(coachAvailability),
+              sessionDuration,
+              blockedDatesCount: blockedDates.length,
+            }, null, 2)}
+          </pre>
+        </div>
+      )}
+
       {/* Date Selection */}
       <div>
         <h3 className="text-lg font-semibold text-gray-900 mb-3">Select a Date</h3>
-        <div className="grid grid-cols-7 gap-2">
-          {availableDates.slice(0, 21).map((date) => (
-            <button
-              key={date.toISOString()}
-              onClick={() => setSelectedDate(date)}
-              className={`p-3 rounded-lg border-2 transition-all ${
-                selectedDate?.toDateString() === date.toDateString()
-                  ? 'border-[#FF6B4A] bg-orange-50 text-[#FF6B4A] font-semibold'
-                  : 'border-gray-200 hover:border-gray-300 text-gray-700'
-              }`}
-            >
-              <div className="text-xs text-gray-500">
-                {date.toLocaleDateString('en-US', { weekday: 'short' })}
-              </div>
-              <div className="text-lg font-semibold">
-                {date.getDate()}
-              </div>
-            </button>
-          ))}
-        </div>
-        {availableDates.length > 21 && (
-          <p className="text-sm text-gray-500 mt-2">
-            + {availableDates.length - 21} more dates available
-          </p>
+        {availableDates.length === 0 ? (
+          <div className="p-6 bg-gray-50 rounded-lg text-center">
+            <p className="text-gray-600 mb-2">No available dates found</p>
+            <p className="text-sm text-gray-500">
+              This coach may not have set their availability yet.
+            </p>
+          </div>
+        ) : (
+          <>
+            <div className="grid grid-cols-7 gap-2">
+              {availableDates.slice(0, 21).map((date) => (
+                <button
+                  key={date.toISOString()}
+                  onClick={() => setSelectedDate(date)}
+                  className={`p-3 rounded-lg border-2 transition-all ${
+                    selectedDate?.toDateString() === date.toDateString()
+                      ? 'border-[#FF6B4A] bg-orange-50 text-[#FF6B4A] font-semibold'
+                      : 'border-gray-200 hover:border-gray-300 text-gray-700'
+                  }`}
+                >
+                  <div className="text-xs text-gray-500">
+                    {date.toLocaleDateString('en-US', { weekday: 'short' })}
+                  </div>
+                  <div className="text-lg font-semibold">
+                    {date.getDate()}
+                  </div>
+                </button>
+              ))}
+            </div>
+            {availableDates.length > 21 && (
+              <p className="text-sm text-gray-500 mt-2">
+                + {availableDates.length - 21} more dates available
+              </p>
+            )}
+          </>
         )}
       </div>
 

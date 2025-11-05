@@ -55,14 +55,13 @@ export const auth = betterAuth({
     },
   },
 
-  // User schema extensions are already in our database schema
   user: {
     additionalFields: {
       role: {
         type: 'string',
         required: true,
         defaultValue: 'pending',
-        input: false, // Role should not be set during signup - users select after account creation
+        input: false,
       },
       status: {
         type: 'string',
@@ -94,12 +93,12 @@ export const auth = betterAuth({
   session: {
     expiresIn: 60 * 60 * 24 * 30, // 30 days
     updateAge: 60 * 60 * 24, // Update session every 24 hours
+    cookieCache: {
+      enabled: true,
+      maxAge: 60 * 60 * 12, // 12 hours
+    }
   },
 
-  // No session callback needed - profileComplete is now stored in the user table
-  // This eliminates the extra DB query on every session fetch
-
-  // Rate limiting (in-memory, Vercel-compatible)
   rateLimit: {
     enabled: true,
     window: 60, // 1 minute
@@ -113,12 +112,10 @@ export const auth = betterAuth({
     },
   },
 
-  // Database hooks for tracking last login
   databaseHooks: {
     session: {
       create: {
         after: async (session) => {
-          // Update lastLoginAt when session is created
           const { eq } = await import('drizzle-orm');
           await db
             .update(user)
