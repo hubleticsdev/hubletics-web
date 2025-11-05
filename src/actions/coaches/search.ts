@@ -2,7 +2,7 @@
 
 import { db } from '@/lib/db';
 import { coachProfile } from '@/lib/db/schema';
-import { and, eq, gte, lte, sql, or, ilike } from 'drizzle-orm';
+import { and, eq, gte, lte, sql, ilike } from 'drizzle-orm';
 
 export interface CoachSearchFilters {
   sport?: string;
@@ -24,19 +24,19 @@ export interface CoachSearchResult {
   };
   specialties: Array<{ sport: string; tags: string[] }>;
   bio: string;
-  hourlyRate: string; // Decimal type from DB
-  reputationScore: string; // Decimal type from DB
+  hourlyRate: string;
+  reputationScore: string;
   totalReviews: number;
   totalLessonsCompleted: number;
   user: {
     image: string | null;
     email: string;
+    platformFeePercentage?: string | null;
   };
 }
 
 /**
  * Search and filter coaches
- * Only returns approved coaches with completed Stripe onboarding
  */
 export async function searchCoaches(
   filters: CoachSearchFilters = {}
@@ -89,6 +89,7 @@ export async function searchCoaches(
           columns: {
             image: true,
             email: true,
+            platformFeePercentage: true,
           },
         },
       },
@@ -126,6 +127,7 @@ export async function getCoachPublicProfile(userId: string) {
             id: true,
             name: true,
             image: true,
+            platformFeePercentage: true,
           },
         },
       },

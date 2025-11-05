@@ -4,6 +4,7 @@ import { db } from '@/lib/db';
 import { coachProfile } from '@/lib/db/schema';
 import { eq } from 'drizzle-orm';
 import { stripe } from '@/lib/stripe';
+import { calculateBookingPricing } from '@/lib/pricing';
 
 export async function POST(req: NextRequest) {
   try {
@@ -16,18 +17,25 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const { coachId, amount } = await req.json();
+    const { coachId, sessionDuration } = await req.json();
 
-    if (!coachId || !amount) {
+    if (!coachId || !sessionDuration) {
       return NextResponse.json(
         { error: 'Missing required fields' },
         { status: 400 }
       );
     }
 
-    // Get coach's Stripe account
+    // Get coach's Stripe account and rate
     const coach = await db.query.coachProfile.findFirst({
       where: eq(coachProfile.userId, coachId),
+      with: {
+        user: {
+          columns: {
+            platformFeePercentage: true,
+          },
+        },
+      },
     });
 
     if (!coach || !coach.stripeAccountId) {
@@ -37,14 +45,28 @@ export async function POST(req: NextRequest) {
       );
     }
 
+    // Calculate pricing server-side
+    const coachRate = parseFloat(coach.hourlyRate);
+    const platformFee = coach.user?.platformFeePercentage
+      ? parseFloat(coach.user.platformFeePercentage as unknown as string)
+      : 15;
+
+    const pricing = calculateBookingPricing(
+      coachRate,
+      sessionDuration,
+      platformFee
+    );
+
     // Create PaymentIntent with manual capture
     const paymentIntent = await stripe.paymentIntents.create({
-      amount: Math.round(amount * 100), // Convert to cents
+      amount: Math.round(pricing.clientPays * 100),
       currency: 'usd',
       capture_method: 'manual',
       metadata: {
         clientId: session.user.id,
         coachId,
+        coachRate: pricing.coachDesiredRate.toString(),
+        sessionDuration: sessionDuration.toString(),
       },
       transfer_data: {
         destination: coach.stripeAccountId,
@@ -54,6 +76,10 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({
       clientSecret: paymentIntent.client_secret,
       paymentIntentId: paymentIntent.id,
+      pricing: {
+        clientPays: pricing.clientPays,
+        coachReceives: pricing.coachPayout,
+      },
     });
   } catch (error) {
     console.error('Create payment intent error:', error);

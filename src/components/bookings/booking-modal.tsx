@@ -28,6 +28,7 @@ interface BookingModalProps {
 
 interface BookingFormProps extends BookingModalProps {
   clientSecret: string;
+  serverPricing?: { clientPays: number; coachReceives: number } | null;
 }
 
 function BookingForm({
@@ -40,6 +41,7 @@ function BookingForm({
   existingBookings,
   onClose,
   clientSecret,
+  serverPricing,
 }: BookingFormProps) {
   const router = useRouter();
   const stripe = useStripe();
@@ -54,7 +56,8 @@ function BookingForm({
   const [error, setError] = useState<string | null>(null);
   const [step, setStep] = useState<'datetime' | 'details' | 'payment'>('datetime');
 
-  const totalCost = hourlyRate * (sessionDuration / 60);
+  // Use server-calculated price
+  const totalCost = serverPricing?.clientPays || hourlyRate * (sessionDuration / 60);
 
   const handleSubmit = async () => {
     if (!stripe || !elements || !selectedSlot || !clientSecret) {
@@ -90,7 +93,7 @@ function BookingForm({
         throw new Error('Payment confirmation failed');
       }
 
-      // Payment confirmed! Now create the booking record
+      // Payment confirmed, create the booking record
       const bookingResult = await createBooking({
         coachId,
         scheduledStartAt: selectedSlot.start,
@@ -108,7 +111,7 @@ function BookingForm({
         throw new Error(bookingResult.error || 'Failed to create booking');
       }
 
-      // Success!
+      // Success, close the modal and redirect to dashboard
       onClose();
       router.push('/dashboard/athlete');
       router.refresh();
@@ -359,28 +362,31 @@ function BookingForm({
 
 export function BookingModal(props: BookingModalProps) {
   const [clientSecret, setClientSecret] = useState<string | null>(null);
+  const [serverPricing, setServerPricing] = useState<{ clientPays: number; coachReceives: number } | null>(null);
 
   useEffect(() => {
-    // We'll create the PaymentIntent upfront to get client_secret
-    // This is fine since we're using manual capture
+    // Create the PaymentIntent upfront to get client_secret
     fetch('/api/bookings/create-intent', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         coachId: props.coachId,
-        amount: props.hourlyRate * (props.sessionDuration / 60),
+        sessionDuration: props.sessionDuration,
       }),
     })
       .then(res => res.json())
       .then(data => {
         if (data.clientSecret) {
           setClientSecret(data.clientSecret);
+          if (data.pricing) {
+            setServerPricing(data.pricing);
+          }
         }
       })
       .catch(err => {
         console.error('Failed to create payment intent:', err);
       });
-  }, [props.coachId, props.hourlyRate, props.sessionDuration]);
+  }, [props.coachId, props.sessionDuration]);
 
   if (!clientSecret) {
     return (
@@ -411,7 +417,7 @@ export function BookingModal(props: BookingModalProps) {
         },
       }}
     >
-      <BookingForm {...props} clientSecret={clientSecret} />
+      <BookingForm {...props} clientSecret={clientSecret} serverPricing={serverPricing} />
     </Elements>
   );
 }

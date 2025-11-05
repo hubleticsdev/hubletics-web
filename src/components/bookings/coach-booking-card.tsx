@@ -17,6 +17,9 @@ interface BookingCardProps {
     };
     clientMessage: string | null;
     clientPaid: string;
+    coachPayout: string;
+    platformFee: string;
+    stripeFee: string;
     status: string;
     client: {
       id: string;
@@ -158,8 +161,8 @@ export function CoachBookingCard({ booking, onUpdate }: BookingCardProps) {
           </div>
         )}
 
-        <div className="flex items-center gap-3 pt-2">
-          <svg className="w-5 h-5 text-[#FF6B4A] flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <div className="flex items-start gap-3 pt-2">
+          <svg className="w-5 h-5 text-[#FF6B4A] mt-1 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path
               strokeLinecap="round"
               strokeLinejoin="round"
@@ -167,7 +170,32 @@ export function CoachBookingCard({ booking, onUpdate }: BookingCardProps) {
               d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
             />
           </svg>
-          <span className="text-lg font-bold text-[#FF6B4A]">${parseFloat(booking.clientPaid).toFixed(2)}</span>
+          <div>
+            <div className="text-lg font-bold text-[#FF6B4A]">
+              You receive: ${parseFloat(booking.coachPayout).toFixed(2)}
+            </div>
+            <details className="text-xs text-gray-500 mt-1">
+              <summary className="cursor-pointer hover:text-gray-700">View breakdown</summary>
+              <div className="mt-2 space-y-1 bg-gray-50 p-2 rounded">
+                <div className="flex justify-between">
+                  <span>Client paid:</span>
+                  <span className="font-medium">${parseFloat(booking.clientPaid).toFixed(2)}</span>
+                </div>
+                <div className="flex justify-between text-red-600">
+                  <span>Stripe fee:</span>
+                  <span>-${parseFloat(booking.stripeFee).toFixed(2)}</span>
+                </div>
+                <div className="flex justify-between text-red-600">
+                  <span>Platform fee:</span>
+                  <span>-${parseFloat(booking.platformFee).toFixed(2)}</span>
+                </div>
+                <div className="flex justify-between border-t border-gray-300 pt-1 font-semibold text-gray-900">
+                  <span>Your payout:</span>
+                  <span>${parseFloat(booking.coachPayout).toFixed(2)}</span>
+                </div>
+              </div>
+            </details>
+          </div>
         </div>
       </div>
 

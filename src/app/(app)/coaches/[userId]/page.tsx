@@ -7,6 +7,7 @@ import { getCoachBookings } from '@/actions/coaches/availability';
 import { getCoachPublicProfile } from '@/actions/coaches/search';
 import { BookingModalTrigger } from '@/components/bookings/booking-modal-trigger';
 import { getSession } from '@/lib/auth/session';
+import { getClientDisplayRate } from '@/lib/pricing';
 
 export default async function CoachProfilePage({
   params,
@@ -24,7 +25,14 @@ export default async function CoachProfilePage({
   const displayImage = coach.profilePhoto || coach.user.image || '/placeholder-avatar.png';
   const reputationScore = parseFloat(coach.reputationScore as unknown as string);
   const rating = Number.isFinite(reputationScore) ? reputationScore / 20 : 0;
-  const hourlyRate = Number.parseFloat(coach.hourlyRate as unknown as string);
+  const coachHourlyRate = Number.parseFloat(coach.hourlyRate as unknown as string);
+  const platformFee = coach.user?.platformFeePercentage
+    ? Number.parseFloat(coach.user.platformFeePercentage as unknown as string)
+    : 15;
+
+  // Calculate what client pays (includes platform & Stripe fees)
+  const clientDisplayRate = getClientDisplayRate(coachHourlyRate, platformFee);
+
   const locationDisplay = coach.location
     ? `${coach.location.cities.join(', ')}, ${coach.location.state}`
     : 'Location shared after booking';
@@ -39,13 +47,22 @@ export default async function CoachProfilePage({
       new Date(b.scheduledStartAt).getTime(),
   );
 
-  const availability = coach.weeklyAvailability || {
-    monday: [{ start: '09:00', end: '17:00' }],
-    tuesday: [{ start: '09:00', end: '17:00' }],
-    wednesday: [{ start: '09:00', end: '17:00' }],
-    thursday: [{ start: '09:00', end: '17:00' }],
-    friday: [{ start: '09:00', end: '17:00' }],
-  };
+  // Normalize availability keys to lowercase to match calendar expectations
+  const rawAvailability = coach.weeklyAvailability || {};
+  const availability = Object.keys(rawAvailability).length > 0
+    ? Object.fromEntries(
+        Object.entries(rawAvailability).map(([key, value]) => [
+          key.toLowerCase(),
+          value,
+        ])
+      )
+    : {
+        monday: [{ start: '09:00', end: '17:00' }],
+        tuesday: [{ start: '09:00', end: '17:00' }],
+        wednesday: [{ start: '09:00', end: '17:00' }],
+        thursday: [{ start: '09:00', end: '17:00' }],
+        friday: [{ start: '09:00', end: '17:00' }],
+      };
 
   const blockedDates = coach.blockedDates || [];
   const sessionDuration = coach.sessionDuration || 60;
@@ -91,7 +108,8 @@ export default async function CoachProfilePage({
             existingBookings={existingBookings}
             nextSession={nextSession}
             introVideo={coach.introVideo}
-            hourlyRate={hourlyRate}
+            coachHourlyRate={coachHourlyRate}
+            clientDisplayRate={clientDisplayRate}
           />
         </section>
 
@@ -188,7 +206,8 @@ function BookingSummary({
   existingBookings,
   nextSession,
   introVideo,
-  hourlyRate,
+  coachHourlyRate,
+  clientDisplayRate,
 }: {
   canBook: boolean;
   coach: NonNullable<Awaited<ReturnType<typeof getCoachPublicProfile>>>;
@@ -199,7 +218,8 @@ function BookingSummary({
   existingBookings: Array<{ scheduledStartAt: Date; scheduledEndAt: Date }>;
   nextSession?: { scheduledStartAt: Date; scheduledEndAt: Date };
   introVideo?: string | null;
-  hourlyRate: number;
+  coachHourlyRate: number;
+  clientDisplayRate: number;
 }) {
   return (
     <div className="flex flex-col gap-6 rounded-3xl border border-white/70 bg-white/90 p-8 shadow-[0_35px_100px_-70px_rgba(15,23,42,0.55)] backdrop-blur">
@@ -216,10 +236,12 @@ function BookingSummary({
           Training investment
         </p>
         <p className="text-4xl font-semibold text-[#FF6B4A]">
-          ${Number.isFinite(hourlyRate) ? hourlyRate : 0}
+          ${Number.isFinite(clientDisplayRate) ? clientDisplayRate.toFixed(2) : '0.00'}
           <span className="ml-1 text-base font-medium text-slate-500">/hr</span>
         </p>
-        <p className="text-sm text-slate-500">Session duration: {sessionDuration} minutes</p>
+        <p className="text-sm text-slate-500">
+          Session duration: {sessionDuration} minutes • Coach receives ${coachHourlyRate}/hr
+        </p>
       </div>
 
       {nextSession ? (
@@ -257,7 +279,7 @@ function BookingSummary({
           <BookingModalTrigger
             coachId={coach.userId}
             coachName={coach.fullName}
-            hourlyRate={Number.isFinite(hourlyRate) ? hourlyRate : 0}
+            hourlyRate={coachHourlyRate}
             sessionDuration={sessionDuration}
             availability={availability}
             blockedDates={blockedDates}

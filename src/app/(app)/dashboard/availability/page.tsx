@@ -40,6 +40,12 @@ export default async function AvailabilityPage() {
     orderBy: (bookings, { asc }) => [asc(bookings.scheduledStartAt)],
   });
 
+  // Normalize availability keys to lowercase for consistency
+  const rawAvailability = profile.weeklyAvailability as Record<string, Array<{ start: string; end: string }>> || {};
+  const normalizedAvailability = Object.fromEntries(
+    Object.entries(rawAvailability).map(([key, value]) => [key.toLowerCase(), value])
+  );
+
   return (
     <div className="min-h-screen bg-gray-50 pt-20">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
@@ -51,7 +57,7 @@ export default async function AvailabilityPage() {
         </div>
 
         <AvailabilityManager
-          weeklyAvailability={profile.weeklyAvailability as Record<string, Array<{ start: string; end: string }>>}
+          weeklyAvailability={normalizedAvailability}
           blockedDates={profile.blockedDates || []}
           sessionDuration={profile.sessionDuration}
           upcomingBookings={upcomingBookings.map((b) => ({

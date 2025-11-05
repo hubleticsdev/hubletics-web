@@ -4,7 +4,8 @@ import { getSession } from '@/lib/auth/session';
 import { db } from '@/lib/db';
 import { booking, coachProfile } from '@/lib/db/schema';
 import { eq } from 'drizzle-orm';
-import { calculatePricing, createBookingPaymentIntent } from '@/lib/stripe';
+import { createBookingPaymentIntent } from '@/lib/stripe';
+import { calculateBookingPricing } from '@/lib/pricing';
 import { sendEmail } from '@/lib/email/resend';
 import { getBookingRequestEmailTemplate } from '@/lib/email/templates/booking-notifications';
 
@@ -29,13 +30,14 @@ export async function createBooking(input: CreateBookingInput) {
       return { success: false, error: 'Unauthorized' };
     }
 
-    // Get coach details
+    // Get coach details including user platform fee
     const coach = await db.query.coachProfile.findFirst({
       where: eq(coachProfile.userId, input.coachId),
       with: {
         user: {
           columns: {
             email: true,
+            platformFeePercentage: true,
           },
         },
       },
@@ -55,9 +57,13 @@ export async function createBooking(input: CreateBookingInput) {
         (1000 * 60)
     );
 
-    // Calculate pricing
+    // Calculate pricing with proper formula
     const coachRateNum = parseFloat(coach.hourlyRate);
-    const pricing = calculatePricing(coachRateNum);
+    const platformFee = coach.user?.platformFeePercentage
+      ? parseFloat(coach.user.platformFeePercentage as unknown as string)
+      : 15;
+
+    const pricing = calculateBookingPricing(coachRateNum, duration, platformFee);
 
     // Create booking record
     const bookingId = crypto.randomUUID();
@@ -90,7 +96,7 @@ export async function createBooking(input: CreateBookingInput) {
       duration,
       location: input.location,
       clientMessage: input.clientMessage,
-      coachRate: coach.hourlyRate,
+      coachRate: pricing.coachDesiredRate.toString(), // What coach set (what they receive)
       clientPaid: pricing.clientPays.toString(),
       platformFee: pricing.platformFee.toString(),
       stripeFee: pricing.stripeFee.toString(),

@@ -1,11 +1,18 @@
 import Link from 'next/link';
 import Image from 'next/image';
 import { CoachSearchResult } from '@/actions/coaches/search';
+import { getClientDisplayRate } from '@/lib/pricing';
 
 export function CoachCard({ coach }: { coach: CoachSearchResult }) {
   const displayImage = coach.profilePhoto || coach.user.image || '/placeholder-avatar.png';
-  const rating = parseFloat(coach.reputationScore) / 20; // Convert 0-100 to 0-5 stars
-  const hourlyRate = parseFloat(coach.hourlyRate);
+  const rating = parseFloat(coach.reputationScore) / 20; // convert 0-100 to 0-5 stars
+  const coachHourlyRate = parseFloat(coach.hourlyRate);
+  const platformFee = coach.user?.platformFeePercentage
+    ? parseFloat(coach.user.platformFeePercentage)
+    : 15;
+
+  // Calculate what client actually pays
+  const clientDisplayRate = getClientDisplayRate(coachHourlyRate, platformFee);
   const locationDisplay = `${coach.location.cities.join(', ')}, ${coach.location.state}`;
 
   return (
@@ -24,7 +31,7 @@ export function CoachCard({ coach }: { coach: CoachSearchResult }) {
         {/* Price Badge */}
         <div className="absolute top-4 right-4 bg-white/95 backdrop-blur-sm px-3 py-1 rounded-full shadow-md">
           <span className="text-lg font-bold text-[#FF6B4A]">
-            ${hourlyRate}
+            ${clientDisplayRate.toFixed(2)}
           </span>
           <span className="text-sm text-gray-600">/hr</span>
         </div>

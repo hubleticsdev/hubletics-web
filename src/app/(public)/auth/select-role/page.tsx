@@ -30,8 +30,7 @@ export default function SelectRolePage() {
 
       toast.success('Role set successfully! Redirecting...');
 
-      // Small delay to ensure DB update is committed, then hard reload
-      // This clears all caches and forces proxy to read fresh session from DB
+      // Small delay to ensure DB update and cache invalidation complete, then redirect
       setTimeout(() => {
         window.location.href = '/auth/signin';
       }, 500);

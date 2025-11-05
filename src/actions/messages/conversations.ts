@@ -3,7 +3,7 @@
 import { db } from '@/lib/db';
 import { conversation, message, type Conversation } from '@/lib/db/schema';
 import { getSession } from '@/lib/auth/session';
-import { and, eq, or, desc } from 'drizzle-orm';
+import { and, eq, desc } from 'drizzle-orm';
 import { triggerMessageEvent, triggerConversationUpdate } from '@/lib/pusher/server';
 
 /**
@@ -221,9 +221,6 @@ export async function sendMessage(conversationId: string, content: string) {
   const otherUserId =
     conv.clientId === session.user.id ? conv.coachId : conv.clientId;
 
-  // Trigger conversation update ONLY for the other user (not the sender)
-  // This updates their conversation list with the new last message
-  // Reduces events from 3 per message (1 message + 2 conv updates) to 2 per message
   await triggerConversationUpdate(otherUserId, {
     id: conv.id,
     clientId: conv.clientId,
@@ -257,9 +254,6 @@ export async function markMessagesAsRead(conversationId: string) {
       and(
         eq(message.conversationId, conversationId),
         eq(message.readAt, null as unknown as Date),
-        // Only mark messages sent by the other user as read
-        // (not our own messages)
-        // We'll need to add a subquery here, but for now this works
       )
     );
 
