@@ -1,6 +1,7 @@
 'use server';
 
 import { getSession } from '@/lib/auth/session';
+import { invalidateSessionCache } from '@/lib/auth/cache';
 import { db } from '@/lib/db';
 import { user as userTable } from '@/lib/db/schema';
 import { eq } from 'drizzle-orm';
@@ -17,14 +18,10 @@ export async function setUserRole(role: 'client' | 'coach'): Promise<{ success: 
 
     const user = session.user;
 
-    // Security: Only allow setting role if current role is 'pending'
-    // This prevents users from changing their role after it's been set
     if (user.role !== 'pending') {
       return { success: false, error: 'Role has already been set and cannot be changed' };
     }
 
-    // Security: Only allow setting role if profile is not yet complete
-    // This ensures role can only be set during initial account setup
     if (user.profileComplete) {
       return { success: false, error: 'Role cannot be changed after profile is complete' };
     }
@@ -39,6 +36,9 @@ export async function setUserRole(role: 'client' | 'coach'): Promise<{ success: 
       .update(userTable)
       .set({ role: role as UserRole })
       .where(eq(userTable.id, user.id));
+
+    // Invalidate session cache to force fresh read on next request
+    await invalidateSessionCache();
 
     return { success: true };
   } catch (error) {

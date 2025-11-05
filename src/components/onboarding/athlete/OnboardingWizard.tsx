@@ -79,17 +79,17 @@ export function OnboardingWizard({ initialName, googleAvatar }: OnboardingWizard
 
     try {
       const result = await createAthleteProfile(formData);
-      
+
       if (result.alreadyExists) {
         toast.info('Profile already exists! Redirecting...');
       } else {
         toast.success('Profile created successfully!');
       }
-      
-      // profileComplete is now updated in the user table (no session callback needed)
-      // Regular Next.js navigation works fine now
-      router.push('/dashboard/athlete');
-      router.refresh();
+
+      // Small delay to ensure DB update and cache invalidation complete, then redirect
+      setTimeout(() => {
+        window.location.href = '/dashboard/athlete';
+      }, 500);
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Failed to create profile');
     } finally {

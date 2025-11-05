@@ -19,7 +19,7 @@ export type AthleteProfileData = {
 };
 
 export async function createAthleteProfile(data: AthleteProfileData) {
-  // Require client role - this is cached, preventing duplicate queries!
+  // Require client role
   const session = await requireRole('client');
   const user = session.user;
 
@@ -30,12 +30,9 @@ export async function createAthleteProfile(data: AthleteProfileData) {
   });
 
   if (existingProfile) {
-    // Profile already exists, treat as success (idempotent)
     return { success: true, alreadyExists: true };
   }
 
-  // Create the athlete profile matching the schema structure
-  // Use custom uploaded photo, fallback to Google avatar, or null
   const profilePhoto = data.profilePhotoUrl || user.image || null;
   
   await db.insert(athleteProfile).values({
@@ -62,11 +59,14 @@ export async function createAthleteProfile(data: AthleteProfileData) {
   });
 
   // Update user table to mark profile as complete
-  // This ensures session.user.profileComplete is immediately updated
   const { user: userTable } = await import('@/lib/db/schema');
   await db.update(userTable)
     .set({ profileComplete: true })
     .where(eq(userTable.id, user.id));
+
+  // Invalidate session cache to force fresh read on next request
+  const { invalidateSessionCache } = await import('@/lib/auth/cache');
+  await invalidateSessionCache();
 
   return { success: true };
 }

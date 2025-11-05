@@ -7,7 +7,7 @@ import { getSession } from '@/lib/auth/session';
 import { revalidatePath } from 'next/cache';
 
 /**
- * Update user account settings (name only - email is managed by auth)
+ * Update user account settings
  */
 export async function updateUserAccount({ name }: { name: string }) {
   try {
@@ -63,7 +63,7 @@ export async function updateAthleteProfile(data: {
 }
 
 /**
- * Update coach profile (editable fields only - not admin-controlled fields)
+ * Update coach profile
  */
 export async function updateCoachProfile(data: {
   fullName: string;
@@ -80,7 +80,7 @@ export async function updateCoachProfile(data: {
     fileUrl: string;
   }>;
   accomplishments?: string;
-  hourlyRate: string; // decimal as string
+  hourlyRate: string;
   preferredLocations?: Array<{ name: string; address: string; notes?: string }>;
 }) {
   try {
@@ -88,9 +88,6 @@ export async function updateCoachProfile(data: {
     if (!session || session.user.role !== 'coach') {
       return { success: false, error: 'Unauthorized' };
     }
-
-    // Note: We don't update weeklyAvailability, blockedDates, sessionDuration here
-    // Those are managed through the dedicated availability page
 
     await db
       .update(coachProfile)

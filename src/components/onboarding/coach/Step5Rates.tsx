@@ -10,6 +10,16 @@ type Step5Props = {
 };
 
 const DAYS_OF_WEEK = [
+  'monday',
+  'tuesday',
+  'wednesday',
+  'thursday',
+  'friday',
+  'saturday',
+  'sunday',
+] as const;
+
+const DAYS_OF_WEEK_DISPLAY = [
   'Monday',
   'Tuesday',
   'Wednesday',
@@ -163,6 +173,7 @@ export function Step5Rates({ formData, setFormData }: Step5Props) {
           {DAYS_OF_WEEK.map((day) => {
             const daySlots = formData.weeklyAvailability[day] || [];
             const hasSlots = daySlots.length > 0;
+            const dayDisplay = day.charAt(0).toUpperCase() + day.slice(1);
             return (
               <button
                 key={day}
@@ -176,7 +187,7 @@ export function Step5Rates({ formData, setFormData }: Step5Props) {
                     : 'bg-white border-gray-200 text-gray-700 hover:border-gray-300'
                 }`}
               >
-                {day.substring(0, 3)}
+                {dayDisplay.substring(0, 3)}
                 {hasSlots && <span className="ml-1 text-xs">({daySlots.length})</span>}
               </button>
             );
@@ -186,7 +197,7 @@ export function Step5Rates({ formData, setFormData }: Step5Props) {
         {/* Add Time Slot */}
         {selectedDay && (
           <div className="border-2 border-orange-200 rounded-lg p-4 bg-orange-50/30">
-            <h4 className="font-semibold text-gray-900 mb-3">{selectedDay}</h4>
+            <h4 className="font-semibold text-gray-900 mb-3">{selectedDay.charAt(0).toUpperCase() + selectedDay.slice(1)}</h4>
 
             <div className="flex gap-3 mb-4">
               <div className="flex-1">

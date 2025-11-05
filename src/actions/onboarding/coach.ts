@@ -27,7 +27,7 @@ export type CoachProfileData = {
 };
 
 export async function createCoachProfile(data: CoachProfileData) {
-  // Require coach role - this is cached, preventing duplicate queries!
+  // Require coach role
   const session = await requireRole('coach');
   const user = session.user;
 
@@ -38,12 +38,9 @@ export async function createCoachProfile(data: CoachProfileData) {
   });
 
   if (existingProfile) {
-    // Profile already exists, treat as success (idempotent)
     return { success: true, alreadyExists: true };
   }
 
-  // Create the coach profile matching the schema structure
-  // Use custom uploaded photo, fallback to Google avatar, or null
   const profilePhoto = data.profilePhotoUrl || user.image || null;
 
   await db.insert(coachProfile).values({
@@ -72,10 +69,13 @@ export async function createCoachProfile(data: CoachProfileData) {
   });
 
   // Update user table to mark profile as complete
-  // This ensures session.user.profileComplete is immediately updated
   await db.update(userTable)
     .set({ profileComplete: true })
     .where(eq(userTable.id, user.id));
+
+  // Invalidate session cache to force fresh read on next request
+  const { invalidateSessionCache } = await import('@/lib/auth/cache');
+  await invalidateSessionCache();
 
   return { success: true };
 }

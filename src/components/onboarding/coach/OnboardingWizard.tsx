@@ -125,9 +125,10 @@ export function OnboardingWizard({ initialName, googleAvatar }: OnboardingWizard
         toast.success('Profile created successfully! Awaiting admin approval...');
       }
 
-      // Redirect to dashboard
-      router.push('/dashboard/coach');
-      router.refresh();
+      // Small delay to ensure DB update and cache invalidation complete, then redirect
+      setTimeout(() => {
+        window.location.href = '/dashboard/coach';
+      }, 500);
     } catch (error) {
       console.error('Error creating profile:', error);
       toast.error('Failed to create profile. Please try again.');

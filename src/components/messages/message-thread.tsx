@@ -68,10 +68,33 @@ export function MessageThread({
     const messageContent = newMessage.trim();
     setNewMessage(''); // Clear input immediately for better UX
 
+    // Optimistic UI update - create temporary message
+    const tempMessage: Message = {
+      id: `temp-${Date.now()}`,
+      content: messageContent,
+      createdAt: new Date(),
+      senderId: currentUserId,
+      sender: {
+        id: currentUserId,
+        name: 'You',
+        image: null,
+      },
+    };
+
+    // Add message optimistically
+    setMessages((prev) => [...prev, tempMessage]);
+
     try {
-      await sendMessage(conversationId, messageContent);
-      // Message will appear via Pusher event
+      const serverMessage = await sendMessage(conversationId, messageContent);
+
+      // Replace temp message with real one from server
+      setMessages((prev) =>
+        prev.map((m) => (m.id === tempMessage.id ? serverMessage : m))
+      );
+      // Pusher will also send the message, but duplicate check prevents double display
     } catch (error) {
+      // Remove temp message on error
+      setMessages((prev) => prev.filter((m) => m.id !== tempMessage.id));
       toast.error(error instanceof Error ? error.message : 'Failed to send message');
       setNewMessage(messageContent); // Restore message on error
     } finally {
@@ -146,7 +169,7 @@ export function MessageThread({
       </div>
 
       {/* Messages */}
-      <div className="flex-1 overflow-y-auto p-4 space-y-6">
+      <div className="flex-1 overflow-y-auto p-4 space-y-6 message-scroll">
         {Object.entries(groupedMessages).map(([dateKey, dateMessages]) => (
           <div key={dateKey}>
             {/* Date separator */}

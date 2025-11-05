@@ -27,8 +27,7 @@ export default async function proxy(request: NextRequest) {
   const isOnboardingPage = pathChecks.isOnboarding(pathname);
   const isHomePage = pathname === '/';
   
-  // Early return for home page - it's a public landing page (no auth checks needed)
-  // Auth pages handle their own redirects for logged-in users
+  // Early return for home page
   if (isHomePage) {
     return NextResponse.next();
   }
@@ -44,8 +43,7 @@ export default async function proxy(request: NextRequest) {
     const role = user.role as UserRole;
     const status = user.status;
 
-    // OPTIMIZATION: Pass session data via REQUEST headers to avoid duplicate queries
-    // Pages can only read request headers, not response headers
+    // Pass session data via REQUEST headers to avoid duplicate queries
     const requestHeaders = new Headers(request.headers);
     requestHeaders.set('x-user-id', user.id);
     requestHeaders.set('x-user-role', role);
@@ -55,9 +53,8 @@ export default async function proxy(request: NextRequest) {
     requestHeaders.set('x-user-profile-complete', user.profileComplete ? 'true' : 'false');
     requestHeaders.set('x-user-status', status);
 
-    // SECURITY: Block suspended, banned, or deactivated users
+    // Block suspended, banned, or deactivated users
     if (status !== 'active') {
-      // Invalidate the session immediately
       await auth.api.signOut({
         headers: request.headers,
       });
@@ -69,15 +66,15 @@ export default async function proxy(request: NextRequest) {
       return suspendedResponse;
     }
 
-    // CRITICAL: Handle users with pending role (must select role before continuing)
+    // Handle users with pending role
     if (role === 'pending') {
       const isSelectRolePage = pathname === '/auth/select-role';
-      
+
       if (!isSelectRolePage) {
         // Redirect to role selection page from any other page
         return NextResponse.redirect(new URL('/auth/select-role', request.url));
       }
-      
+
       // Allow access to the select-role page
       return NextResponse.next({
         request: {
