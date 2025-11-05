@@ -4,5 +4,10 @@ import { cookies } from 'next/headers';
 export async function invalidateSessionCache(): Promise<void> {
   const cookieStore = await cookies();
 
-  cookieStore.delete('better-auth.session_data');
+  // In production, the cookie name is __Secure-better-auth.session_data
+  if (process.env.NODE_ENV === 'production') {
+    cookieStore.delete('__Secure-better-auth.session_data');
+  } else {
+    cookieStore.delete('better-auth.session_data');
+  }
 }
