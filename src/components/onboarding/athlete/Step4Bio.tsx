@@ -31,11 +31,11 @@ export function Step4Bio({ formData, setFormData }: Step4Props) {
         />
         <div className="mt-2 flex items-center justify-between">
           <p className="text-xs text-gray-500">
-            {formData.bio.length}/500 characters
+            {(formData.bio || '').length}/500 characters
           </p>
-          {formData.bio.length > 450 && (
+          {(formData.bio || '').length > 450 && (
             <p className="text-xs text-orange-600 font-medium">
-              {500 - formData.bio.length} characters remaining
+              {500 - (formData.bio || '').length} characters remaining
             </p>
           )}
         </div>

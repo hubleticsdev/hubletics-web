@@ -3,8 +3,10 @@
 import { db } from '@/lib/db';
 import { conversation, message, type Conversation } from '@/lib/db/schema';
 import { getSession } from '@/lib/auth/session';
-import { and, eq, desc } from 'drizzle-orm';
+import { and, eq, desc, or } from 'drizzle-orm';
 import { triggerMessageEvent, triggerConversationUpdate } from '@/lib/pusher/server';
+import { z } from 'zod';
+import { messageContentSchema, validateInput } from '@/lib/validations';
 
 /**
  * Get all conversations for the current user
@@ -59,6 +61,7 @@ export async function getUserConversations() {
 
 /**
  * Get or create a conversation between two users
+ * Uses INSERT ... ON CONFLICT pattern to prevent race conditions
  */
 export async function getOrCreateConversation(otherUserId: string) {
   const session = await getSession();
@@ -66,45 +69,40 @@ export async function getOrCreateConversation(otherUserId: string) {
     throw new Error('Unauthorized');
   }
 
-  // Check if conversation already exists
-  const existingConversation = await db.query.conversation.findFirst({
-    where: (conversations, { and, eq, or }) =>
-      or(
-        and(
-          eq(conversations.clientId, session.user.id),
-          eq(conversations.coachId, otherUserId)
-        ),
-        and(
-          eq(conversations.clientId, otherUserId),
-          eq(conversations.coachId, session.user.id)
-        )
-      ),
-  });
-
-  if (existingConversation) {
-    return existingConversation;
-  }
-
   // Determine roles: if current user is client, they're talking to a coach
   // If current user is coach, the other user is the client
   const currentUserIsClient = session.user.role === 'client';
+  const clientId = currentUserIsClient ? session.user.id : otherUserId;
+  const coachId = currentUserIsClient ? otherUserId : session.user.id;
 
-  // Create new conversation
-  const [newConversation] = await db
+  // Try to insert first
+  await db
     .insert(conversation)
     .values({
-      clientId: currentUserIsClient ? session.user.id : otherUserId,
-      coachId: currentUserIsClient ? otherUserId : session.user.id,
+      clientId,
+      coachId,
     })
-    .returning();
+    .onConflictDoNothing();
+
+  // Now select the conversation (will be either newly created or existing)
+  const [conversationResult] = await db
+    .select()
+    .from(conversation)
+    .where(
+      and(
+        eq(conversation.clientId, clientId),
+        eq(conversation.coachId, coachId)
+      )
+    )
+    .limit(1);
 
   // Trigger real-time update for both users
   await Promise.all([
-    triggerConversationUpdate(session.user.id, newConversation),
-    triggerConversationUpdate(otherUserId, newConversation),
+    triggerConversationUpdate(session.user.id, conversationResult),
+    triggerConversationUpdate(otherUserId, conversationResult),
   ]);
 
-  return newConversation;
+  return conversationResult;
 }
 
 /**
@@ -160,15 +158,15 @@ export async function sendMessage(conversationId: string, content: string) {
     throw new Error('Unauthorized');
   }
 
-  if (!content.trim()) {
-    throw new Error('Message content cannot be empty');
-  }
+  // Validate inputs
+  const validatedConversationId = validateInput(z.string().uuid(), conversationId);
+  const validatedContent = validateInput(messageContentSchema, content);
 
   // Verify user is a participant
   const conv = await db.query.conversation.findFirst({
     where: (conversations, { and, eq, or }) =>
       and(
-        eq(conversations.id, conversationId),
+        eq(conversations.id, validatedConversationId),
         or(
           eq(conversations.clientId, session.user.id),
           eq(conversations.coachId, session.user.id)
@@ -184,9 +182,9 @@ export async function sendMessage(conversationId: string, content: string) {
   const [newMessage] = await db
     .insert(message)
     .values({
-      conversationId,
+      conversationId: validatedConversationId,
       senderId: session.user.id,
-      content: content.trim(),
+      content: validatedContent.trim(),
     })
     .returning();
 
@@ -194,7 +192,7 @@ export async function sendMessage(conversationId: string, content: string) {
   await db
     .update(conversation)
     .set({ lastMessageAt: new Date() })
-    .where(eq(conversation.id, conversationId));
+    .where(eq(conversation.id, validatedConversationId));
 
   // Get full message with sender info for real-time event
   const fullMessage = await db.query.message.findFirst({

@@ -46,7 +46,7 @@ export function MessageThread({
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   // Listen for new messages in real-time
-  usePusherEvent<Message>(`conversation-${conversationId}`, 'new-message', (message) => {
+  usePusherEvent<Message>(`private-conversation-${conversationId}`, 'new-message', (message) => {
     setMessages((prev) => {
       // Avoid duplicates
       if (prev.some((m) => m.id === message.id)) {
@@ -139,8 +139,22 @@ export function MessageThread({
     });
   };
 
-  // Group messages by date
-  const groupedMessages = messages.reduce((groups: Record<string, Message[]>, message) => {
+    // Deduplicate messages by ID (keep the most recent one)
+    const deduplicatedMessages = messages.reduce((unique: Message[], message) => {
+      const existingIndex = unique.findIndex((m) => m.id === message.id);
+      if (existingIndex >= 0) {
+        // Replace with the more complete message (prefer one with sender info)
+        if (message.sender && message.sender.name && !unique[existingIndex].sender?.name) {
+          unique[existingIndex] = message;
+        }
+      } else {
+        unique.push(message);
+      }
+      return unique;
+    }, []);
+  
+    // Group messages by date
+    const groupedMessages = deduplicatedMessages.reduce((groups: Record<string, Message[]>, message) => {
     const dateKey = new Date(message.createdAt).toDateString();
     if (!groups[dateKey]) {
       groups[dateKey] = [];

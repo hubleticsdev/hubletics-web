@@ -22,7 +22,7 @@ export function BookingCalendar({
 }: BookingCalendarProps) {
   const [selectedDate, setSelectedDate] = useState<Date | null>(null);
 
-  // Generate next 30 days
+  // Generate next 30 days that have actual available time slots
   const availableDates = useMemo(() => {
     const dates: Date[] = [];
     const today = new Date();
@@ -31,18 +31,65 @@ export function BookingCalendar({
     for (let i = 1; i <= 30; i++) {
       const date = new Date(today);
       date.setDate(today.getDate() + i);
-      
+
       const dayName = date.toLocaleDateString('en-US', { weekday: 'long' }).toLowerCase();
       const dateString = date.toISOString().split('T')[0];
-      
-      // Check if coach is available this day of week and date isn't blocked
-      if (coachAvailability[dayName] && !blockedDates.includes(dateString)) {
+
+      // Skip if date is blocked
+      if (blockedDates.includes(dateString)) continue;
+
+      // Skip if coach has no availability for this day of week
+      const dayAvailability = coachAvailability[dayName];
+      if (!dayAvailability || dayAvailability.length === 0) continue;
+
+      // Check if there are any available time slots for this date (not conflicting with existing bookings)
+      let hasAvailableSlots = false;
+
+      for (const { start, end } of dayAvailability) {
+        const [startHour, startMin] = start.split(':').map(Number);
+        const [endHour, endMin] = end.split(':').map(Number);
+
+        const startTime = new Date(date);
+        startTime.setHours(startHour, startMin, 0, 0);
+
+        const endTime = new Date(date);
+        endTime.setHours(endHour, endMin, 0, 0);
+
+        let currentSlot = new Date(startTime);
+
+        while (currentSlot.getTime() + sessionDuration * 60000 <= endTime.getTime()) {
+          const slotEnd = new Date(currentSlot.getTime() + sessionDuration * 60000);
+
+          // Check if slot conflicts with existing bookings
+          const isAvailable = !existingBookings.some(booking => {
+            const bookingStart = new Date(booking.scheduledStartAt);
+            const bookingEnd = new Date(booking.scheduledEndAt);
+            return (
+              (currentSlot >= bookingStart && currentSlot < bookingEnd) ||
+              (slotEnd > bookingStart && slotEnd <= bookingEnd) ||
+              (currentSlot <= bookingStart && slotEnd >= bookingEnd)
+            );
+          });
+
+          // Check if slot is in the future
+          if (isAvailable && currentSlot > new Date()) {
+            hasAvailableSlots = true;
+            break;
+          }
+
+          currentSlot = new Date(currentSlot.getTime() + 30 * 60000); // 30 min intervals
+        }
+
+        if (hasAvailableSlots) break;
+      }
+
+      if (hasAvailableSlots) {
         dates.push(date);
       }
     }
-    
+
     return dates;
-  }, [coachAvailability, blockedDates]);
+  }, [coachAvailability, blockedDates, sessionDuration, existingBookings]);
 
   // Generate time slots for selected date
   const timeSlots = useMemo(() => {

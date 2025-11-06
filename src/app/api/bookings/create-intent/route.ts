@@ -5,6 +5,7 @@ import { coachProfile } from '@/lib/db/schema';
 import { eq } from 'drizzle-orm';
 import { stripe } from '@/lib/stripe';
 import { calculateBookingPricing } from '@/lib/pricing';
+import { uuidSchema, validateInput } from '@/lib/validations';
 
 export async function POST(req: NextRequest) {
   try {
@@ -26,9 +27,18 @@ export async function POST(req: NextRequest) {
       );
     }
 
+    // Validate inputs
+    const validatedCoachId = validateInput(uuidSchema, coachId);
+    if (typeof sessionDuration !== 'number' || sessionDuration < 30 || sessionDuration > 480) {
+      return NextResponse.json(
+        { error: 'Invalid session duration (must be 30-480 minutes)' },
+        { status: 400 }
+      );
+    }
+
     // Get coach's Stripe account and rate
     const coach = await db.query.coachProfile.findFirst({
-      where: eq(coachProfile.userId, coachId),
+      where: eq(coachProfile.userId, validatedCoachId),
       with: {
         user: {
           columns: {

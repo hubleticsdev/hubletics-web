@@ -5,6 +5,7 @@ import { user, athleteProfile, coachProfile } from '@/lib/db/schema';
 import { eq } from 'drizzle-orm';
 import { getSession } from '@/lib/auth/session';
 import { revalidatePath } from 'next/cache';
+import { updateUserAccountSchema, updateAthleteProfileSchema, updateCoachProfileSchema, validateInput } from '@/lib/validations';
 
 /**
  * Update user account settings
@@ -16,13 +17,16 @@ export async function updateUserAccount({ name }: { name: string }) {
       return { success: false, error: 'Unauthorized' };
     }
 
-    await db.update(user).set({ name }).where(eq(user.id, session.user.id));
+    // Validate input
+    const validatedData = validateInput(updateUserAccountSchema, { name });
+
+    await db.update(user).set({ name: validatedData.name }).where(eq(user.id, session.user.id));
 
     revalidatePath('/dashboard/profile');
     return { success: true };
   } catch (error) {
     console.error('Update user account error:', error);
-    return { success: false, error: 'Failed to update account' };
+    return { success: false, error: error instanceof Error ? error.message : 'Failed to update account' };
   }
 }
 
@@ -45,10 +49,13 @@ export async function updateAthleteProfile(data: {
       return { success: false, error: 'Unauthorized' };
     }
 
+    // Validate input
+    const validatedData = validateInput(updateAthleteProfileSchema, data);
+
     await db
       .update(athleteProfile)
       .set({
-        ...data,
+        ...validatedData,
         updatedAt: new Date(),
       })
       .where(eq(athleteProfile.userId, session.user.id));
@@ -58,7 +65,7 @@ export async function updateAthleteProfile(data: {
     return { success: true };
   } catch (error) {
     console.error('Update athlete profile error:', error);
-    return { success: false, error: 'Failed to update profile' };
+    return { success: false, error: error instanceof Error ? error.message : 'Failed to update profile' };
   }
 }
 
@@ -89,10 +96,13 @@ export async function updateCoachProfile(data: {
       return { success: false, error: 'Unauthorized' };
     }
 
+    // Validate input
+    const validatedData = validateInput(updateCoachProfileSchema, data);
+
     await db
       .update(coachProfile)
       .set({
-        ...data,
+        ...validatedData,
         updatedAt: new Date(),
         updatedBy: session.user.id,
       })
@@ -104,6 +114,6 @@ export async function updateCoachProfile(data: {
     return { success: true };
   } catch (error) {
     console.error('Update coach profile error:', error);
-    return { success: false, error: 'Failed to update profile' };
+    return { success: false, error: error instanceof Error ? error.message : 'Failed to update profile' };
   }
 }

@@ -8,22 +8,16 @@ import { createBookingPaymentIntent } from '@/lib/stripe';
 import { calculateBookingPricing } from '@/lib/pricing';
 import { sendEmail } from '@/lib/email/resend';
 import { getBookingRequestEmailTemplate } from '@/lib/email/templates/booking-notifications';
+import { z } from 'zod';
+import { createBookingSchema, validateInput } from '@/lib/validations';
 
-interface CreateBookingInput {
-  coachId: string;
-  scheduledStartAt: Date;
-  scheduledEndAt: Date;
-  location: {
-    name: string;
-    address: string;
-    notes?: string;
-  };
-  clientMessage?: string;
-  paymentIntentId?: string; // Optional: if provided, use existing PI; otherwise create new one
-}
+export type CreateBookingInput = z.infer<typeof createBookingSchema>;
 
 export async function createBooking(input: CreateBookingInput) {
   try {
+    // Validate input
+    const validatedInput = validateInput(createBookingSchema, input);
+
     const session = await getSession();
 
     if (!session || session.user.role !== 'client') {
@@ -32,7 +26,7 @@ export async function createBooking(input: CreateBookingInput) {
 
     // Get coach details including user platform fee
     const coach = await db.query.coachProfile.findFirst({
-      where: eq(coachProfile.userId, input.coachId),
+      where: eq(coachProfile.userId, validatedInput.coachId),
       with: {
         user: {
           columns: {
@@ -53,7 +47,7 @@ export async function createBooking(input: CreateBookingInput) {
 
     // Calculate duration in minutes
     const duration = Math.round(
-      (input.scheduledEndAt.getTime() - input.scheduledStartAt.getTime()) /
+      (validatedInput.scheduledEndAt.getTime() - validatedInput.scheduledStartAt.getTime()) /
         (1000 * 60)
     );
 
@@ -72,8 +66,8 @@ export async function createBooking(input: CreateBookingInput) {
 
     // If paymentIntentId provided, use it (payment already confirmed)
     // Otherwise, create a new PaymentIntent (backward compatibility)
-    if (input.paymentIntentId) {
-      paymentIntentId = input.paymentIntentId;
+    if (validatedInput.paymentIntentId) {
+      paymentIntentId = validatedInput.paymentIntentId;
     } else {
       const paymentIntent = await createBookingPaymentIntent(
         pricing.clientPays,
@@ -90,12 +84,12 @@ export async function createBooking(input: CreateBookingInput) {
     await db.insert(booking).values({
       id: bookingId,
       clientId: session.user.id,
-      coachId: input.coachId,
-      scheduledStartAt: input.scheduledStartAt,
-      scheduledEndAt: input.scheduledEndAt,
+      coachId: validatedInput.coachId,
+      scheduledStartAt: validatedInput.scheduledStartAt,
+      scheduledEndAt: validatedInput.scheduledEndAt,
       duration,
-      location: input.location,
-      clientMessage: input.clientMessage,
+      location: validatedInput.location,
+      clientMessage: validatedInput.clientMessage,
       coachRate: pricing.coachDesiredRate.toString(), // What coach set (what they receive)
       clientPaid: pricing.clientPays.toString(),
       platformFee: pricing.platformFee.toString(),
@@ -113,10 +107,10 @@ export async function createBooking(input: CreateBookingInput) {
       coach.fullName,
       session.user.name,
       {
-        date: input.scheduledStartAt.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' }),
-        time: `${input.scheduledStartAt.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })} - ${input.scheduledEndAt.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })}`,
+        date: validatedInput.scheduledStartAt.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' }),
+        time: `${validatedInput.scheduledStartAt.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })} - ${validatedInput.scheduledEndAt.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })}`,
         duration,
-        location: `${input.location.name}, ${input.location.address}`,
+        location: `${validatedInput.location.name}, ${validatedInput.location.address}`,
         amount: pricing.clientPays.toFixed(2),
       }
     );

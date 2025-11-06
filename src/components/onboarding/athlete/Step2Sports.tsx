@@ -122,19 +122,6 @@ export function Step2Sports({ formData, setFormData }: Step2Props) {
         </div>
       )}
 
-      {/* Additional Notes */}
-      <div>
-        <label className="block text-sm font-semibold text-gray-900 mb-2">
-          Additional Notes (optional)
-        </label>
-        <textarea
-          value={formData.notes}
-          onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
-          rows={4}
-          className="block w-full rounded-lg border-2 border-gray-200 px-4 py-3 shadow-sm transition-colors focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20 text-base"
-          placeholder="Any specific goals, training preferences, or areas you'd like to focus on..."
-        />
-      </div>
     </div>
   );
 }

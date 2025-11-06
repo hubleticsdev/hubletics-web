@@ -2,10 +2,12 @@
 
 import { getSession } from '@/lib/auth/session';
 import { db } from '@/lib/db';
+import { withTransaction } from '@/lib/db/transactions';
 import { coachProfile, adminAction, user as userTable } from '@/lib/db/schema';
 import { eq } from 'drizzle-orm';
 import { createConnectAccount } from '@/lib/stripe';
 import { sendEmail } from '@/lib/email/resend';
+import { uuidSchema, validateInput } from '@/lib/validations';
 import {
   getCoachApprovedEmailTemplate,
   getCoachRejectedEmailTemplate,
@@ -23,9 +25,12 @@ export async function approveCoach(coachUserId: string, notes?: string) {
       return { success: false, error: 'Unauthorized' };
     }
 
+    // Validate coachUserId
+    const validatedCoachUserId = validateInput(uuidSchema, coachUserId);
+
     // Get coach profile and user
     const coach = await db.query.coachProfile.findFirst({
-      where: eq(coachProfile.userId, coachUserId),
+      where: eq(coachProfile.userId, validatedCoachUserId),
       with: {
         user: true,
       },
@@ -39,37 +44,40 @@ export async function approveCoach(coachUserId: string, notes?: string) {
       return { success: false, error: 'Coach already processed' };
     }
 
-    // Create Stripe Connect account
+    // Create Stripe account, update profile, and log admin action atomically
     let stripeAccountId = coach.stripeAccountId;
 
-    if (!stripeAccountId) {
-      const stripeAccount = await createConnectAccount(
-        coach.user.email,
-        coachUserId
-      );
-      stripeAccountId = stripeAccount.id;
-    }
+    await withTransaction(async (tx) => {
+      // Create Stripe Connect account if needed
+      if (!stripeAccountId) {
+        const stripeAccount = await createConnectAccount(
+          coach.user.email,
+          validatedCoachUserId
+        );
+        stripeAccountId = stripeAccount.id;
+      }
 
-    // Update coach profile
-    await db
-      .update(coachProfile)
-      .set({
-        adminApprovalStatus: 'approved',
-        adminApprovedAt: new Date(),
-        adminApprovedBy: session.user.id,
-        stripeAccountId,
-        updatedAt: new Date(),
-        updatedBy: session.user.id,
-      })
-      .where(eq(coachProfile.userId, coachUserId));
+      // Update coach profile
+      await tx
+        .update(coachProfile)
+        .set({
+          adminApprovalStatus: 'approved',
+          adminApprovedAt: new Date(),
+          adminApprovedBy: session.user.id,
+          stripeAccountId,
+          updatedAt: new Date(),
+          updatedBy: session.user.id,
+        })
+        .where(eq(coachProfile.userId, validatedCoachUserId));
 
-    // Log admin action
-    await db.insert(adminAction).values({
-      adminId: session.user.id,
-      action: 'approved_coach',
-      targetUserId: coachUserId,
-      relatedEntityId: coach.id,
-      notes: notes || 'Coach profile approved',
+      // Log admin action
+      await tx.insert(adminAction).values({
+        adminId: session.user.id,
+        action: 'approved_coach',
+        targetUserId: validatedCoachUserId,
+        relatedEntityId: coach.id,
+        notes: notes || 'Coach profile approved',
+      });
     });
 
     // Send approval email
@@ -107,9 +115,12 @@ export async function rejectCoach(
       return { success: false, error: 'Unauthorized' };
     }
 
+    // Validate coachUserId
+    const validatedCoachUserId = validateInput(uuidSchema, coachUserId);
+
     // Get coach profile
     const coach = await db.query.coachProfile.findFirst({
-      where: eq(coachProfile.userId, coachUserId),
+      where: eq(coachProfile.userId, validatedCoachUserId),
       with: {
         user: true,
       },
@@ -123,25 +134,28 @@ export async function rejectCoach(
       return { success: false, error: 'Coach already processed' };
     }
 
-    // Update coach profile
-    await db
-      .update(coachProfile)
-      .set({
-        adminApprovalStatus: 'rejected',
-        adminApprovedAt: new Date(),
-        adminApprovedBy: session.user.id,
-        updatedAt: new Date(),
-        updatedBy: session.user.id,
-      })
-      .where(eq(coachProfile.userId, coachUserId));
+    // Update profile and log admin action atomically
+    await withTransaction(async (tx) => {
+      // Update coach profile
+      await tx
+        .update(coachProfile)
+        .set({
+          adminApprovalStatus: 'rejected',
+          adminApprovedAt: new Date(),
+          adminApprovedBy: session.user.id,
+          updatedAt: new Date(),
+          updatedBy: session.user.id,
+        })
+        .where(eq(coachProfile.userId, validatedCoachUserId));
 
-    // Log admin action
-    await db.insert(adminAction).values({
-      adminId: session.user.id,
-      action: 'rejected_coach',
-      targetUserId: coachUserId,
-      relatedEntityId: coach.id,
-      notes: `${reason}${notes ? ` - ${notes}` : ''}`,
+      // Log admin action
+      await tx.insert(adminAction).values({
+        adminId: session.user.id,
+        action: 'rejected_coach',
+        targetUserId: validatedCoachUserId,
+        relatedEntityId: coach.id,
+        notes: `${reason}${notes ? ` - ${notes}` : ''}`,
+      });
     });
 
     // Send rejection email

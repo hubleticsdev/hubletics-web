@@ -2,47 +2,21 @@
 
 import { requireRole } from '@/lib/auth/session';
 import { db } from '@/lib/db';
+import { withTransaction } from '@/lib/db/transactions';
 import { coachProfile, user as userTable } from '@/lib/db/schema';
 import { isValidUploadThingUrl } from '@/lib/utils';
+import { z } from 'zod';
+import { coachProfileSchema, validateInput } from '@/lib/validations';
 
-export type CoachProfileData = {
-  fullName: string;
-  profilePhotoUrl?: string | null;
-  introVideoUrl: string;
-  cities: string[];
-  state: string;
-  specialties: Array<{ sport: string; tags: string[] }>;
-  bio: string;
-  accomplishments?: string;
-  certifications: Array<{
-    name: string;
-    org: string;
-    issueDate: string;
-    expDate?: string;
-    fileUrl: string;
-  }>;
-  hourlyRate: number;
-  sessionDuration: number;
-  weeklyAvailability: Record<string, Array<{ start: string; end: string }>>;
-  preferredLocations: Array<{ name: string; address: string; notes?: string }>;
-};
+export type CoachProfileData = z.infer<typeof coachProfileSchema>;
 
 export async function createCoachProfile(data: CoachProfileData) {
   // Require coach role
   const session = await requireRole('coach');
   const user = session.user;
 
-  if (data.profilePhotoUrl && !isValidUploadThingUrl(data.profilePhotoUrl)) {
-    throw new Error('Invalid profile photo URL');
-  }
-  if (data.introVideoUrl && !isValidUploadThingUrl(data.introVideoUrl)) {
-    throw new Error('Invalid intro video URL');
-  }
-  for (const cert of data.certifications) {
-    if (!isValidUploadThingUrl(cert.fileUrl)) {
-      throw new Error('Invalid certification file URL');
-    }
-  }
+  // Validate input
+  const validatedData = validateInput(coachProfileSchema, data);
 
   // Check if profile already exists (prevent double-submit)
   const { eq } = await import('drizzle-orm');
@@ -54,41 +28,44 @@ export async function createCoachProfile(data: CoachProfileData) {
     return { success: true, alreadyExists: true };
   }
 
-  const profilePhoto = data.profilePhotoUrl || user.image || null;
+  const profilePhoto = validatedData.profilePhotoUrl || user.image || null;
 
-  await db.insert(coachProfile).values({
-    userId: user.id,
-    fullName: data.fullName,
-    profilePhoto,
-    introVideo: data.introVideoUrl,
-    location: {
-      cities: data.cities,
-      state: data.state,
-    },
-    specialties: data.specialties,
-    bio: data.bio,
-    certifications: data.certifications.length > 0 ? data.certifications : undefined,
-    accomplishments: data.accomplishments || null,
-    hourlyRate: data.hourlyRate.toString(),
-    sessionDuration: data.sessionDuration,
-    weeklyAvailability: data.weeklyAvailability,
-    preferredLocations: data.preferredLocations.length > 0 ? data.preferredLocations : undefined,
-    // Defaults from schema:
-    // adminApprovalStatus: 'pending' (default)
-    // stripeOnboardingComplete: false (default)
-    // reputationScore: 0.00 (default)
-    // totalReviews: 0 (default)
-    // totalLessonsCompleted: 0 (default)
+  // Create coach profile and update user status atomically
+  await withTransaction(async (tx) => {
+    await tx.insert(coachProfile).values({
+      userId: user.id,
+      fullName: validatedData.fullName,
+      profilePhoto,
+      introVideo: validatedData.introVideoUrl,
+      location: {
+        cities: validatedData.cities,
+        state: validatedData.state,
+      },
+      specialties: validatedData.specialties,
+      bio: validatedData.bio,
+      certifications: validatedData.certifications.length > 0 ? validatedData.certifications : undefined,
+      accomplishments: validatedData.accomplishments || null,
+      hourlyRate: validatedData.hourlyRate.toString(),
+      sessionDuration: validatedData.sessionDuration,
+      weeklyAvailability: validatedData.weeklyAvailability,
+      preferredLocations: validatedData.preferredLocations.length > 0 ? validatedData.preferredLocations : undefined,
+      // Defaults from schema:
+      // adminApprovalStatus: 'pending' (default)
+      // stripeOnboardingComplete: false (default)
+      // reputationScore: 0.00 (default)
+      // totalReviews: 0 (default)
+      // totalLessonsCompleted: 0 (default)
+    });
+
+    // Update user table to mark profile as complete and clear temp onboarding files
+    await tx.update(userTable)
+      .set({
+        profileComplete: true,
+        onboardingPhotoUrl: null,
+        onboardingVideoUrl: null,
+      })
+      .where(eq(userTable.id, user.id));
   });
-
-  // Update user table to mark profile as complete and clear temp onboarding files
-  await db.update(userTable)
-    .set({
-      profileComplete: true,
-      onboardingPhotoUrl: null,
-      onboardingVideoUrl: null,
-    })
-    .where(eq(userTable.id, user.id));
 
   // Invalidate session cache to force fresh read on next request
   const { invalidateSessionCache } = await import('@/lib/auth/cache');

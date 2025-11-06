@@ -9,12 +9,15 @@ import {
   cancelBookingPayment,
   refundBookingPayment,
 } from '@/lib/stripe';
+import { stripe } from '@/lib/stripe';
 import { sendEmail } from '@/lib/email/resend';
 import {
   getBookingAcceptedEmailTemplate,
   getBookingDeclinedEmailTemplate,
   getBookingCancelledEmailTemplate,
 } from '@/lib/email/templates/booking-notifications';
+import { z } from 'zod';
+import { uuidSchema, validateInput } from '@/lib/validations';
 
 /**
  * Coach accepts a booking request
@@ -22,6 +25,9 @@ import {
  */
 export async function acceptBooking(bookingId: string) {
   try {
+    // Validate input
+    const validatedBookingId = validateInput(uuidSchema, bookingId);
+
     const session = await getSession();
 
     if (!session || session.user.role !== 'coach') {
@@ -30,7 +36,7 @@ export async function acceptBooking(bookingId: string) {
 
     const bookingRecord = await db.query.booking.findFirst({
       where: and(
-        eq(booking.id, bookingId),
+        eq(booking.id, validatedBookingId),
         eq(booking.coachId, session.user.id),
         eq(booking.status, 'pending')
       ),
@@ -52,10 +58,10 @@ export async function acceptBooking(bookingId: string) {
       return { success: false, error: 'No payment intent found' };
     }
 
-    // Capture the held payment
-    await captureBookingPayment(bookingRecord.stripePaymentIntentId);
+    // Capture the held payment first
+    await captureBookingPayment(bookingRecord.stripePaymentIntentId!);
 
-    // Update booking status
+    // Then update booking status
     await db
       .update(booking)
       .set({
@@ -63,9 +69,9 @@ export async function acceptBooking(bookingId: string) {
         coachRespondedAt: new Date(),
         updatedAt: new Date(),
       })
-      .where(eq(booking.id, bookingId));
+         .where(eq(booking.id, validatedBookingId));
 
-    console.log(`Booking accepted: ${bookingId}`);
+    console.log(`Booking accepted: ${validatedBookingId}`);
     console.log(`Payment captured: ${bookingRecord.stripePaymentIntentId}`);
 
     // Send email notification to client
@@ -128,10 +134,10 @@ export async function declineBooking(bookingId: string, reason?: string) {
       return { success: false, error: 'No payment intent found' };
     }
 
-    // Cancel the held payment
-    await cancelBookingPayment(bookingRecord.stripePaymentIntentId);
+    // Cancel the held payment first
+    await cancelBookingPayment(bookingRecord.stripePaymentIntentId!);
 
-    // Update booking status
+    // Then update booking status
     await db
       .update(booking)
       .set({
@@ -186,15 +192,14 @@ export async function cancelBooking(bookingId: string, reason: string) {
       return { success: false, error: 'No payment intent found' };
     }
 
-    // If booking was accepted, process refund
-    // If still pending, just cancel the payment intent
+    // Process payment refund/cancel first
     if (bookingRecord.status === 'accepted') {
-      await refundBookingPayment(bookingRecord.stripePaymentIntentId);
+      await refundBookingPayment(bookingRecord.stripePaymentIntentId!);
     } else {
-      await cancelBookingPayment(bookingRecord.stripePaymentIntentId);
+      await cancelBookingPayment(bookingRecord.stripePaymentIntentId!);
     }
 
-    // Update booking
+    // Then update booking
     await db
       .update(booking)
       .set({
@@ -285,17 +290,48 @@ export async function confirmBookingComplete(bookingId: string) {
       return { success: false, error: 'Booking not found' };
     }
 
+    // Determine new status
+    const newStatus = bookingRecord.markedCompleteByCoach ? 'completed' : 'accepted';
+
     // Update booking
     await db
       .update(booking)
       .set({
         confirmedByClient: true,
         confirmedByClientAt: new Date(),
-        // If coach already marked complete, set status to completed
-        status: bookingRecord.markedCompleteByCoach ? 'completed' : 'accepted',
+        status: newStatus,
         updatedAt: new Date(),
       })
       .where(eq(booking.id, bookingId));
+
+    // If booking is now completed, capture the payment
+    if (newStatus === 'completed' && bookingRecord.stripePaymentIntentId) {
+      try {
+        console.log(`Capturing payment for completed booking: ${bookingId}`);
+
+        // Capture the payment (this also creates the transfer to coach)
+        const paymentIntent = await stripe.paymentIntents.capture(
+          bookingRecord.stripePaymentIntentId
+        );
+
+        console.log(`Payment captured successfully: ${paymentIntent.id}`);
+
+        // Update booking with captured amount and status
+        await db
+          .update(booking)
+          .set({
+            // Store the final captured amount (should match what we calculated)
+            clientPaid: (paymentIntent.amount_received / 100).toString(),
+            updatedAt: new Date(),
+          })
+          .where(eq(booking.id, bookingId));
+
+      } catch (error) {
+        console.error(`Failed to capture payment for booking ${bookingId}:`, error);
+        // Don't fail the entire operation - booking is still completed
+        // The payment can be captured manually later
+      }
+    }
 
     console.log(`Booking confirmed by client: ${bookingId}`);
 
