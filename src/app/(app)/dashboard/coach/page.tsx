@@ -16,6 +16,7 @@ import { format } from 'date-fns';
 
 import { getPendingBookingRequests, getUpcomingBookings } from '@/actions/bookings/queries';
 import { CoachBookingCard } from '@/components/bookings/coach-booking-card';
+import { getCoachEarningsSummary } from '@/actions/coach/earnings';
 import { requireRole } from '@/lib/auth/session';
 import { db } from '@/lib/db';
 import { coachProfile } from '@/lib/db/schema';
@@ -31,6 +32,13 @@ type StatusBanner = {
   description: string;
   cta?: { href: string; label: string };
   icon: LucideIcon;
+};
+
+type Metric = {
+  label: string;
+  value: string;
+  caption: string;
+  href?: string;
 };
 
 type QuickAction = {
@@ -63,6 +71,7 @@ export default async function CoachDashboard() {
 
   const { bookings: pendingRequests } = await getPendingBookingRequests();
   const { bookings: upcomingSessions } = await getUpcomingBookings();
+  const earningsSummary = await getCoachEarningsSummary();
 
   const reputationScoreValue = (() => {
     const raw = coach.reputationScore;
@@ -139,8 +148,9 @@ export default async function CoachDashboard() {
     },
     {
       label: 'Lifetime earnings',
-      value: '$0',
-      caption: 'Payouts arrive 24h after sessions',
+      value: `$${earningsSummary.totalEarnings.toFixed(2)}`,
+      caption: 'View detailed earnings report',
+      href: '/dashboard/earnings',
     },
   ];
 
@@ -156,6 +166,12 @@ export default async function CoachDashboard() {
       title: 'Message athletes',
       description: 'Coordinate logistics and share prep work in chat.',
       icon: MessageCircle,
+    },
+    {
+      href: '/dashboard/earnings',
+      title: 'View earnings',
+      description: 'Track payouts, view transaction history, and manage payments.',
+      icon: CreditCard,
     },
     {
       href: '/dashboard/profile',
@@ -255,12 +271,22 @@ function HeroBanner({
             </p>
           </div>
 
-          <div className="grid gap-3 sm:grid-cols-2">
+          <div className="space-y-4">
             {statuses.length > 0 ? (
               statuses.map((status) => <StatusCard key={status.title} {...status} />)
             ) : (
-              <div className="rounded-2xl border border-white/60 bg-white/80 p-5 text-sm text-slate-600 shadow-sm">
-                Everything looks good. Keep sharing highlights from recent sessions to stay top of mind for athletes.
+              <div className="rounded-2xl border border-white/60 bg-white/80 p-6 text-sm text-slate-600 shadow-sm">
+                <div className="flex items-center gap-3">
+                  <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-green-100 text-green-600">
+                    <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                    </svg>
+                  </div>
+                  <div>
+                    <h3 className="font-semibold text-slate-900">Everything looks good!</h3>
+                    <p className="text-slate-600">Keep sharing highlights from recent sessions to stay top of mind for athletes.</p>
+                  </div>
+                </div>
               </div>
             )}
           </div>
@@ -297,20 +323,38 @@ function HeroBanner({
 function StatsStrip({
   metrics,
 }: {
-  metrics: { label: string; value: string; caption: string }[];
+  metrics: Metric[];
 }) {
   return (
     <section className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
       {metrics.map((metric) => (
         <div
           key={metric.label}
-          className="rounded-3xl border border-white/70 bg-white/85 p-6 shadow-[0_28px_80px_-70px_rgba(15,23,42,0.55)] backdrop-blur"
+          className={cn(
+            "rounded-3xl border border-white/70 bg-white/85 p-6 shadow-[0_28px_80px_-70px_rgba(15,23,42,0.55)] backdrop-blur",
+            metric.href && "cursor-pointer transition hover:border-[#FF6B4A]/40 hover:bg-white"
+          )}
         >
-          <span className="text-xs font-semibold uppercase tracking-[0.32em] text-slate-500">
-            {metric.label}
-          </span>
-          <p className="mt-4 text-3xl font-semibold text-slate-900">{metric.value}</p>
-          <p className="mt-2 text-xs text-slate-500">{metric.caption}</p>
+          {metric.href ? (
+            <Link href={metric.href} className="block">
+              <span className="text-xs font-semibold uppercase tracking-[0.32em] text-slate-500">
+                {metric.label}
+              </span>
+              <p className="mt-4 text-3xl font-semibold text-slate-900">{metric.value}</p>
+              <p className="mt-2 text-xs text-slate-500 flex items-center gap-1">
+                {metric.caption}
+                <ArrowUpRight className="h-3 w-3 opacity-60" />
+              </p>
+            </Link>
+          ) : (
+            <>
+              <span className="text-xs font-semibold uppercase tracking-[0.32em] text-slate-500">
+                {metric.label}
+              </span>
+              <p className="mt-4 text-3xl font-semibold text-slate-900">{metric.value}</p>
+              <p className="mt-2 text-xs text-slate-500">{metric.caption}</p>
+            </>
+          )}
         </div>
       ))}
     </section>
@@ -428,34 +472,39 @@ function BookingSection<T>({
 function StatusCard({ tone, title, description, cta, icon: Icon }: StatusBanner) {
   const toneClasses: Record<StatusTone, string> = {
     warning: 'border-amber-200/70 bg-amber-50 text-amber-800',
-    info: 'border-slate-200/70 bg-white text-slate-700',
+    info: 'border-slate-200/70 bg-white-50 text-slate-800',
     success: 'border-emerald-200/70 bg-emerald-50 text-emerald-800',
   };
 
   return (
     <div
       className={cn(
-        'flex flex-col gap-3 rounded-2xl border px-4 py-4 shadow-sm sm:flex-row sm:items-start sm:justify-between',
+        'rounded-2xl border p-6 shadow-sm',
         toneClasses[tone],
       )}
     >
-      <div className="flex items-start gap-3">
-        <div className="mt-1 flex h-8 w-8 items-center justify-center rounded-xl bg-white/80 text-[#FF6B4A]">
-          <Icon className="h-4 w-4" />
+      <div className="flex items-start gap-4">
+        <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-white/90 text-[#FF6B4A] shadow-sm">
+          <Icon className="h-5 w-5" />
         </div>
-        <div className="space-y-1">
-          <h3 className="text-sm font-semibold text-slate-900">{title}</h3>
-          <p className="text-xs leading-relaxed text-slate-600">{description}</p>
+        <div className="flex-1 space-y-2">
+          <h3 className="text-lg font-semibold text-slate-900">{title}</h3>
+          <p className="text-sm leading-relaxed text-slate-700">{description}</p>
+          {cta && (
+            <div className="pt-2">
+              <Link
+                href={cta.href}
+                className="inline-flex items-center justify-center rounded-full bg-gradient-to-r from-[#FF6B4A] via-[#FF8C5A] to-[#FFB84D] px-6 py-3 text-sm font-semibold text-white shadow-[0_12px_30px_-18px_rgba(255,107,74,0.8)] transition hover:scale-[1.02] hover:shadow-[0_16px_40px_-20px_rgba(255,107,74,0.9)]"
+              >
+                {cta.label}
+                <svg className="ml-2 h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7l5 5m0 0l-5 5m5-5H6" />
+                </svg>
+              </Link>
+            </div>
+          )}
         </div>
       </div>
-      {cta && (
-        <Link
-          href={cta.href}
-          className="inline-flex w-fit items-center justify-center rounded-full bg-gradient-to-r from-[#FF6B4A] via-[#FF8C5A] to-[#FFB84D] px-4 py-2 text-xs font-semibold text-white shadow-[0_10px_25px_-18px_rgba(255,107,74,0.8)] transition hover:scale-[1.02]"
-        >
-          {cta.label}
-        </Link>
-      )}
     </div>
   );
 }

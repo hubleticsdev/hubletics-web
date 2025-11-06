@@ -13,6 +13,7 @@ import { format } from 'date-fns';
 
 import { getMyBookings, getUpcomingBookings } from '@/actions/bookings/queries';
 import { AthleteBookingCard } from '@/components/bookings/athlete-booking-card';
+import { getAthleteSpendSummary } from '@/actions/athlete/spend';
 import { requireRole } from '@/lib/auth/session';
 import { db } from '@/lib/db';
 import { athleteProfile } from '@/lib/db/schema';
@@ -43,6 +44,7 @@ export default async function AthleteDashboard() {
 
   const { bookings: upcomingBookings } = await getUpcomingBookings();
   const { bookings: pendingBookings } = await getMyBookings('pending');
+  const spendSummary = await getAthleteSpendSummary();
 
   const sportsInterested = athlete.sportsInterested ?? [];
   const nextSession = upcomingBookings[0];
@@ -68,7 +70,7 @@ export default async function AthleteDashboard() {
     },
     {
       label: 'Lifetime spend',
-      value: '$0',
+      value: `$${spendSummary.totalSpent.toFixed(2)}`,
       caption: 'Track receipts inside billing',
     },
   ];

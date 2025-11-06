@@ -1,4 +1,5 @@
 import { getPendingCoaches } from '@/actions/admin/coach-approval';
+import { getAdminDashboardMetrics } from '@/actions/admin/dashboard';
 import { db } from '@/lib/db';
 import Link from 'next/link';
 
@@ -6,10 +7,11 @@ export const dynamic = 'force-dynamic';
 
 export default async function AdminDashboard() {
   const { coaches: pendingCoaches } = await getPendingCoaches();
+  const dashboardMetrics = await getAdminDashboardMetrics();
 
   // Get active coaches count (approved + Stripe onboarding complete)
   const activeCoaches = await db.query.coachProfile.findMany({
-    where: (coaches, { and, eq }) => 
+    where: (coaches, { and, eq }) =>
       and(
         eq(coaches.adminApprovalStatus, 'approved'),
         eq(coaches.stripeOnboardingComplete, true)
@@ -41,13 +43,15 @@ export default async function AdminDashboard() {
         </div>
         <div className="bg-white rounded-lg shadow p-6">
           <div className="text-sm text-gray-600 mb-2">Total Users</div>
-          <div className="text-3xl font-bold text-gray-900">-</div>
-          <div className="text-xs text-gray-500 mt-1">Coming soon</div>
+          <div className="text-3xl font-bold text-gray-900">{dashboardMetrics.totalUsers}</div>
+          <div className="text-xs text-gray-500 mt-1">Active accounts</div>
         </div>
         <div className="bg-white rounded-lg shadow p-6">
           <div className="text-sm text-gray-600 mb-2">This Month Revenue</div>
-          <div className="text-3xl font-bold text-gray-900">$0</div>
-          <div className="text-xs text-gray-500 mt-1">No bookings yet</div>
+          <div className="text-3xl font-bold text-gray-900">${dashboardMetrics.monthlyRevenue.toFixed(2)}</div>
+          <div className="text-xs text-gray-500 mt-1">
+            {dashboardMetrics.completedBookingsThisMonth} bookings completed
+          </div>
         </div>
       </div>
 
