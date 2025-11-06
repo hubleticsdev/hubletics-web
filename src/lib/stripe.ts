@@ -61,36 +61,6 @@ export async function isAccountOnboarded(accountId: string): Promise<boolean> {
 }
 
 /**
- * Calculate pricing breakdown for a booking
- * Coach sets their desired hourly rate
- * Client pays: coach rate + 18% markup (covers Stripe fees + platform commission)
- */
-export function calculatePricing(coachRate: number) {
-  const markup = coachRate * 0.18; // 18% markup
-  const clientPays = coachRate + markup;
-
-  // Stripe fee: 2.9% + $0.30
-  const stripeFee = clientPays * 0.029 + 0.3;
-
-  // Net after Stripe fee
-  const netAmount = clientPays - stripeFee;
-
-  // Platform takes 15% of net
-  const platformFee = netAmount * 0.15;
-
-  // Coach receives 85% of net
-  const coachPayout = netAmount * 0.85;
-
-  return {
-    coachRate: Number(coachRate.toFixed(2)),
-    clientPays: Number(clientPays.toFixed(2)),
-    stripeFee: Number(stripeFee.toFixed(2)),
-    platformFee: Number(platformFee.toFixed(2)),
-    coachPayout: Number(coachPayout.toFixed(2)),
-  };
-}
-
-/**
  * Create a payment intent for a booking
  * Amount is held (not captured) until coach accepts
  */

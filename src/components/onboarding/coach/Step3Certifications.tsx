@@ -277,6 +277,13 @@ export function Step3Certifications({ formData, setFormData }: Step3Props) {
                   container: 'flex items-center',
                   allowedContent: 'text-xs text-gray-500 mt-2',
                 }}
+                content={{
+                  button({ ready, isUploading }) {
+                    if (isUploading) return 'Uploading...';
+                    if (ready) return 'Upload PDF';
+                    return 'Getting ready...';
+                  },
+                }}
               />
             )}
           </div>

@@ -13,17 +13,19 @@ import { Step5Rates } from './Step5Rates';
 type OnboardingWizardProps = {
   initialName: string;
   googleAvatar: string | null;
+  savedPhotoUrl: string | null;
+  savedVideoUrl: string | null;
 };
 
-export function OnboardingWizard({ initialName, googleAvatar }: OnboardingWizardProps) {
+export function OnboardingWizard({ initialName, googleAvatar, savedPhotoUrl, savedVideoUrl }: OnboardingWizardProps) {
   const router = useRouter();
   const [currentStep, setCurrentStep] = useState(1);
   const [loading, setLoading] = useState(false);
 
   const [formData, setFormData] = useState<CoachProfileData>({
     fullName: initialName || '',
-    profilePhotoUrl: null,
-    introVideoUrl: '',
+    profilePhotoUrl: savedPhotoUrl,
+    introVideoUrl: savedVideoUrl || '',
     cities: [],
     state: '',
     specialties: [],

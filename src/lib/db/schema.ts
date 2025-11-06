@@ -145,6 +145,11 @@ export const user = pgTable(
       .notNull()
       .default('15.00'),
 
+    // Temporary onboarding file storage (cleared after profile creation)
+    // Prevents orphaned uploads when user refreshes during onboarding
+    onboardingPhotoUrl: text('onboardingPhotoUrl'),
+    onboardingVideoUrl: text('onboardingVideoUrl'),
+
     // Soft delete support
     deletedAt: timestamp('deletedAt'),
     deletedBy: text('deletedBy'), // Admin ID who performed deletion

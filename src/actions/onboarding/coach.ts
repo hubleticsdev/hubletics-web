@@ -3,6 +3,7 @@
 import { requireRole } from '@/lib/auth/session';
 import { db } from '@/lib/db';
 import { coachProfile, user as userTable } from '@/lib/db/schema';
+import { isValidUploadThingUrl } from '@/lib/utils';
 
 export type CoachProfileData = {
   fullName: string;
@@ -30,6 +31,18 @@ export async function createCoachProfile(data: CoachProfileData) {
   // Require coach role
   const session = await requireRole('coach');
   const user = session.user;
+
+  if (data.profilePhotoUrl && !isValidUploadThingUrl(data.profilePhotoUrl)) {
+    throw new Error('Invalid profile photo URL');
+  }
+  if (data.introVideoUrl && !isValidUploadThingUrl(data.introVideoUrl)) {
+    throw new Error('Invalid intro video URL');
+  }
+  for (const cert of data.certifications) {
+    if (!isValidUploadThingUrl(cert.fileUrl)) {
+      throw new Error('Invalid certification file URL');
+    }
+  }
 
   // Check if profile already exists (prevent double-submit)
   const { eq } = await import('drizzle-orm');
@@ -68,9 +81,13 @@ export async function createCoachProfile(data: CoachProfileData) {
     // totalLessonsCompleted: 0 (default)
   });
 
-  // Update user table to mark profile as complete
+  // Update user table to mark profile as complete and clear temp onboarding files
   await db.update(userTable)
-    .set({ profileComplete: true })
+    .set({
+      profileComplete: true,
+      onboardingPhotoUrl: null,
+      onboardingVideoUrl: null,
+    })
     .where(eq(userTable.id, user.id));
 
   // Invalidate session cache to force fresh read on next request

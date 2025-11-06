@@ -3,6 +3,7 @@
 import { requireRole } from '@/lib/auth/session';
 import { db } from '@/lib/db';
 import { athleteProfile } from '@/lib/db/schema';
+import { isValidUploadThingUrl } from '@/lib/utils';
 
 export type AthleteProfileData = {
   fullName: string;
@@ -22,6 +23,10 @@ export async function createAthleteProfile(data: AthleteProfileData) {
   // Require client role
   const session = await requireRole('client');
   const user = session.user;
+
+  if (data.profilePhotoUrl && !isValidUploadThingUrl(data.profilePhotoUrl)) {
+    throw new Error('Invalid profile photo URL');
+  }
 
   // Check if profile already exists (prevent double-submit)
   const { eq } = await import('drizzle-orm');
@@ -58,10 +63,13 @@ export async function createAthleteProfile(data: AthleteProfileData) {
     bio: data.bio || null,
   });
 
-  // Update user table to mark profile as complete
+  // Update user table to mark profile as complete and clear temp onboarding files
   const { user: userTable } = await import('@/lib/db/schema');
   await db.update(userTable)
-    .set({ profileComplete: true })
+    .set({
+      profileComplete: true,
+      onboardingPhotoUrl: null,
+    })
     .where(eq(userTable.id, user.id));
 
   // Invalidate session cache to force fresh read on next request

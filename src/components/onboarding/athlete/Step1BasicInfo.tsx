@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { UploadButton } from '@/lib/uploadthing';
 import { toast } from 'sonner';
 import type { AthleteProfileData } from '@/actions/onboarding/athlete';
+import { saveTempPhoto } from '@/actions/onboarding/save-temp-files';
 import Image from 'next/image';
 
 type Step1Props = {
@@ -89,9 +90,10 @@ export function Step1BasicInfo({ formData, setFormData, googleAvatar }: Step1Pro
             ) : (
               <UploadButton
                 endpoint="profileImage"
-                onClientUploadComplete={(res) => {
+                onClientUploadComplete={async (res) => {
                   if (res && res[0]) {
                     setFormData({ ...formData, profilePhotoUrl: res[0].url });
+                    await saveTempPhoto(res[0].url);
                     toast.success('Profile photo uploaded!');
                     setUploading(false);
                   }
@@ -105,9 +107,16 @@ export function Step1BasicInfo({ formData, setFormData, googleAvatar }: Step1Pro
                 }}
                 appearance={{
                   button:
-                    'ut-ready:bg-gradient-to-r ut-ready:from-blue-500 ut-ready:to-indigo-500 ut-uploading:cursor-not-allowed ut-ready:cursor-pointer ut-uploading:bg-gray-400 ut-button:text-white ut-button:font-semibold ut-button:rounded-lg ut-button:px-4 ut-button:py-2',
+                    'ut-ready:bg-gradient-to-r ut-ready:from-[#FF6B4A] ut-ready:to-[#FF8C5A] ut-uploading:cursor-not-allowed ut-ready:cursor-pointer ut-uploading:bg-gray-400 ut-button:text-white ut-button:font-semibold ut-button:rounded-lg ut-button:px-4 ut-button:py-2',
                   container: 'flex items-center',
                   allowedContent: 'text-xs text-gray-500 mt-2',
+                }}
+                content={{
+                  button({ ready, isUploading }) {
+                    if (isUploading) return 'Uploading...';
+                    if (ready) return formData.profilePhotoUrl ? 'Change Photo' : 'Upload Photo';
+                    return 'Getting ready...';
+                  },
                 }}
               />
             )}

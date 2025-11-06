@@ -13,9 +13,10 @@ import { Step4Bio } from './Step4Bio';
 type OnboardingWizardProps = {
   initialName: string;
   googleAvatar: string | null;
+  savedPhotoUrl: string | null;
 };
 
-export function OnboardingWizard({ initialName, googleAvatar }: OnboardingWizardProps) {
+export function OnboardingWizard({ initialName, googleAvatar, savedPhotoUrl }: OnboardingWizardProps) {
   const router = useRouter();
   const [currentStep, setCurrentStep] = useState(1);
   const [loading, setLoading] = useState(false);
@@ -24,7 +25,7 @@ export function OnboardingWizard({ initialName, googleAvatar }: OnboardingWizard
     fullName: initialName || '',
     city: '',
     state: '',
-    profilePhotoUrl: null,
+    profilePhotoUrl: savedPhotoUrl,
     sports: [],
     experienceLevels: {},
     notes: '',

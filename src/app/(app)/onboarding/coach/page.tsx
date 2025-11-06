@@ -1,20 +1,31 @@
 import { requireRole } from '@/lib/auth/session';
 import { OnboardingWizard } from '@/components/onboarding/coach/OnboardingWizard';
+import { db } from '@/lib/db';
+import { user } from '@/lib/db/schema';
+import { eq } from 'drizzle-orm';
 
 export default async function CoachOnboardingPage() {
-  // The proxy.ts already verified:
-  // 1. User is authenticated
-  // 2. User has role='coach'
-  // 3. User's profile is incomplete
-  // 
-  // Using cached requireRole() here prevents duplicate DB queries
-  // (proxy.ts already fetched the session, so this will use the cached result)
   const session = await requireRole('coach');
 
-  // Session will always exist here due to proxy checks, but satisfy TypeScript
   const userName = session.user.name || '';
   const googleAvatar = session.user.image || null;
 
-  return <OnboardingWizard initialName={userName} googleAvatar={googleAvatar} />;
+  // Fetch temp onboarding files from user table to prevent orphaned uploads
+  const userData = await db.query.user.findFirst({
+    where: eq(user.id, session.user.id),
+    columns: {
+      onboardingPhotoUrl: true,
+      onboardingVideoUrl: true,
+    },
+  });
+
+  return (
+    <OnboardingWizard
+      initialName={userName}
+      googleAvatar={googleAvatar}
+      savedPhotoUrl={userData?.onboardingPhotoUrl || null}
+      savedVideoUrl={userData?.onboardingVideoUrl || null}
+    />
+  );
 }
 
