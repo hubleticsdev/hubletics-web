@@ -52,6 +52,7 @@
     "stripe": "^19.1.0",
     "tailwind-merge": "^3.3.1",
     "uploadthing": "^7.7.4",
+    "ws": "^8.18.3",
     "zod": "^4.1.12"
   },
   "devDependencies": {
@@ -59,6 +60,7 @@
     "@types/node": "^20",
     "@types/react": "^19",
     "@types/react-dom": "^19",
+    "@types/ws": "^8.18.1",
     "drizzle-kit": "^0.31.5",
     "eslint": "^9",
     "eslint-config-next": "16.0.0",

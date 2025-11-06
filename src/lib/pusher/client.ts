@@ -19,6 +19,12 @@ export function getPusherClient(): PusherJS {
   if (!pusherInstance) {
     pusherInstance = new PusherJS(clientEnv.PUSHER_KEY, {
       cluster: clientEnv.PUSHER_CLUSTER,
+      auth: {
+        headers: {
+          //  custom headers?
+        }
+      },
+      authEndpoint: '/api/pusher/auth',
     });
   }
   return pusherInstance;
@@ -70,7 +76,7 @@ export function usePusherEvent<T = unknown>(
  */
 export function useConversationMessages(conversationId: string) {
   const [messages, setMessages] = useState<unknown[]>([]);
-  const channelName = `conversation-${conversationId}`;
+  const channelName = `private-conversation-${conversationId}`;
 
   usePusherEvent(channelName, 'new-message', (newMessage: unknown) => {
     setMessages((prev) => [...prev, newMessage]);
@@ -84,7 +90,7 @@ export function useConversationMessages(conversationId: string) {
  */
 export function useTypingIndicator(conversationId: string) {
   const [typingUsers, setTypingUsers] = useState<Record<string, string>>({});
-  const channelName = `conversation-${conversationId}`;
+  const channelName = `private-conversation-${conversationId}`;
 
   usePusherEvent<{ userId: string; userName: string; isTyping: boolean }>(
     channelName,
