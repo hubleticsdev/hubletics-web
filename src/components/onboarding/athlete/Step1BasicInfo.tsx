@@ -34,7 +34,7 @@ export function Step1BasicInfo({ formData, setFormData, googleAvatar }: Step1Pro
         </label>
         <div className="flex items-start gap-6">
           {/* Avatar Preview */}
-          <div className="flex-shrink-0">
+          <div className="flex-shrink-0 relative group">
             <div className="w-24 h-24 rounded-full overflow-hidden bg-gradient-to-br from-blue-100 to-indigo-100 border-2 border-blue-200 flex items-center justify-center">
               {displayPhoto ? (
                 <Image
@@ -58,36 +58,65 @@ export function Step1BasicInfo({ formData, setFormData, googleAvatar }: Step1Pro
                 </svg>
               )}
             </div>
+            {formData.profilePhotoUrl && (
+              <button
+                type="button"
+                onClick={() => {
+                  setFormData({ ...formData, profilePhotoUrl: '' });
+                  toast.success('Photo removed. Upload a new one below.');
+                }}
+                className="absolute -top-1 -right-1 p-1.5 bg-red-500 hover:bg-red-600 text-white rounded-full shadow-lg transition-all opacity-0 group-hover:opacity-100"
+                title="Remove photo"
+              >
+                <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20">
+                  <path
+                    fillRule="evenodd"
+                    d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z"
+                    clipRule="evenodd"
+                  />
+                </svg>
+              </button>
+            )}
           </div>
 
           {/* Upload Button */}
           <div className="flex-1">
-            <UploadButton
-              endpoint="profileImage"
-              onClientUploadComplete={(res) => {
-                if (res && res[0]) {
-                  setFormData({ ...formData, profilePhotoUrl: res[0].url });
-                  toast.success('Profile photo uploaded!');
+            {uploading ? (
+              <div className="flex items-center gap-3 p-4 bg-blue-50 border-2 border-blue-200 rounded-lg">
+                <div className="animate-spin rounded-full h-5 w-5 border-2 border-blue-500 border-t-transparent"></div>
+                <span className="text-sm font-medium text-blue-700">Uploading photo...</span>
+              </div>
+            ) : (
+              <UploadButton
+                endpoint="profileImage"
+                onClientUploadComplete={(res) => {
+                  if (res && res[0]) {
+                    setFormData({ ...formData, profilePhotoUrl: res[0].url });
+                    toast.success('Profile photo uploaded!');
+                    setUploading(false);
+                  }
+                }}
+                onUploadError={(error: Error) => {
+                  toast.error(`Upload failed: ${error.message}`);
                   setUploading(false);
-                }
-              }}
-              onUploadError={(error: Error) => {
-                toast.error(`Upload failed: ${error.message}`);
-                setUploading(false);
-              }}
-              onUploadBegin={() => {
-                setUploading(true);
-              }}
-            />
+                }}
+                onUploadBegin={() => {
+                  setUploading(true);
+                }}
+                appearance={{
+                  button:
+                    'ut-ready:bg-gradient-to-r ut-ready:from-blue-500 ut-ready:to-indigo-500 ut-uploading:cursor-not-allowed ut-ready:cursor-pointer ut-uploading:bg-gray-400 ut-button:text-white ut-button:font-semibold ut-button:rounded-lg ut-button:px-4 ut-button:py-2',
+                  container: 'flex items-center',
+                  allowedContent: 'text-xs text-gray-500 mt-2',
+                }}
+              />
+            )}
             <p className="mt-2 text-xs text-gray-500">
-              {googleAvatar 
+              {googleAvatar && !formData.profilePhotoUrl
                 ? "We're using your Google profile photo. Upload a different one if you'd like!"
                 : "Upload a clear photo of yourself. Max file size: 4MB."
               }
             </p>
-            {uploading && (
-              <p className="mt-2 text-sm text-blue-600 font-medium">Uploading...</p>
-            )}
           </div>
         </div>
       </div>

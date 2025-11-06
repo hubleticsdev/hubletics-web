@@ -68,7 +68,7 @@ export function Step1BasicInfo({ formData, setFormData, googleAvatar }: Step1Pro
         </label>
         <div className="flex items-start gap-6">
           {/* Avatar Preview */}
-          <div className="flex-shrink-0">
+          <div className="flex-shrink-0 relative group">
             <div className="w-24 h-24 rounded-full overflow-hidden bg-gradient-to-br from-orange-100 to-red-100 border-2 border-orange-200 flex items-center justify-center">
               {displayPhoto ? (
                 <Image
@@ -92,32 +92,58 @@ export function Step1BasicInfo({ formData, setFormData, googleAvatar }: Step1Pro
                 </svg>
               )}
             </div>
+            {formData.profilePhotoUrl && (
+              <button
+                type="button"
+                onClick={() => {
+                  setFormData({ ...formData, profilePhotoUrl: '' });
+                  toast.success('Photo removed. Upload a new one below.');
+                }}
+                className="absolute -top-1 -right-1 p-1.5 bg-red-500 hover:bg-red-600 text-white rounded-full shadow-lg transition-all opacity-0 group-hover:opacity-100"
+                title="Remove photo"
+              >
+                <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20">
+                  <path
+                    fillRule="evenodd"
+                    d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z"
+                    clipRule="evenodd"
+                  />
+                </svg>
+              </button>
+            )}
           </div>
 
           {/* Upload Button */}
           <div className="flex-1">
-            <UploadButton
-              endpoint="profileImage"
-              onClientUploadComplete={(res) => {
-                if (res?.[0]?.url) {
-                  setFormData({ ...formData, profilePhotoUrl: res[0].url });
-                  toast.success('Profile photo uploaded!');
-                }
-                setUploadingPhoto(false);
-              }}
-              onUploadError={(error: Error) => {
-                toast.error(`Upload failed: ${error.message}`);
-                setUploadingPhoto(false);
-              }}
-              onUploadBegin={() => setUploadingPhoto(true)}
-              disabled={uploadingPhoto}
-              appearance={{
-                button:
-                  'ut-ready:bg-gradient-to-r ut-ready:from-[#FF6B4A] ut-ready:to-[#FF8C5A] ut-uploading:cursor-not-allowed ut-ready:cursor-pointer ut-uploading:bg-gray-400 ut-button:text-white ut-button:font-semibold ut-button:rounded-lg ut-button:px-4 ut-button:py-2',
-                container: 'flex items-center',
-                allowedContent: 'text-xs text-gray-500 mt-2',
-              }}
-            />
+            {uploadingPhoto ? (
+              <div className="flex items-center gap-3 p-4 bg-orange-50 border-2 border-orange-200 rounded-lg">
+                <div className="animate-spin rounded-full h-5 w-5 border-2 border-orange-500 border-t-transparent"></div>
+                <span className="text-sm font-medium text-orange-700">Uploading photo...</span>
+              </div>
+            ) : (
+              <UploadButton
+                endpoint="profileImage"
+                onClientUploadComplete={(res) => {
+                  if (res?.[0]?.url) {
+                    setFormData({ ...formData, profilePhotoUrl: res[0].url });
+                    toast.success('Profile photo uploaded!');
+                  }
+                  setUploadingPhoto(false);
+                }}
+                onUploadError={(error: Error) => {
+                  toast.error(`Upload failed: ${error.message}`);
+                  setUploadingPhoto(false);
+                }}
+                onUploadBegin={() => setUploadingPhoto(true)}
+                disabled={uploadingPhoto}
+                appearance={{
+                  button:
+                    'ut-ready:bg-gradient-to-r ut-ready:from-[#FF6B4A] ut-ready:to-[#FF8C5A] ut-uploading:cursor-not-allowed ut-ready:cursor-pointer ut-uploading:bg-gray-400 ut-button:text-white ut-button:font-semibold ut-button:rounded-lg ut-button:px-4 ut-button:py-2',
+                  container: 'flex items-center',
+                  allowedContent: 'text-xs text-gray-500 mt-2',
+                }}
+              />
+            )}
             <p className="text-xs text-gray-500 mt-2">
               {googleAvatar && !formData.profilePhotoUrl
                 ? 'Using your Google profile photo. Upload a new one to replace it.'
@@ -133,42 +159,68 @@ export function Step1BasicInfo({ formData, setFormData, googleAvatar }: Step1Pro
           Intro Video <span className="text-red-500">*</span>
         </label>
         <div className="space-y-3">
-          {formData.introVideoUrl && (
-            <div className="flex items-center gap-3 p-3 bg-green-50 border border-green-200 rounded-lg">
-              <svg className="w-5 h-5 text-green-600 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
-                <path d="M2 6a2 2 0 012-2h6a2 2 0 012 2v8a2 2 0 01-2 2H4a2 2 0 01-2-2V6zM14.553 7.106A1 1 0 0014 8v4a1 1 0 00.553.894l2 1A1 1 0 0018 13V7a1 1 0 00-1.447-.894l-2 1z" />
-              </svg>
-              <div className="flex-1 min-w-0">
-                <p className="text-sm font-medium text-green-800 truncate">Video uploaded successfully!</p>
-                <p className="text-xs text-green-600 truncate">{formData.introVideoUrl}</p>
+          {formData.introVideoUrl ? (
+            <div className="relative border-2 border-green-200 rounded-lg overflow-hidden bg-black">
+              <video
+                src={formData.introVideoUrl}
+                controls
+                className="w-full max-h-96 object-contain"
+              >
+                Your browser does not support the video tag.
+              </video>
+              <button
+                type="button"
+                onClick={() => {
+                  setFormData({ ...formData, introVideoUrl: '' });
+                  toast.success('Video removed. Upload a new one below.');
+                }}
+                className="absolute top-2 right-2 p-2 bg-red-500 hover:bg-red-600 text-white rounded-full shadow-lg transition-colors"
+                title="Remove video"
+              >
+                <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
+                  <path
+                    fillRule="evenodd"
+                    d="M9 2a1 1 0 00-.894.553L7.382 4H4a1 1 0 000 2v10a2 2 0 002 2h8a2 2 0 002-2V6a1 1 0 100-2h-3.382l-.724-1.447A1 1 0 0011 2H9zM7 8a1 1 0 012 0v6a1 1 0 11-2 0V8zm5-1a1 1 0 00-1 1v6a1 1 0 102 0V8a1 1 0 00-1-1z"
+                    clipRule="evenodd"
+                  />
+                </svg>
+              </button>
+              <div className="absolute bottom-2 left-2 px-3 py-1.5 bg-green-500 text-white text-xs font-medium rounded-full flex items-center gap-1.5">
+                <svg className="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 20 20">
+                  <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+                </svg>
+                Video uploaded
               </div>
             </div>
+          ) : (
+            <>
+              <UploadButton
+                endpoint="coachIntroVideo"
+                onClientUploadComplete={(res) => {
+                  if (res?.[0]?.url) {
+                    setFormData({ ...formData, introVideoUrl: res[0].url });
+                    toast.success('Intro video uploaded!');
+                  }
+                  setUploadingVideo(false);
+                }}
+                onUploadError={(error: Error) => {
+                  toast.error(`Upload failed: ${error.message}`);
+                  setUploadingVideo(false);
+                }}
+                onUploadBegin={() => setUploadingVideo(true)}
+                disabled={uploadingVideo}
+                appearance={{
+                  button:
+                    'ut-ready:bg-gradient-to-r ut-ready:from-[#FF6B4A] ut-ready:to-[#FF8C5A] ut-uploading:cursor-not-allowed ut-ready:cursor-pointer ut-uploading:bg-gray-400 ut-button:text-white ut-button:font-semibold ut-button:rounded-lg ut-button:px-4 ut-button:py-2',
+                  container: 'flex items-center',
+                  allowedContent: 'text-xs text-gray-500 mt-2',
+                }}
+              />
+              <p className="text-xs text-gray-500">
+                Record a 30-60 second intro about yourself and your coaching style. Max 64MB.
+              </p>
+            </>
           )}
-          <UploadButton
-            endpoint="coachIntroVideo"
-            onClientUploadComplete={(res) => {
-              if (res?.[0]?.url) {
-                setFormData({ ...formData, introVideoUrl: res[0].url });
-                toast.success('Intro video uploaded!');
-              }
-              setUploadingVideo(false);
-            }}
-            onUploadError={(error: Error) => {
-              toast.error(`Upload failed: ${error.message}`);
-              setUploadingVideo(false);
-            }}
-            onUploadBegin={() => setUploadingVideo(true)}
-            disabled={uploadingVideo}
-            appearance={{
-              button:
-                'ut-ready:bg-gradient-to-r ut-ready:from-[#FF6B4A] ut-ready:to-[#FF8C5A] ut-uploading:cursor-not-allowed ut-ready:cursor-pointer ut-uploading:bg-gray-400 ut-button:text-white ut-button:font-semibold ut-button:rounded-lg ut-button:px-4 ut-button:py-2',
-              container: 'flex items-center',
-              allowedContent: 'text-xs text-gray-500 mt-2',
-            }}
-          />
-          <p className="text-xs text-gray-500">
-            Record a 30-60 second intro about yourself and your coaching style. Max 64MB.
-          </p>
         </div>
       </div>
 
