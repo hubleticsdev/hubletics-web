@@ -1,6 +1,7 @@
 import { requireRole } from '@/lib/auth/session';
 import { db } from '@/lib/db';
 import Image from 'next/image';
+import { PlatformFeeEditor } from '@/components/admin/PlatformFeeEditor';
 
 export const dynamic = 'force-dynamic';
 
@@ -17,6 +18,7 @@ export default async function AdminUsersPage() {
       role: true,
       status: true,
       profileComplete: true,
+      platformFeePercentage: true,
       createdAt: true,
       lastLoginAt: true,
     },
@@ -73,6 +75,9 @@ export default async function AdminUsersPage() {
                 </th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                   Profile
+                </th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  Platform Fee
                 </th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                   Joined
@@ -134,6 +139,13 @@ export default async function AdminUsersPage() {
                     ) : (
                       <span className="text-gray-400">Incomplete</span>
                     )}
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap">
+                    <PlatformFeeEditor
+                      userId={user.id}
+                      currentFee={parseFloat(user.platformFeePercentage as unknown as string)}
+                      userRole={user.role}
+                    />
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                     {new Date(user.createdAt).toLocaleDateString()}

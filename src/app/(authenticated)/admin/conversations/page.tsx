@@ -118,10 +118,10 @@ export default async function AdminConversationsPage() {
 
                     {/* View Link */}
                     <Link
-                      href={`/dashboard/messages/${conv.id}`}
-                      className="px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors text-sm font-medium"
+                      href={`/admin/conversations/${conv.id}`}
+                      className="px-4 py-2 bg-blue-100 text-blue-700 rounded-lg hover:bg-blue-200 transition-colors text-sm font-medium"
                     >
-                      View Thread
+                      View Messages
                     </Link>
                   </div>
                 </div>
