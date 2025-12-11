@@ -13,13 +13,11 @@ export default async function CoachEarningsPage() {
 
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-16">
-      {/* Header */}
       <div className="mb-8">
         <h1 className="text-3xl font-bold text-gray-900">Earnings</h1>
         <p className="text-gray-600 mt-2">Track your income and manage payouts</p>
       </div>
 
-      {/* Stripe Onboarding Warning */}
       {!summary.stripeOnboardingComplete && (
         <div className="mb-6 bg-yellow-50 border border-yellow-200 rounded-lg p-6">
           <div className="flex items-start gap-4">
@@ -61,9 +59,7 @@ export default async function CoachEarningsPage() {
         </div>
       )}
 
-      {/* Earnings Summary Cards */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
-        {/* Total Earnings */}
         <div className="bg-gradient-to-br from-green-500 to-green-600 rounded-lg shadow-lg p-6 text-white">
           <div className="flex items-center justify-between mb-4">
             <h3 className="text-sm font-semibold uppercase tracking-wide opacity-90">
@@ -84,7 +80,6 @@ export default async function CoachEarningsPage() {
           </p>
         </div>
 
-        {/* Available Balance */}
         <div className="bg-white rounded-lg shadow-lg p-6 border-2 border-blue-500">
           <div className="flex items-center justify-between mb-4">
             <h3 className="text-sm font-semibold uppercase tracking-wide text-gray-600">
@@ -104,7 +99,6 @@ export default async function CoachEarningsPage() {
           </p>
         </div>
 
-        {/* Pending Balance */}
         <div className="bg-white rounded-lg shadow-lg p-6 border-2 border-orange-500">
           <div className="flex items-center justify-between mb-4">
             <h3 className="text-sm font-semibold uppercase tracking-wide text-gray-600">
@@ -125,7 +119,6 @@ export default async function CoachEarningsPage() {
         </div>
       </div>
 
-      {/* Upcoming Bookings Info */}
       {summary.upcomingBookings > 0 && (
         <div className="mb-6 bg-blue-50 border border-blue-200 rounded-lg p-4">
           <div className="flex items-center gap-3">
@@ -145,7 +138,6 @@ export default async function CoachEarningsPage() {
         </div>
       )}
 
-      {/* Stripe Dashboard Access */}
       {summary.stripeOnboardingComplete && summary.stripeAccountId && (
         <div className="mb-8 bg-white rounded-lg shadow p-6">
           <div className="flex items-center justify-between">
@@ -161,7 +153,6 @@ export default async function CoachEarningsPage() {
         </div>
       )}
 
-      {/* Booking Earnings Table */}
       <div className="bg-white rounded-lg shadow overflow-hidden">
         <div className="px-6 py-4 border-b border-gray-200">
           <h2 className="text-xl font-semibold text-gray-900">Recent Bookings</h2>
@@ -270,8 +261,7 @@ export default async function CoachEarningsPage() {
           </div>
         )}
       </div>
-
-      {/* Help Text */}
+      
       <div className="mt-6 bg-gray-50 rounded-lg p-4">
         <h3 className="text-sm font-semibold text-gray-900 mb-2">How Payouts Work</h3>
         <ul className="text-sm text-gray-600 space-y-2">

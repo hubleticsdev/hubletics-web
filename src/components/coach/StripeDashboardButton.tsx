@@ -18,7 +18,6 @@ export function StripeDashboardButton() {
         return;
       }
 
-      // Open Stripe dashboard in new tab
       window.open(result.url, '_blank', 'noopener,noreferrer');
     } catch (error) {
       console.error('Error accessing Stripe dashboard:', error);

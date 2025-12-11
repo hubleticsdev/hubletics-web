@@ -30,7 +30,6 @@ export async function getCoachEarningsSummary(): Promise<EarningsSummary> {
   const session = await requireRole('coach');
   const coachId = session.user.id;
 
-  // Get coach profile for Stripe info
   const profile = await db.query.coachProfile.findFirst({
     where: eq(coachProfile.userId, coachId),
     columns: {
@@ -39,7 +38,6 @@ export async function getCoachEarningsSummary(): Promise<EarningsSummary> {
     },
   });
 
-  // Get all completed bookings
   const completedBookings = await db.query.booking.findMany({
     where: and(
       eq(booking.coachId, coachId),
@@ -51,7 +49,6 @@ export async function getCoachEarningsSummary(): Promise<EarningsSummary> {
     },
   });
 
-  // Get upcoming accepted bookings
   const upcomingBookings = await db.query.booking.findMany({
     where: and(
       eq(booking.coachId, coachId),
@@ -62,20 +59,17 @@ export async function getCoachEarningsSummary(): Promise<EarningsSummary> {
     },
   });
 
-  // Calculate earnings
   const totalEarnings = completedBookings.reduce(
     (sum, b) => sum + parseFloat(b.coachPayout as unknown as string),
     0
   );
 
-  // Pending = completed but not yet transferred
   const pendingBookings = completedBookings.filter(b => !b.stripeTransferId);
   const pendingBalance = pendingBookings.reduce(
     (sum, b) => sum + parseFloat(b.coachPayout as unknown as string),
     0
   );
 
-  // Available = transferred to Stripe Connect account
   const availableBalance = totalEarnings - pendingBalance;
 
   return {
@@ -124,8 +118,7 @@ export async function getStripeLoginLink(): Promise<{ url: string } | { error: s
   try {
     const session = await requireRole('coach');
     const coachId = session.user.id;
-
-    // Get coach's Stripe account
+  
     const profile = await db.query.coachProfile.findFirst({
       where: eq(coachProfile.userId, coachId),
       columns: {
@@ -142,7 +135,6 @@ export async function getStripeLoginLink(): Promise<{ url: string } | { error: s
       return { error: 'Stripe onboarding not complete. Please complete setup first.' };
     }
 
-    // Create login link for Stripe Express Dashboard
     const loginLink = await stripe.accounts.createLoginLink(profile.stripeAccountId);
 
     return { url: loginLink.url };

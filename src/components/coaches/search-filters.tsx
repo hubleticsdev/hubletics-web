@@ -54,7 +54,6 @@ export function SearchFilters({ specialties, className }: SearchFiltersProps) {
       <h2 className="text-xl font-bold text-gray-900 mb-4">Filter Coaches</h2>
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mb-4">
-        {/* Search by Name */}
         <div>
           <label htmlFor="search" className="block text-sm font-medium text-gray-700 mb-1">
             Search by Name
@@ -70,7 +69,6 @@ export function SearchFilters({ specialties, className }: SearchFiltersProps) {
           />
         </div>
 
-        {/* Sport Filter */}
         <div>
           <label htmlFor="sport" className="block text-sm font-medium text-gray-700 mb-1">
             Sport / Specialty
@@ -90,7 +88,6 @@ export function SearchFilters({ specialties, className }: SearchFiltersProps) {
           </select>
         </div>
 
-        {/* Location Filter */}
         <div>
           <label htmlFor="location" className="block text-sm font-medium text-gray-700 mb-1">
             Location
@@ -106,7 +103,6 @@ export function SearchFilters({ specialties, className }: SearchFiltersProps) {
           />
         </div>
 
-        {/* Price Range */}
         <div>
           <label htmlFor="minPrice" className="block text-sm font-medium text-gray-700 mb-1">
             Min Price ($/hr)
@@ -137,7 +133,6 @@ export function SearchFilters({ specialties, className }: SearchFiltersProps) {
           />
         </div>
 
-        {/* Minimum Rating */}
         <div>
           <label htmlFor="minRating" className="block text-sm font-medium text-gray-700 mb-1">
             Minimum Rating
@@ -157,7 +152,6 @@ export function SearchFilters({ specialties, className }: SearchFiltersProps) {
         </div>
       </div>
 
-      {/* Action Buttons */}
       <div className="flex flex-col gap-3 sm:flex-row">
         <button
           onClick={handleSearch}

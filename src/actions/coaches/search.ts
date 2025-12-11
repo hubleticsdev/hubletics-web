@@ -1,8 +1,8 @@
 'use server';
 
 import { db } from '@/lib/db';
-import { coachProfile } from '@/lib/db/schema';
-import { and, eq, gte, lte, sql, ilike } from 'drizzle-orm';
+import { coachProfile, user } from '@/lib/db/schema';
+import { and, eq, gte, lte, sql, ilike, or } from 'drizzle-orm';
 import { coachSearchFiltersSchema, validateInput } from '@/lib/validations';
 
 export interface CoachSearchFilters {
@@ -36,21 +36,16 @@ export interface CoachSearchResult {
   };
 }
 
-/**
- * Search and filter coaches
- */
 export async function searchCoaches(
   filters: CoachSearchFilters = {}
 ): Promise<{ coaches: CoachSearchResult[]; total: number }> {
   try {
-    // Validate search filters
     const validatedFilters = validateInput(coachSearchFiltersSchema, filters);
     const conditions = [
       eq(coachProfile.adminApprovalStatus, 'approved'),
       eq(coachProfile.stripeOnboardingComplete, true),
     ];
 
-    // Filter by sport (specialty)
     if (validatedFilters.sport) {
       conditions.push(
         sql`EXISTS (
@@ -60,12 +55,10 @@ export async function searchCoaches(
       );
     }
 
-    // Filter by location
     if (validatedFilters.location) {
       conditions.push(ilike(coachProfile.location, `%${validatedFilters.location}%`));
     }
 
-    // Filter by price range
     if (validatedFilters.minPrice !== undefined) {
       conditions.push(gte(coachProfile.hourlyRate, validatedFilters.minPrice.toString()));
     }
@@ -73,15 +66,20 @@ export async function searchCoaches(
       conditions.push(lte(coachProfile.hourlyRate, validatedFilters.maxPrice.toString()));
     }
 
-    // Filter by minimum rating
     if (validatedFilters.minRating !== undefined) {
       conditions.push(gte(coachProfile.reputationScore, validatedFilters.minRating.toString()));
     }
 
-    // Search by name
     if (validatedFilters.searchQuery) {
       conditions.push(
-        ilike(coachProfile.fullName, `%${validatedFilters.searchQuery}%`)
+        or(
+          ilike(coachProfile.fullName, `%${validatedFilters.searchQuery}%`),
+          sql`EXISTS (
+            SELECT 1 FROM ${user}
+            WHERE ${user.id} = ${coachProfile.userId}
+            AND LOWER(${user.username}) LIKE LOWER(${'%' + validatedFilters.searchQuery + '%'})
+          )`
+        )!
       );
     }
 
@@ -90,6 +88,7 @@ export async function searchCoaches(
       with: {
         user: {
           columns: {
+            username: true,
             image: true,
             email: true,
             platformFeePercentage: true,
@@ -100,7 +99,7 @@ export async function searchCoaches(
         desc(coaches.reputationScore),
         desc(coaches.totalReviews),
       ],
-      limit: 50, // Reasonable limit for now
+      limit: 50,
     });
 
     return {
@@ -113,9 +112,6 @@ export async function searchCoaches(
   }
 }
 
-/**
- * Get a single coach's public profile
- */
 export async function getCoachPublicProfile(userId: string) {
   try {
     const coach = await db.query.coachProfile.findFirst({
@@ -129,6 +125,7 @@ export async function getCoachPublicProfile(userId: string) {
           columns: {
             id: true,
             name: true,
+            username: true,
             image: true,
             platformFeePercentage: true,
           },
@@ -147,10 +144,6 @@ export async function getCoachPublicProfile(userId: string) {
   }
 }
 
-/**
- * Get all unique sports from approved coaches
- * Used for the filter dropdown
- */
 export async function getAvailableSpecialties(): Promise<string[]> {
   try {
     const result = await db
@@ -164,8 +157,7 @@ export async function getAvailableSpecialties(): Promise<string[]> {
           eq(coachProfile.stripeOnboardingComplete, true)
         )
       );
-
-    // Extract unique sport names from specialties
+    
     const allSports = result.flatMap((r) => 
       (r.specialties || []).map((spec) => spec.sport)
     );

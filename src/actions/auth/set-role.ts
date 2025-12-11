@@ -9,7 +9,6 @@ import type { UserRole } from '@/types/auth';
 
 export async function setUserRole(role: 'client' | 'coach'): Promise<{ success: boolean; error?: string }> {
   try {
-    // Get the current session
     const session = await getSession();
 
     if (!session) {
@@ -26,18 +25,15 @@ export async function setUserRole(role: 'client' | 'coach'): Promise<{ success: 
       return { success: false, error: 'Role cannot be changed after profile is complete' };
     }
 
-    // Validate role
     if (role !== 'client' && role !== 'coach') {
       return { success: false, error: 'Invalid role' };
     }
 
-    // Update the user's role in the database
     await db
       .update(userTable)
       .set({ role: role as UserRole })
       .where(eq(userTable.id, user.id));
 
-    // Invalidate session cache to force fresh read on next request
     await invalidateSessionCache();
 
     return { success: true };

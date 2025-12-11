@@ -11,7 +11,6 @@ export default async function AvailabilityPage() {
     redirect('/dashboard/coach');
   }
 
-  // Fetch coach profile
   const profile = await db.query.coachProfile.findFirst({
     where: eq(coachProfile.userId, session.user.id),
   });
@@ -20,7 +19,6 @@ export default async function AvailabilityPage() {
     redirect('/onboarding/coach');
   }
 
-  // Fetch upcoming bookings
   const now = new Date();
   const upcomingBookings = await db.query.booking.findMany({
     where: and(
@@ -40,7 +38,6 @@ export default async function AvailabilityPage() {
     orderBy: (bookings, { asc }) => [asc(bookings.scheduledStartAt)],
   });
 
-  // Normalize availability keys to lowercase for consistency
   const rawAvailability = profile.weeklyAvailability as Record<string, Array<{ start: string; end: string }>> || {};
   const normalizedAvailability = Object.fromEntries(
     Object.entries(rawAvailability).map(([key, value]) => [key.toLowerCase(), value])

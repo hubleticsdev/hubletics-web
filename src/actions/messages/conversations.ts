@@ -8,9 +8,6 @@ import { triggerMessageEvent, triggerConversationUpdate } from '@/lib/pusher/ser
 import { z } from 'zod';
 import { messageContentSchema, validateInput } from '@/lib/validations';
 
-/**
- * Get all conversations for the current user
- */
 export async function getUserConversations() {
   const session = await getSession();
   if (!session) {
@@ -47,7 +44,6 @@ export async function getUserConversations() {
     orderBy: [desc(conversation.lastMessageAt)],
   });
 
-  // Transform to include the "other" participant
   return conversations.map((conv) => {
     const otherParticipant =
       conv.clientId === session.user.id ? conv.coach : conv.client;
@@ -59,23 +55,16 @@ export async function getUserConversations() {
   });
 }
 
-/**
- * Get or create a conversation between two users
- * Uses INSERT ... ON CONFLICT pattern to prevent race conditions
- */
 export async function getOrCreateConversation(otherUserId: string) {
   const session = await getSession();
   if (!session) {
     throw new Error('Unauthorized');
   }
 
-  // Determine roles: if current user is client, they're talking to a coach
-  // If current user is coach, the other user is the client
   const currentUserIsClient = session.user.role === 'client';
   const clientId = currentUserIsClient ? session.user.id : otherUserId;
   const coachId = currentUserIsClient ? otherUserId : session.user.id;
 
-  // Try to insert first
   await db
     .insert(conversation)
     .values({
@@ -84,7 +73,6 @@ export async function getOrCreateConversation(otherUserId: string) {
     })
     .onConflictDoNothing();
 
-  // Now select the conversation (will be either newly created or existing)
   const [conversationResult] = await db
     .select()
     .from(conversation)
@@ -96,7 +84,6 @@ export async function getOrCreateConversation(otherUserId: string) {
     )
     .limit(1);
 
-  // Trigger real-time update for both users
   await Promise.all([
     triggerConversationUpdate(session.user.id, conversationResult),
     triggerConversationUpdate(otherUserId, conversationResult),
@@ -105,16 +92,12 @@ export async function getOrCreateConversation(otherUserId: string) {
   return conversationResult;
 }
 
-/**
- * Get messages for a specific conversation
- */
 export async function getConversationMessages(conversationId: string, limit = 50, offset = 0) {
   const session = await getSession();
   if (!session) {
     throw new Error('Unauthorized');
   }
 
-  // Verify user is a participant
   const conv = await db.query.conversation.findFirst({
     where: (conversations, { and, eq, or }) =>
       and(
@@ -146,23 +129,18 @@ export async function getConversationMessages(conversationId: string, limit = 50
     },
   });
 
-  return messages.reverse(); // Return in chronological order
+  return messages.reverse();
 }
 
-/**
- * Send a message in a conversation
- */
 export async function sendMessage(conversationId: string, content: string) {
   const session = await getSession();
   if (!session) {
     throw new Error('Unauthorized');
   }
 
-  // Validate inputs
   const validatedConversationId = validateInput(z.string().uuid(), conversationId);
   const validatedContent = validateInput(messageContentSchema, content);
 
-  // Verify user is a participant
   const conv = await db.query.conversation.findFirst({
     where: (conversations, { and, eq, or }) =>
       and(
@@ -178,7 +156,6 @@ export async function sendMessage(conversationId: string, content: string) {
     throw new Error('Conversation not found or unauthorized');
   }
 
-  // Create message
   const [newMessage] = await db
     .insert(message)
     .values({
@@ -188,13 +165,11 @@ export async function sendMessage(conversationId: string, content: string) {
     })
     .returning();
 
-  // Update conversation lastMessageAt
   await db
     .update(conversation)
     .set({ lastMessageAt: new Date() })
     .where(eq(conversation.id, validatedConversationId));
 
-  // Get full message with sender info for real-time event
   const fullMessage = await db.query.message.findFirst({
     where: eq(message.id, newMessage.id),
     with: {
@@ -212,10 +187,8 @@ export async function sendMessage(conversationId: string, content: string) {
     throw new Error('Failed to retrieve sent message');
   }
 
-  // Trigger real-time event for the message
   await triggerMessageEvent(conversationId, fullMessage);
 
-  // Determine the other participant
   const otherUserId =
     conv.clientId === session.user.id ? conv.coachId : conv.clientId;
 
@@ -236,9 +209,6 @@ export async function sendMessage(conversationId: string, content: string) {
   return fullMessage;
 }
 
-/**
- * Mark messages as read
- */
 export async function markMessagesAsRead(conversationId: string) {
   const session = await getSession();
   if (!session) {

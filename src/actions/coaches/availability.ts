@@ -5,9 +5,6 @@ import { booking, coachProfile } from '@/lib/db/schema';
 import { eq, and, gte } from 'drizzle-orm';
 import { getSession } from '@/lib/auth/session';
 
-/**
- * Get coach's upcoming bookings for availability calculation
- */
 export async function getCoachBookings(coachId: string) {
   try {
     const now = new Date();
@@ -31,9 +28,6 @@ export async function getCoachBookings(coachId: string) {
   }
 }
 
-/**
- * Update coach availability settings
- */
 export async function updateCoachAvailability({
   weeklyAvailability,
   blockedDates,
