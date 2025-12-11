@@ -1,4 +1,3 @@
-// Transaction utilities for Vercel serverless environment with Neon
 import { Pool, neonConfig } from '@neondatabase/serverless';
 import { drizzle } from 'drizzle-orm/neon-serverless';
 import * as schema from './schema';
@@ -14,7 +13,6 @@ interface TransactionDatabase {
 
 neonConfig.webSocketConstructor = ws;
 
-// Execute a database transaction using WebSocket connection
 export async function withTransaction<T>(
   callback: (tx: TransactionDatabase) => Promise<T>
 ): Promise<T> {
@@ -45,4 +43,3 @@ export async function withTransaction<T>(
 
   return result;
 }
-

@@ -1,52 +1,3 @@
-/**
- * Hubletics Database Schema
- *
- * This schema integrates with better-auth for authentication and includes
- * all application-specific tables for the coaching marketplace platform.
- *
- * CLEANUP CONSIDERATIONS:
- *
- * 1. Expired Sessions:
- *    - Sessions have an expiresAt timestamp
- *    - Consider a cron job to delete sessions where expiresAt < NOW()
- *    - Frequency: Daily or weekly
- *
- * 2. Expired Verification Tokens:
- *    - Verification records have expiresAt timestamp
- *    - Should be cleaned up regularly to prevent table bloat
- *    - Frequency: Daily
- *
- * 3. Expired Idempotency Keys:
- *    - Idempotency keys have expiresAt timestamp
- *    - Clean up expired keys to maintain performance
- *    - Frequency: Daily
- *    - Index on expiresAt helps with efficient cleanup
- *
- * 4. Soft Deleted Users:
- *    - Users have deletedAt field for soft deletes
- *    - Consider permanent deletion after retention period (e.g., 90 days)
- *    - Ensure CASCADE behavior handles related records appropriately
- *
- * 5. Old Booking Locks:
- *    - Bookings have lockedUntil for preventing race conditions
- *    - Stale locks should be released if lockedUntil < NOW()
- *    - Can be done during booking queries or via periodic cleanup
- *
- * 6. Completed/Cancelled Bookings:
- *    - Consider archiving old bookings (> 1 year old) to separate table
- *    - Keep recent bookings for quick access and analytics
- *
- * 7. Old Messages:
- *    - Message history can grow large over time
- *    - Consider archiving messages older than retention period
- *    - Keep flagged messages separate for admin review
- *
- * AUDIT TRAIL:
- * - Key admin actions logged in admin_action table
- * - Consider adding createdBy/updatedBy fields to sensitive tables
- * - User soft deletes track deletedBy for accountability
- */
-
 import {
   pgTable,
   varchar,
@@ -64,10 +15,6 @@ import {
 } from 'drizzle-orm/pg-core';
 import { relations, sql } from 'drizzle-orm';
 
-// ============================================================================
-// ENUMS
-// ============================================================================
-
 export const userRoleEnum = pgEnum('user_role', ['pending', 'client', 'coach', 'admin']);
 export const userStatusEnum = pgEnum('user_status', [
   'active',
@@ -82,11 +29,19 @@ export const approvalStatusEnum = pgEnum('approval_status', [
 ]);
 export const bookingStatusEnum = pgEnum('booking_status', [
   'pending',
+  'awaiting_payment',
   'accepted',
   'declined',
   'cancelled',
   'completed',
   'disputed',
+  'open',
+]);
+export const groupTypeEnum = pgEnum('group_type', ['private', 'public']);
+export const participantPaymentStatusEnum = pgEnum('participant_payment_status', [
+  'pending',
+  'paid',
+  'refunded',
 ]);
 export const refundReasonEnum = pgEnum('refund_reason', [
   'coach_no_show',
@@ -120,11 +75,6 @@ export const flaggedMessageActionEnum = pgEnum('flagged_message_action', [
   'user_banned',
 ]);
 
-// ============================================================================
-// BETTER-AUTH CORE TABLES
-// ============================================================================
-
-// User table (better-auth core table with our extensions)
 export const user = pgTable(
   'user',
   {
@@ -136,7 +86,7 @@ export const user = pgTable(
     createdAt: timestamp('createdAt').notNull().defaultNow(),
     updatedAt: timestamp('updatedAt').notNull().defaultNow(),
 
-    // Our custom extensions
+    username: varchar('username', { length: 30 }).notNull().unique(),
     role: userRoleEnum('role').notNull().default('client'),
     status: userStatusEnum('status').notNull().default('active'),
     profileComplete: boolean('profileComplete').notNull().default(false),
@@ -145,24 +95,21 @@ export const user = pgTable(
       .notNull()
       .default('15.00'),
 
-    // Temporary onboarding file storage (cleared after profile creation)
-    // Prevents orphaned uploads when user refreshes during onboarding
     onboardingPhotoUrl: text('onboardingPhotoUrl'),
     onboardingVideoUrl: text('onboardingVideoUrl'),
 
-    // Soft delete support
     deletedAt: timestamp('deletedAt'),
-    deletedBy: text('deletedBy'), // Admin ID who performed deletion
+    deletedBy: text('deletedBy'),
   },
   (table) => [
     uniqueIndex('user_email_idx').on(table.email),
+    uniqueIndex('user_username_idx').on(table.username),
     index('user_role_idx').on(table.role),
     index('user_status_idx').on(table.status),
     index('user_deleted_at_idx').on(table.deletedAt),
   ]
 );
 
-// Session table (better-auth core table)
 export const session = pgTable(
   'session',
   {
@@ -180,7 +127,6 @@ export const session = pgTable(
   (table) => [index('session_user_id_idx').on(table.userId)]
 );
 
-// Account table (better-auth core table for OAuth)
 export const account = pgTable(
   'account',
   {
@@ -196,14 +142,13 @@ export const account = pgTable(
     accessTokenExpiresAt: timestamp('accessTokenExpiresAt'),
     refreshTokenExpiresAt: timestamp('refreshTokenExpiresAt'),
     scope: text('scope'),
-    password: text('password'), // For email/password auth
+    password: text('password'),
     createdAt: timestamp('createdAt').notNull().defaultNow(),
     updatedAt: timestamp('updatedAt').notNull().defaultNow(),
   },
   (table) => [index('account_user_id_idx').on(table.userId)]
 );
 
-// Verification table (better-auth core table)
 export const verification = pgTable('verification', {
   id: text('id').primaryKey(),
   identifier: text('identifier').notNull(),
@@ -212,10 +157,6 @@ export const verification = pgTable('verification', {
   createdAt: timestamp('createdAt').notNull().defaultNow(),
   updatedAt: timestamp('updatedAt').notNull().defaultNow(),
 });
-
-// ============================================================================
-// PROFILE TABLES
-// ============================================================================
 
 export const athleteProfile = pgTable('athlete_profile', {
   id: text('id')
@@ -240,8 +181,8 @@ export const athleteProfile = pgTable('athlete_profile', {
   >(),
   availability: jsonb('availability').notNull().$type<
     Record<string, Array<{ start: string; end: string }>>
-  >(), // { "Monday": [{ start: "09:00", end: "12:00" }], ... }
-  bio: text('bio'),
+    >(),
+    bio: text('bio'),
   createdAt: timestamp('createdAt').notNull().defaultNow(),
   updatedAt: timestamp('updatedAt').notNull().defaultNow(),
 });
@@ -284,7 +225,7 @@ export const coachProfile = pgTable(
     >(),
     weeklyAvailability: jsonb('weeklyAvailability').notNull().$type<
       Record<string, Array<{ start: string; end: string }>>
-    >(), // { "Monday": [{ start: "09:00", end: "12:00" }, { start: "17:00", end: "20:00" }], ... }
+    >(),
     blockedDates: date('blockedDates', { mode: 'string' }).array(),
     stripeAccountId: varchar('stripeAccountId', { length: 255 }).unique(),
     stripeOnboardingComplete: boolean('stripeOnboardingComplete')
@@ -302,10 +243,14 @@ export const coachProfile = pgTable(
     totalLessonsCompleted: integer('totalLessonsCompleted')
       .notNull()
       .default(0),
+    
+    groupBookingsEnabled: boolean('groupBookingsEnabled').notNull().default(false),
+    allowPrivateGroups: boolean('allowPrivateGroups').notNull().default(false),
+    allowPublicGroups: boolean('allowPublicGroups').notNull().default(false),
+    
     createdAt: timestamp('createdAt').notNull().defaultNow(),
     updatedAt: timestamp('updatedAt').notNull().defaultNow(),
 
-    // Audit trail (who made changes to this profile)
     updatedBy: text('updatedBy').references(() => user.id),
   },
   (table) => [
@@ -315,10 +260,6 @@ export const coachProfile = pgTable(
     index('coach_approval_status_idx').on(table.adminApprovalStatus),
   ]
 );
-
-// ============================================================================
-// MESSAGING TABLES
-// ============================================================================
 
 export const conversation = pgTable(
   'conversation',
@@ -354,8 +295,7 @@ export const message = pgTable(
       .notNull()
       .references(() => conversation.id, { onDelete: 'cascade' }),
     senderId: text('senderId')
-      .notNull()
-      .references(() => user.id),
+      .references(() => user.id, { onDelete: 'set null' }),
     content: text('content').notNull(),
     createdAt: timestamp('createdAt').notNull().defaultNow(),
     readAt: timestamp('readAt'),
@@ -377,10 +317,10 @@ export const flaggedMessage = pgTable('flagged_message', {
     .$defaultFn(() => crypto.randomUUID()),
   messageId: text('messageId')
     .notNull()
-    .references(() => message.id),
+    .references(() => message.id, { onDelete: 'cascade' }),
   conversationId: text('conversationId')
     .notNull()
-    .references(() => conversation.id),
+    .references(() => conversation.id, { onDelete: 'cascade' }),
   senderId: text('senderId')
     .notNull()
     .references(() => user.id),
@@ -393,10 +333,6 @@ export const flaggedMessage = pgTable('flagged_message', {
   createdAt: timestamp('createdAt').notNull().defaultNow(),
   updatedAt: timestamp('updatedAt').notNull().defaultNow(),
 });
-
-// ============================================================================
-// BOOKING TABLES
-// ============================================================================
 
 export const booking = pgTable(
   'booking',
@@ -412,10 +348,9 @@ export const booking = pgTable(
       .references(() => user.id),
     conversationId: text('conversationId').references(() => conversation.id),
 
-    // Booking details (using timestamptz for proper timezone handling)
     scheduledStartAt: timestamp('scheduledStartAt', { withTimezone: true }).notNull(),
     scheduledEndAt: timestamp('scheduledEndAt', { withTimezone: true }).notNull(),
-    duration: integer('duration').notNull(), // Duration in minutes for easy calculations
+    duration: integer('duration').notNull(),
     location: jsonb('location').notNull().$type<{
       name: string;
       address: string;
@@ -423,30 +358,30 @@ export const booking = pgTable(
     }>(),
     clientMessage: text('clientMessage'),
 
-    // Pricing
     coachRate: decimal('coachRate', { precision: 10, scale: 2 }).notNull(),
     clientPaid: decimal('clientPaid', { precision: 10, scale: 2 }).notNull(),
     platformFee: decimal('platformFee', { precision: 10, scale: 2 }).notNull(),
     stripeFee: decimal('stripeFee', { precision: 10, scale: 2 }).notNull(),
     coachPayout: decimal('coachPayout', { precision: 10, scale: 2 }).notNull(),
 
-    // Stripe
     stripePaymentIntentId: varchar('stripePaymentIntentId', {
       length: 255,
     }).unique(),
     stripeTransferId: varchar('stripeTransferId', { length: 255 }),
 
-    // Status
+    paymentDueAt: timestamp('paymentDueAt'),
+    paymentCompletedAt: timestamp('paymentCompletedAt'),
+    paymentReminderSentAt: timestamp('paymentReminderSentAt'),
+    paymentFinalReminderSentAt: timestamp('paymentFinalReminderSentAt'),
+
     status: bookingStatusEnum('status').notNull().default('pending'),
 
-    // Response handling
     coachRespondedAt: timestamp('coachRespondedAt'),
     proposedAlternateTime: jsonb('proposedAlternateTime').$type<{
-      startAt: string; // ISO 8601 timestamp with timezone
-      endAt: string; // ISO 8601 timestamp with timezone
+      startAt: string;
+      endAt: string;
     }>(),
 
-    // Completion
     markedCompleteByCoach: boolean('markedCompleteByCoach')
       .notNull()
       .default(false),
@@ -454,18 +389,23 @@ export const booking = pgTable(
     confirmedByClient: boolean('confirmedByClient').notNull().default(false),
     confirmedByClientAt: timestamp('confirmedByClientAt'),
 
-    // Cancellation
     cancelledBy: text('cancelledBy').references(() => user.id),
     cancelledAt: timestamp('cancelledAt'),
     cancellationReason: text('cancellationReason'),
     refundAmount: decimal('refundAmount', { precision: 10, scale: 2 }),
     refundProcessedAt: timestamp('refundProcessedAt'),
 
-    // Idempotency
     idempotencyKey: varchar('idempotencyKey', { length: 255 }).unique(),
 
-    // Locking
     lockedUntil: timestamp('lockedUntil'),
+
+    isGroupBooking: boolean('isGroupBooking').notNull().default(false),
+    groupType: groupTypeEnum('groupType'),
+    organizerId: text('organizerId').references(() => user.id),
+    maxParticipants: integer('maxParticipants'),
+    minParticipants: integer('minParticipants'),
+    pricePerPerson: decimal('pricePerPerson', { precision: 10, scale: 2 }),
+    currentParticipants: integer('currentParticipants').default(0),
 
     createdAt: timestamp('createdAt').notNull().defaultNow(),
     updatedAt: timestamp('updatedAt').notNull().defaultNow(),
@@ -476,14 +416,85 @@ export const booking = pgTable(
     index('booking_status_idx').on(table.status),
     index('booking_scheduled_start_idx').on(table.scheduledStartAt),
     index('booking_payment_intent_idx').on(table.stripePaymentIntentId),
-    // Composite index for common query pattern: coach's bookings by date and status
     index('booking_coach_date_status_idx').on(
       table.coachId,
       table.scheduledStartAt,
       table.status
     ),
+    index('booking_group_type_idx').on(table.groupType),
+    index('booking_organizer_idx').on(table.organizerId),
   ]
 );
+
+export const groupPricingTier = pgTable('group_pricing_tier', {
+  id: text('id')
+    .primaryKey()
+    .$defaultFn(() => crypto.randomUUID()),
+  coachId: text('coachId')
+    .notNull()
+    .references(() => user.id, { onDelete: 'cascade' }),
+  minParticipants: integer('minParticipants').notNull(),
+  maxParticipants: integer('maxParticipants'), // null means "X+"
+  pricePerPerson: decimal('pricePerPerson', { precision: 10, scale: 2 }).notNull(),
+  createdAt: timestamp('createdAt').notNull().defaultNow(),
+  updatedAt: timestamp('updatedAt').notNull().defaultNow(),
+});
+
+export const bookingParticipant = pgTable(
+  'booking_participant',
+  {
+    id: text('id')
+      .primaryKey()
+      .$defaultFn(() => crypto.randomUUID()),
+    bookingId: text('bookingId')
+      .notNull()
+      .references(() => booking.id, { onDelete: 'cascade' }),
+    userId: text('userId')
+      .notNull()
+      .references(() => user.id, { onDelete: 'cascade' }),
+    paymentStatus: participantPaymentStatusEnum('paymentStatus')
+      .notNull()
+      .default('pending'),
+    amountPaid: decimal('amountPaid', { precision: 10, scale: 2 }),
+    stripePaymentIntentId: varchar('stripePaymentIntentId', { length: 255 }),
+    joinedAt: timestamp('joinedAt').notNull().defaultNow(),
+    cancelledAt: timestamp('cancelledAt'),
+    refundedAt: timestamp('refundedAt'),
+    refundAmount: decimal('refundAmount', { precision: 10, scale: 2 }),
+  },
+  (table) => [
+    uniqueIndex('booking_participant_unique_idx').on(table.bookingId, table.userId),
+    index('booking_participant_booking_idx').on(table.bookingId),
+    index('booking_participant_user_idx').on(table.userId),
+  ]
+);
+
+export const recurringGroupLesson = pgTable('recurring_group_lesson', {
+  id: text('id')
+    .primaryKey()
+    .$defaultFn(() => crypto.randomUUID()),
+  coachId: text('coachId')
+    .notNull()
+    .references(() => user.id, { onDelete: 'cascade' }),
+  title: varchar('title', { length: 255 }).notNull(),
+  description: text('description'),
+  dayOfWeek: integer('dayOfWeek').notNull(),
+  startTime: time('startTime').notNull(),
+  duration: integer('duration').notNull(),
+  maxParticipants: integer('maxParticipants').notNull(),
+  minParticipants: integer('minParticipants').notNull(),
+  pricePerPerson: decimal('pricePerPerson', { precision: 10, scale: 2 }).notNull(),
+  location: jsonb('location').notNull().$type<{
+    name: string;
+    address: string;
+    notes?: string;
+  }>(),
+  isActive: boolean('isActive').notNull().default(true),
+  startDate: date('startDate', { mode: 'string' }).notNull(),
+  endDate: date('endDate', { mode: 'string' }),
+  createdAt: timestamp('createdAt').notNull().defaultNow(),
+  updatedAt: timestamp('updatedAt').notNull().defaultNow(),
+});
 
 export const review = pgTable(
   'review',
@@ -512,7 +523,6 @@ export const review = pgTable(
   (table) => [
     index('review_coach_idx').on(table.coachId),
     index('review_booking_idx').on(table.bookingId),
-    // Composite index for fetching coach's reviews chronologically
     index('review_coach_created_idx').on(table.coachId, table.createdAt),
   ]
 );
@@ -532,23 +542,17 @@ export const refundRequest = pgTable('refund_request', {
   evidencePhotos: text('evidencePhotos').array(),
   requestedAmount: refundAmountEnum('requestedAmount').notNull(),
 
-  // Admin review
   status: refundStatusEnum('status').notNull().default('pending'),
   reviewedBy: text('reviewedBy').references(() => user.id),
   reviewedAt: timestamp('reviewedAt'),
   adminNotes: text('adminNotes'),
   approvedAmount: decimal('approvedAmount', { precision: 10, scale: 2 }),
 
-  // Stripe
   stripeRefundId: varchar('stripeRefundId', { length: 255 }),
   refundProcessedAt: timestamp('refundProcessedAt'),
 
   createdAt: timestamp('createdAt').notNull().defaultNow(),
 });
-
-// ============================================================================
-// ADMIN TABLES
-// ============================================================================
 
 export const adminAction = pgTable('admin_action', {
   id: text('id')
@@ -563,10 +567,6 @@ export const adminAction = pgTable('admin_action', {
   notes: text('notes'),
   createdAt: timestamp('createdAt').notNull().defaultNow(),
 });
-
-// ============================================================================
-// UTILITY TABLES
-// ============================================================================
 
 export const idempotencyKey = pgTable(
   'idempotency_key',
@@ -584,10 +584,6 @@ export const idempotencyKey = pgTable(
     index('idempotency_key_expires_idx').on(table.expiresAt),
   ]
 );
-
-// ============================================================================
-// RELATIONS (for Drizzle relational queries)
-// ============================================================================
 
 export const userRelations = relations(user, ({ one, many }) => ({
   athleteProfile: one(athleteProfile, {
@@ -757,10 +753,6 @@ export const adminActionRelations = relations(adminAction, ({ one }) => ({
     references: [user.id],
   }),
 }));
-
-// ============================================================================
-// TYPE EXPORTS (for use throughout the app)
-// ============================================================================
 
 export type User = typeof user.$inferSelect;
 export type NewUser = typeof user.$inferInsert;
