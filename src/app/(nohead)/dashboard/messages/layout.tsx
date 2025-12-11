@@ -14,7 +14,6 @@ export default async function MessagesLayout({
 
   return (
     <div className="h-screen flex flex-col bg-white">
-      {/* Minimal header bar */}
       <div className="h-16 border-b border-gray-200 flex items-center px-4 bg-white flex-shrink-0">
         <Link
           href={session.user.role === 'coach' ? '/dashboard/coach' : '/dashboard/athlete'}
@@ -31,7 +30,6 @@ export default async function MessagesLayout({
           Back to Dashboard
         </Link>
       </div>
-      {/* Messages content - takes remaining height */}
       <div className="flex-1 overflow-hidden">
         {children}
       </div>

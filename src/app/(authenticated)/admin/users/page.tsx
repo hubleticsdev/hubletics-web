@@ -8,7 +8,6 @@ export const dynamic = 'force-dynamic';
 export default async function AdminUsersPage() {
   await requireRole('admin');
 
-  // Get all users
   const users = await db.query.user.findMany({
     columns: {
       id: true,
@@ -32,7 +31,6 @@ export default async function AdminUsersPage() {
         <p className="text-gray-600 mt-2">Manage all users in the system</p>
       </div>
 
-      {/* Stats */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
         <div className="bg-white rounded-lg shadow p-6">
           <div className="text-sm text-gray-600 mb-2">Total Users</div>
@@ -57,8 +55,7 @@ export default async function AdminUsersPage() {
           </div>
         </div>
       </div>
-
-      {/* Users Table */}
+  
       <div className="bg-white rounded-lg shadow overflow-hidden">
         <div className="overflow-x-auto">
           <table className="min-w-full divide-y divide-gray-200">

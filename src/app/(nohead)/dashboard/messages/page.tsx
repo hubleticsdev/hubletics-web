@@ -15,7 +15,6 @@ export default async function MessagesPage({
 
   const params = await searchParams;
 
-  // If ?new=userId is provided, create/get conversation and redirect to it
   if (params.new) {
     const conversation = await getOrCreateConversation(params.new);
     redirect(`/dashboard/messages/${conversation.id}`);
@@ -25,7 +24,6 @@ export default async function MessagesPage({
 
   return (
     <div className="flex h-full">
-      {/* Conversations sidebar */}
       <div className="w-full md:w-96 border-r border-gray-200 bg-white overflow-y-auto">
         <div className="p-4 border-b border-gray-200">
           <h1 className="text-2xl font-bold text-gray-900">Messages</h1>
@@ -33,7 +31,6 @@ export default async function MessagesPage({
         <ConversationList initialConversations={conversations} currentUserId={session.user.id} />
       </div>
 
-      {/* Empty state for desktop */}
       <div className="hidden md:flex flex-1 items-center justify-center bg-gray-50">
         <div className="text-center">
           <div className="w-20 h-20 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-4">

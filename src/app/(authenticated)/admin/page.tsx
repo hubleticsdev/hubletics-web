@@ -9,7 +9,6 @@ export default async function AdminDashboard() {
   const { coaches: pendingCoaches } = await getPendingCoaches();
   const dashboardMetrics = await getAdminDashboardMetrics();
 
-  // Get active coaches count (approved + Stripe onboarding complete)
   const activeCoaches = await db.query.coachProfile.findMany({
     where: (coaches, { and, eq }) =>
       and(
@@ -24,7 +23,6 @@ export default async function AdminDashboard() {
         Admin Dashboard
       </h1>
 
-      {/* Quick Stats */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
         <div className="bg-white rounded-lg shadow p-6">
           <div className="text-sm text-gray-600 mb-2">Pending Coaches</div>
@@ -55,7 +53,6 @@ export default async function AdminDashboard() {
         </div>
       </div>
 
-      {/* Pending Coaches */}
       <div className="bg-white rounded-lg shadow">
         <div className="p-6 border-b border-gray-200">
           <h2 className="text-xl font-semibold text-gray-900">

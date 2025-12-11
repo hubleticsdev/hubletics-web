@@ -25,7 +25,6 @@ export default async function ConversationPage({
     notFound();
   }
 
-  // Find the current conversation to get other participant info
   const currentConversation = conversations.find((c) => c.id === conversationId);
   if (!currentConversation) {
     notFound();
@@ -33,17 +32,14 @@ export default async function ConversationPage({
 
   return (
     <div className="flex h-full">
-      {/* Conversations sidebar - hidden on mobile when viewing a conversation */}
       <div className="hidden md:block w-96 border-r border-gray-200 bg-white overflow-y-auto">
         <div className="p-4 border-b border-gray-200">
           <h1 className="text-2xl font-bold text-gray-900">Messages</h1>
         </div>
         <ConversationList initialConversations={conversations} currentUserId={session.user.id} />
       </div>
-
-      {/* Message thread */}
+  
       <div className="flex-1 flex flex-col bg-white">
-        {/* Mobile back button */}
         <div className="md:hidden p-2 border-b border-gray-200">
           <Link
             href="/dashboard/messages"

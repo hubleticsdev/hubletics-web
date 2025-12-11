@@ -10,7 +10,6 @@ export const dynamic = 'force-dynamic';
 export default async function AdminConversationsPage() {
   await requireRole('admin');
 
-  // Get all conversations with participants
   const conversations = await db.query.conversation.findMany({
     with: {
       client: {
@@ -59,9 +58,7 @@ export default async function AdminConversationsPage() {
                 <div key={conv.id} className="p-6 hover:bg-gray-50 transition-colors">
                   <div className="flex items-start justify-between">
                     <div className="flex-1">
-                      {/* Participants */}
                       <div className="flex items-center gap-6 mb-3">
-                        {/* Client */}
                         <div className="flex items-center gap-3">
                           <div className="w-10 h-10 rounded-full overflow-hidden bg-gray-200 flex-shrink-0">
                             <Image
@@ -78,10 +75,8 @@ export default async function AdminConversationsPage() {
                           </div>
                         </div>
 
-                        {/* Separator */}
                         <div className="text-gray-400">⟷</div>
 
-                        {/* Coach */}
                         <div className="flex items-center gap-3">
                           <div className="w-10 h-10 rounded-full overflow-hidden bg-gray-200 flex-shrink-0">
                             <Image
@@ -99,7 +94,6 @@ export default async function AdminConversationsPage() {
                         </div>
                       </div>
 
-                      {/* Last Message */}
                       {lastMessage && (
                         <div className="ml-13">
                           <p className="text-sm text-gray-700 line-clamp-2">{lastMessage.content}</p>
@@ -109,14 +103,12 @@ export default async function AdminConversationsPage() {
                         </div>
                       )}
 
-                      {/* Conversation Meta */}
                       <div className="flex items-center gap-4 mt-3 text-xs text-gray-500">
                         <span>Conversation ID: {conv.id.slice(0, 8)}...</span>
                         <span>Started: {new Date(conv.createdAt).toLocaleDateString()}</span>
                       </div>
                     </div>
 
-                    {/* View Link */}
                     <Link
                       href={`/admin/conversations/${conv.id}`}
                       className="px-4 py-2 bg-blue-100 text-blue-700 rounded-lg hover:bg-blue-200 transition-colors text-sm font-medium"
@@ -131,7 +123,6 @@ export default async function AdminConversationsPage() {
         </div>
       )}
 
-      {/* Stats */}
       <div className="mt-6 bg-blue-50 border border-blue-200 rounded-lg p-4">
         <p className="text-sm text-blue-900">
           <span className="font-semibold">Total Conversations:</span> {conversations.length}

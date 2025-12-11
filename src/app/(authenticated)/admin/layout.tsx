@@ -10,7 +10,6 @@ export default function AdminLayout({
     <div className="min-h-screen bg-gray-50">
       <AuthenticatedNavbar />
       <div className="flex">
-        {/* Admin Sidebar */}
         <aside className="w-64 bg-white border-r border-gray-200 min-h-screen pt-20">
           <nav className="p-4 space-y-2">
             <Link
@@ -52,7 +51,6 @@ export default function AdminLayout({
           </nav>
         </aside>
 
-        {/* Main Content */}
         <main className="flex-1 p-8 pt-24">{children}</main>
       </div>
     </div>

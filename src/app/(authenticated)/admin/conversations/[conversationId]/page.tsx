@@ -17,7 +17,6 @@ export default async function AdminConversationViewPage({ params }: PageProps) {
 
   const { conversationId } = await params;
 
-  // Get conversation with participants
   const conv = await db.query.conversation.findFirst({
     where: eq(conversation.id, conversationId),
     with: {
@@ -46,7 +45,6 @@ export default async function AdminConversationViewPage({ params }: PageProps) {
     notFound();
   }
 
-  // Get all messages in this conversation
   const messages = await db.query.message.findMany({
     where: eq(message.conversationId, conversationId),
     with: {
@@ -62,12 +60,10 @@ export default async function AdminConversationViewPage({ params }: PageProps) {
     orderBy: [desc(message.createdAt)],
   });
 
-  // Reverse to show oldest first (chronological order)
   const chronologicalMessages = [...messages].reverse();
 
   return (
     <div className="max-w-5xl mx-auto">
-      {/* Header */}
       <div className="mb-6">
         <Link
           href="/admin/conversations"
@@ -82,11 +78,9 @@ export default async function AdminConversationViewPage({ params }: PageProps) {
         <p className="text-gray-600 mt-2">Read-only view for admin monitoring</p>
       </div>
 
-      {/* Participants */}
       <div className="bg-white rounded-lg shadow p-6 mb-6">
         <h2 className="text-lg font-semibold text-gray-900 mb-4">Participants</h2>
         <div className="flex items-center gap-8">
-          {/* Client */}
           <div className="flex items-center gap-3">
             <div className="w-12 h-12 rounded-full overflow-hidden bg-gray-200 flex-shrink-0">
               <Image
@@ -106,10 +100,8 @@ export default async function AdminConversationViewPage({ params }: PageProps) {
             </div>
           </div>
 
-          {/* Separator */}
           <div className="text-2xl text-gray-400">⟷</div>
 
-          {/* Coach */}
           <div className="flex items-center gap-3">
             <div className="w-12 h-12 rounded-full overflow-hidden bg-gray-200 flex-shrink-0">
               <Image
@@ -130,7 +122,6 @@ export default async function AdminConversationViewPage({ params }: PageProps) {
           </div>
         </div>
 
-        {/* Conversation Meta */}
         <div className="mt-4 pt-4 border-t border-gray-200">
           <div className="flex items-center gap-6 text-sm text-gray-600">
             <span>
@@ -148,7 +139,6 @@ export default async function AdminConversationViewPage({ params }: PageProps) {
         </div>
       </div>
 
-      {/* Messages */}
       <div className="bg-white rounded-lg shadow">
         <div className="px-6 py-4 border-b border-gray-200">
           <h2 className="text-lg font-semibold text-gray-900">
@@ -163,34 +153,32 @@ export default async function AdminConversationViewPage({ params }: PageProps) {
         ) : (
           <div className="divide-y divide-gray-200">
             {chronologicalMessages.map((msg) => {
-              const isClient = msg.sender.id === conv.clientId;
+              const isClient = msg.sender?.id === conv.clientId;
               return (
                 <div
                   key={msg.id}
                   className={`p-6 ${msg.flagged ? 'bg-red-50' : 'hover:bg-gray-50'}`}
                 >
                   <div className="flex items-start gap-4">
-                    {/* Sender Avatar */}
                     <div className="w-10 h-10 rounded-full overflow-hidden bg-gray-200 flex-shrink-0">
                       <Image
-                        src={msg.sender.image || '/placeholder-avatar.png'}
-                        alt={msg.sender.name}
+                        src={msg.sender?.image || '/placeholder-avatar.png'}
+                        alt={msg.sender?.name || 'Unknown'}
                         width={40}
                         height={40}
                         className="object-cover"
                       />
                     </div>
 
-                    {/* Message Content */}
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-3 mb-2">
-                        <span className="font-medium text-gray-900">{msg.sender.name}</span>
+                        <span className="font-medium text-gray-900">{msg.sender?.name || 'Unknown'}</span>
                         <span
                           className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${
                             isClient ? 'bg-blue-100 text-blue-800' : 'bg-orange-100 text-orange-800'
                           }`}
                         >
-                          {msg.sender.role}
+                          {msg.sender?.role || 'Unknown'}
                         </span>
                         <span className="text-xs text-gray-500">
                           {new Date(msg.createdAt).toLocaleString()}
@@ -204,7 +192,6 @@ export default async function AdminConversationViewPage({ params }: PageProps) {
 
                       <p className="text-gray-700 whitespace-pre-wrap">{msg.content}</p>
 
-                      {/* Flagged indicator */}
                       {msg.flagged && (
                         <div className="mt-3 p-3 bg-red-100 border border-red-200 rounded-lg">
                           <div className="flex items-start gap-2">
@@ -238,8 +225,7 @@ export default async function AdminConversationViewPage({ params }: PageProps) {
           </div>
         )}
       </div>
-
-      {/* Admin Note */}
+      
       <div className="mt-6 bg-yellow-50 border border-yellow-200 rounded-lg p-4">
         <div className="flex items-start gap-3">
           <svg

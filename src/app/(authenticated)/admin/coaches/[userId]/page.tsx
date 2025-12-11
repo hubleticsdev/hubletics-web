@@ -49,7 +49,6 @@ export default async function CoachReviewPage({
       </div>
 
       <div className="bg-white rounded-lg shadow-lg overflow-hidden">
-        {/* Profile Header */}
         <div className="p-6 border-b border-gray-200">
           <div className="flex items-center space-x-4">
             {coach.profilePhoto ? (
@@ -77,7 +76,6 @@ export default async function CoachReviewPage({
           </div>
         </div>
 
-        {/* Intro Video */}
         <div className="p-6 border-b border-gray-200">
           <h3 className="text-lg font-semibold text-gray-900 mb-4">
             Introduction Video
@@ -91,7 +89,6 @@ export default async function CoachReviewPage({
           </video>
         </div>
 
-        {/* Specialties */}
         <div className="p-6 border-b border-gray-200">
           <h3 className="text-lg font-semibold text-gray-900 mb-4">
             Specialties
@@ -110,13 +107,11 @@ export default async function CoachReviewPage({
           </div>
         </div>
 
-        {/* Bio */}
         <div className="p-6 border-b border-gray-200">
           <h3 className="text-lg font-semibold text-gray-900 mb-4">Bio</h3>
           <p className="text-gray-700 whitespace-pre-wrap">{coach.bio}</p>
         </div>
 
-        {/* Certifications */}
         {coach.certifications && coach.certifications.length > 0 && (
           <div className="p-6 border-b border-gray-200">
             <h3 className="text-lg font-semibold text-gray-900 mb-4">
@@ -151,7 +146,6 @@ export default async function CoachReviewPage({
           </div>
         )}
 
-        {/* Accomplishments */}
         {coach.accomplishments && (
           <div className="p-6 border-b border-gray-200">
             <h3 className="text-lg font-semibold text-gray-900 mb-4">
@@ -163,7 +157,6 @@ export default async function CoachReviewPage({
           </div>
         )}
 
-        {/* Pricing */}
         <div className="p-6 border-b border-gray-200">
           <h3 className="text-lg font-semibold text-gray-900 mb-4">
             Pricing & Sessions
@@ -184,7 +177,6 @@ export default async function CoachReviewPage({
           </div>
         </div>
 
-        {/* Preferred Locations */}
         {coach.preferredLocations && coach.preferredLocations.length > 0 && (
           <div className="p-6 border-b border-gray-200">
             <h3 className="text-lg font-semibold text-gray-900 mb-4">
@@ -204,7 +196,6 @@ export default async function CoachReviewPage({
           </div>
         )}
 
-        {/* Weekly Availability */}
         <div className="p-6">
           <h3 className="text-lg font-semibold text-gray-900 mb-4">
             Weekly Availability
@@ -235,7 +226,6 @@ export default async function CoachReviewPage({
         </div>
       </div>
 
-      {/* Action Buttons */}
       <CoachReviewActions userId={userId} />
     </div>
   );

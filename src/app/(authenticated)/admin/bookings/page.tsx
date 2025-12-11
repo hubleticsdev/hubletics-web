@@ -9,7 +9,6 @@ export const dynamic = 'force-dynamic';
 export default async function AdminBookingsPage() {
   await requireRole('admin');
 
-  // Get all bookings
   const bookings = await db.query.booking.findMany({
     with: {
       client: {
@@ -47,7 +46,6 @@ export default async function AdminBookingsPage() {
         <p className="text-gray-600 mt-2">Manage all bookings in the system</p>
       </div>
 
-      {/* Stats */}
       <div className="grid grid-cols-1 md:grid-cols-5 gap-6 mb-8">
         <div className="bg-white rounded-lg shadow p-6">
           <div className="text-sm text-gray-600 mb-2">Total</div>
@@ -71,7 +69,6 @@ export default async function AdminBookingsPage() {
         </div>
       </div>
 
-      {/* Bookings List */}
       <div className="bg-white rounded-lg shadow overflow-hidden">
         {bookings.length === 0 ? (
           <div className="p-12 text-center text-gray-600">No bookings yet.</div>
@@ -81,9 +78,7 @@ export default async function AdminBookingsPage() {
               <div key={booking.id} className="p-6 hover:bg-gray-50">
                 <div className="flex items-center justify-between">
                   <div className="flex-1">
-                    {/* Participants */}
                     <div className="flex items-center gap-6 mb-3">
-                      {/* Client */}
                       <div className="flex items-center gap-3">
                         <div className="w-10 h-10 rounded-full overflow-hidden bg-gray-200">
                           <Image
@@ -102,7 +97,6 @@ export default async function AdminBookingsPage() {
 
                       <div className="text-gray-400">→</div>
 
-                      {/* Coach */}
                       <div className="flex items-center gap-3">
                         <div className="w-10 h-10 rounded-full overflow-hidden bg-gray-200">
                           <Image
@@ -120,7 +114,6 @@ export default async function AdminBookingsPage() {
                       </div>
                     </div>
 
-                    {/* Booking Details */}
                     <div className="ml-13 space-y-1">
                       <p className="text-sm text-gray-900">
                         <span className="font-medium">Date:</span>{' '}
@@ -135,7 +128,6 @@ export default async function AdminBookingsPage() {
                     </div>
                   </div>
 
-                  {/* Status */}
                   <span
                     className={`px-3 py-1 inline-flex text-xs leading-5 font-semibold rounded-full ${
                       booking.status === 'pending'
