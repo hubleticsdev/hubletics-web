@@ -12,11 +12,15 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
-import { Calendar, MapPin, Clock, DollarSign, User, Loader2, Star, AlertCircle } from 'lucide-react';
+import { Calendar, MapPin, Clock, DollarSign, User, Loader2, Star, AlertCircle, Users, MessageCircle } from 'lucide-react';
 import { acceptBooking, declineBooking } from '@/actions/bookings/respond';
+import { leavePublicLesson, cancelPrivateGroupBooking, coachCancelGroupLesson } from '@/actions/group-bookings/cancel';
+import Link from 'next/link';
 import { ReviewModal } from '@/components/reviews/review-modal';
 import { PaymentModal } from '@/components/bookings/payment-modal';
+import { ParticipantsModal } from '@/components/group-bookings/participants-modal';
 import { useRouter } from 'next/navigation';
+import { toast } from 'sonner';
 
 type BookingStatus = 'pending' | 'awaiting_payment' | 'accepted' | 'declined' | 'cancelled' | 'completed' | 'disputed' | 'open';
 
@@ -35,6 +39,12 @@ interface Booking {
   status: BookingStatus;
   coachRespondedAt: Date | null;
   paymentDueAt?: Date | null;
+  isGroupBooking?: boolean;
+  groupType?: 'private' | 'public' | null;
+  organizerId?: string | null;
+  maxParticipants?: number | null;
+  currentParticipants?: number | null;
+  pricePerPerson?: string | null;
   client?: {
     id: string;
     name: string;
@@ -78,6 +88,14 @@ export function BookingsList({ bookings, userRole, userId }: BookingsListProps) 
   } | null>(null);
   const [declineDialogOpen, setDeclineDialogOpen] = useState(false);
   const [bookingToDecline, setBookingToDecline] = useState<string | null>(null);
+  const [participantsModalOpen, setParticipantsModalOpen] = useState(false);
+  const [selectedBookingForParticipants, setSelectedBookingForParticipants] = useState<string | null>(null);
+  const [leaveDialogOpen, setLeaveDialogOpen] = useState(false);
+  const [bookingToLeave, setBookingToLeave] = useState<string | null>(null);
+  const [cancelGroupDialogOpen, setCancelGroupDialogOpen] = useState(false);
+  const [groupToCancel, setGroupToCancel] = useState<string | null>(null);
+  const [coachCancelDialogOpen, setCoachCancelDialogOpen] = useState(false);
+  const [groupToCancelByCoach, setGroupToCancelByCoach] = useState<string | null>(null);
 
   const now = new Date();
 
@@ -176,6 +194,84 @@ export function BookingsList({ bookings, userRole, userId }: BookingsListProps) 
     setBookingToDecline(null);
   };
 
+  const handleLeavePublicLesson = (bookingId: string) => {
+    setBookingToLeave(bookingId);
+    setLeaveDialogOpen(true);
+  };
+
+  const confirmLeavePublicLesson = async () => {
+    if (!bookingToLeave) return;
+
+    setProcessingBookingId(bookingToLeave);
+    setError(null);
+    setLeaveDialogOpen(false);
+
+    const result = await leavePublicLesson(bookingToLeave);
+
+    if (result.success) {
+      toast.success('Successfully left the lesson');
+      router.refresh();
+    } else {
+      toast.error(result.error || 'Failed to leave lesson');
+      setError(result.error || 'Failed to leave lesson');
+      setProcessingBookingId(null);
+    }
+
+    setBookingToLeave(null);
+  };
+
+  const handleCancelPrivateGroup = (bookingId: string) => {
+    setGroupToCancel(bookingId);
+    setCancelGroupDialogOpen(true);
+  };
+
+  const confirmCancelPrivateGroup = async () => {
+    if (!groupToCancel) return;
+
+    setProcessingBookingId(groupToCancel);
+    setError(null);
+    setCancelGroupDialogOpen(false);
+
+    const result = await cancelPrivateGroupBooking(groupToCancel);
+
+    if (result.success) {
+      toast.success('Group booking cancelled successfully');
+      router.refresh();
+    } else {
+      toast.error(result.error || 'Failed to cancel booking');
+      setError(result.error || 'Failed to cancel booking');
+      setProcessingBookingId(null);
+    }
+
+    setGroupToCancel(null);
+  };
+
+  const handleCoachCancelGroup = (bookingId: string) => {
+    setGroupToCancelByCoach(bookingId);
+    setCoachCancelDialogOpen(true);
+  };
+
+  const confirmCoachCancelGroup = async () => {
+    if (!groupToCancelByCoach) return;
+
+    setProcessingBookingId(groupToCancelByCoach);
+    setError(null);
+    setCoachCancelDialogOpen(false);
+
+    const result = await coachCancelGroupLesson(groupToCancelByCoach);
+
+    if (result.success) {
+      toast.success('Group lesson cancelled successfully');
+      router.refresh();
+    } else {
+      toast.error(result.error || 'Failed to cancel lesson');
+      setError(result.error || 'Failed to cancel lesson');
+      setProcessingBookingId(null);
+    }
+
+    setGroupToCancelByCoach(null);
+  };
+
   return (
     <div>
       {error && (
@@ -263,7 +359,7 @@ export function BookingsList({ bookings, userRole, userId }: BookingsListProps) 
                 <div className="p-6">
                   <div className="flex items-start justify-between">
                     <div className="flex-1">
-                      <div className="flex items-center gap-3 mb-3">
+                      <div className="flex items-center gap-3 mb-3 flex-wrap">
                         <span
                           className={`px-3 py-1 rounded-full text-xs font-semibold uppercase ${getStatusColor(
                             booking.status
@@ -271,6 +367,12 @@ export function BookingsList({ bookings, userRole, userId }: BookingsListProps) 
                         >
                           {booking.status}
                         </span>
+                        {booking.isGroupBooking && (
+                          <span className="px-3 py-1 rounded-full text-xs font-semibold bg-purple-100 text-purple-700 flex items-center gap-1">
+                            <Users className="h-3 w-3" />
+                            {booking.groupType === 'public' ? 'PUBLIC GROUP' : 'PRIVATE GROUP'}
+                          </span>
+                        )}
                         {booking.status === 'pending' && userRole === 'coach' && (
                           <span className="text-xs text-gray-500">Awaiting your response</span>
                         )}
@@ -326,9 +428,25 @@ export function BookingsList({ bookings, userRole, userId }: BookingsListProps) 
                           <DollarSign className="h-5 w-5 text-gray-400 mt-0.5" />
                           <div>
                             <div className="text-sm font-medium text-gray-900">${booking.clientPaid}</div>
-                            <div className="text-sm text-gray-600">Total amount</div>
+                            <div className="text-sm text-gray-600">
+                              {booking.isGroupBooking && booking.pricePerPerson 
+                                ? `$${booking.pricePerPerson}/person` 
+                                : 'Total amount'}
+                            </div>
                           </div>
                         </div>
+
+                        {booking.isGroupBooking && (
+                          <div className="flex items-start gap-2">
+                            <Users className="h-5 w-5 text-gray-400 mt-0.5" />
+                            <div>
+                              <div className="text-sm font-medium text-gray-900">
+                                {booking.currentParticipants || 0}/{booking.maxParticipants || 0} joined
+                              </div>
+                              <div className="text-sm text-gray-600">Participants</div>
+                            </div>
+                          </div>
+                        )}
                       </div>
 
                       {booking.clientMessage && (
@@ -369,6 +487,84 @@ export function BookingsList({ bookings, userRole, userId }: BookingsListProps) 
                             Decline
                           </Button>
                         </>
+                      )}
+
+                      {booking.isGroupBooking && (
+                        <>
+                          <Link href={`/dashboard/group-chat/${booking.id}`}>
+                            <Button
+                              type="button"
+                              variant="outline"
+                              size="sm"
+                              className="border-blue-300 text-blue-600 hover:bg-blue-50"
+                            >
+                              <MessageCircle className="h-4 w-4 mr-2" />
+                              Group Chat
+                            </Button>
+                          </Link>
+                          <Button
+                            type="button"
+                            onClick={() => {
+                              setSelectedBookingForParticipants(booking.id);
+                              setParticipantsModalOpen(true);
+                            }}
+                            variant="outline"
+                            size="sm"
+                            className="border-purple-300 text-purple-600 hover:bg-purple-50"
+                          >
+                            <Users className="h-4 w-4 mr-2" />
+                            View Participants
+                          </Button>
+                        </>
+                      )}
+
+                      {booking.isGroupBooking && userRole === 'client' && booking.groupType === 'public' && 
+                       (booking.status === 'open' || booking.status === 'accepted') && 
+                       new Date() < new Date(booking.scheduledStartAt) && (
+                        <Button
+                          type="button"
+                          onClick={() => handleLeavePublicLesson(booking.id)}
+                          disabled={processingBookingId === booking.id}
+                          variant="outline"
+                          className="border-orange-300 text-orange-600 hover:bg-orange-50"
+                          size="sm"
+                        >
+                          {processingBookingId === booking.id && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
+                          Leave Lesson
+                        </Button>
+                      )}
+
+                      {booking.isGroupBooking && userRole === 'client' && booking.groupType === 'private' && 
+                       booking.organizerId === userId &&
+                       ['pending', 'awaiting_payment', 'accepted'].includes(booking.status) && 
+                       new Date() < new Date(booking.scheduledStartAt) && (
+                        <Button
+                          type="button"
+                          onClick={() => handleCancelPrivateGroup(booking.id)}
+                          disabled={processingBookingId === booking.id}
+                          variant="outline"
+                          className="border-red-300 text-red-600 hover:bg-red-50"
+                          size="sm"
+                        >
+                          {processingBookingId === booking.id && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
+                          Cancel Group
+                        </Button>
+                      )}
+
+                      {booking.isGroupBooking && userRole === 'coach' && 
+                       (booking.status === 'open' || booking.status === 'accepted') && 
+                       new Date() < new Date(booking.scheduledStartAt) && (
+                        <Button
+                          type="button"
+                          onClick={() => handleCoachCancelGroup(booking.id)}
+                          disabled={processingBookingId === booking.id}
+                          variant="outline"
+                          className="border-red-300 text-red-600 hover:bg-red-50"
+                          size="sm"
+                        >
+                          {processingBookingId === booking.id && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
+                          Cancel Lesson
+                        </Button>
                       )}
 
                       {booking.status === 'awaiting_payment' && userRole === 'client' && booking.paymentDueAt && (
@@ -466,6 +662,17 @@ export function BookingsList({ bookings, userRole, userId }: BookingsListProps) 
         />
       )}
 
+      {selectedBookingForParticipants && (
+        <ParticipantsModal
+          isOpen={participantsModalOpen}
+          onClose={() => {
+            setParticipantsModalOpen(false);
+            setSelectedBookingForParticipants(null);
+          }}
+          bookingId={selectedBookingForParticipants}
+        />
+      )}
+
       <AlertDialog open={declineDialogOpen} onOpenChange={setDeclineDialogOpen}>
         <AlertDialogContent>
           <AlertDialogHeader>
@@ -481,6 +688,66 @@ export function BookingsList({ bookings, userRole, userId }: BookingsListProps) 
               className="bg-red-600 hover:bg-red-700"
             >
               Decline Booking
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      <AlertDialog open={leaveDialogOpen} onOpenChange={setLeaveDialogOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Leave Group Lesson?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Are you sure you want to leave this group lesson? You will be refunded if you already paid.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={confirmLeavePublicLesson}
+              className="bg-orange-600 hover:bg-orange-700"
+            >
+              Leave Lesson
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      <AlertDialog open={cancelGroupDialogOpen} onOpenChange={setCancelGroupDialogOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Cancel Group Booking?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Are you sure you want to cancel this group booking? All participants will be notified and you will be refunded.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={confirmCancelPrivateGroup}
+              className="bg-red-600 hover:bg-red-700"
+            >
+              Cancel Booking
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      <AlertDialog open={coachCancelDialogOpen} onOpenChange={setCoachCancelDialogOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Cancel Group Lesson?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Are you sure you want to cancel this group lesson? All participants will be refunded.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={confirmCoachCancelGroup}
+              className="bg-red-600 hover:bg-red-700"
+            >
+              Cancel Lesson
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
