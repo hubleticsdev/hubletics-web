@@ -2,16 +2,19 @@ name: Auto-Confirm Bookings Cron
 
 on:
   schedule:
-    - cron: '0 * * * *'
+    - cron: '0 */6 * * *'
   workflow_dispatch:
 
 jobs:
   call-api:
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
       - name: Call auto-confirm API endpoint
+        timeout-minutes: 8
         run: |
           curl -X GET "${{ secrets.APP_URL }}/api/cron/auto-confirm-bookings" \
             -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}" \
+            --max-time 300 \
             -f -s -S -o /dev/null -w "Status: %{http_code}\n"
 
