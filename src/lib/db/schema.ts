@@ -754,6 +754,92 @@ export const adminActionRelations = relations(adminAction, ({ one }) => ({
   }),
 }));
 
+export const groupConversation = pgTable('group_conversation', {
+  id: text('id')
+    .primaryKey()
+    .$defaultFn(() => crypto.randomUUID()),
+  bookingId: text('bookingId')
+    .notNull()
+    .unique()
+    .references(() => booking.id, { onDelete: 'cascade' }),
+  createdAt: timestamp('createdAt').notNull().defaultNow(),
+  updatedAt: timestamp('updatedAt').notNull().defaultNow(),
+  lastMessageAt: timestamp('lastMessageAt'),
+});
+
+export const groupConversationParticipant = pgTable(
+  'group_conversation_participant',
+  {
+    id: text('id')
+      .primaryKey()
+      .$defaultFn(() => crypto.randomUUID()),
+    conversationId: text('conversationId')
+      .notNull()
+      .references(() => groupConversation.id, { onDelete: 'cascade' }),
+    userId: text('userId')
+      .notNull()
+      .references(() => user.id, { onDelete: 'cascade' }),
+    joinedAt: timestamp('joinedAt').notNull().defaultNow(),
+    lastReadAt: timestamp('lastReadAt'),
+  },
+  (table) => [
+    uniqueIndex('group_conv_participant_unique_idx').on(
+      table.conversationId,
+      table.userId
+    ),
+  ]
+);
+
+export const groupMessage = pgTable('group_message', {
+  id: text('id')
+    .primaryKey()
+    .$defaultFn(() => crypto.randomUUID()),
+  conversationId: text('conversationId')
+    .notNull()
+    .references(() => groupConversation.id, { onDelete: 'cascade' }),
+  senderId: text('senderId').references(() => user.id, { onDelete: 'set null' }),
+  content: text('content').notNull(),
+  createdAt: timestamp('createdAt').notNull().defaultNow(),
+  readBy: jsonb('readBy').$type<string[]>().default([]),
+});
+
+export const groupConversationRelations = relations(
+  groupConversation,
+  ({ one, many }) => ({
+    booking: one(booking, {
+      fields: [groupConversation.bookingId],
+      references: [booking.id],
+    }),
+    participants: many(groupConversationParticipant),
+    messages: many(groupMessage),
+  })
+);
+
+export const groupConversationParticipantRelations = relations(
+  groupConversationParticipant,
+  ({ one }) => ({
+    conversation: one(groupConversation, {
+      fields: [groupConversationParticipant.conversationId],
+      references: [groupConversation.id],
+    }),
+    user: one(user, {
+      fields: [groupConversationParticipant.userId],
+      references: [user.id],
+    }),
+  })
+);
+
+export const groupMessageRelations = relations(groupMessage, ({ one }) => ({
+  conversation: one(groupConversation, {
+    fields: [groupMessage.conversationId],
+    references: [groupConversation.id],
+  }),
+  sender: one(user, {
+    fields: [groupMessage.senderId],
+    references: [user.id],
+  }),
+}));
+
 export type User = typeof user.$inferSelect;
 export type NewUser = typeof user.$inferInsert;
 
@@ -795,3 +881,12 @@ export type NewAdminAction = typeof adminAction.$inferInsert;
 
 export type IdempotencyKey = typeof idempotencyKey.$inferSelect;
 export type NewIdempotencyKey = typeof idempotencyKey.$inferInsert;
+
+export type GroupConversation = typeof groupConversation.$inferSelect;
+export type NewGroupConversation = typeof groupConversation.$inferInsert;
+
+export type GroupConversationParticipant = typeof groupConversationParticipant.$inferSelect;
+export type NewGroupConversationParticipant = typeof groupConversationParticipant.$inferInsert;
+
+export type GroupMessage = typeof groupMessage.$inferSelect;
+export type NewGroupMessage = typeof groupMessage.$inferInsert;
