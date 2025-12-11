@@ -2,12 +2,13 @@
 
 import { getSession } from '@/lib/auth/session';
 import { db } from '@/lib/db';
-import { booking } from '@/lib/db/schema';
-import { eq, and, or } from 'drizzle-orm';
+import { booking, coachProfile } from '@/lib/db/schema';
+import { eq, and, or, sql } from 'drizzle-orm';
 import {
   captureBookingPayment,
   cancelBookingPayment,
   refundBookingPayment,
+  transferToCoach,
 } from '@/lib/stripe';
 import { stripe } from '@/lib/stripe';
 import { sendEmail } from '@/lib/email/resend';
@@ -19,13 +20,74 @@ import {
 import { z } from 'zod';
 import { uuidSchema, validateInput } from '@/lib/validations';
 
-/**
- * Coach accepts a booking request
- * Captures the held payment
- */
+async function processCoachPayoutSafely(bookingId: string): Promise<{ success: boolean; error?: string }> {
+  try {
+    const bookingRecord = await db.query.booking.findFirst({
+      where: eq(booking.id, bookingId),
+    });
+
+    if (!bookingRecord) {
+      return { success: false, error: 'Booking not found' };
+    }
+
+    if (bookingRecord.stripeTransferId) {
+      console.log(`[TRANSFER] Booking ${bookingId} already has transfer ${bookingRecord.stripeTransferId} - skipping`);
+      return { success: true };
+    }
+
+    if (!bookingRecord.stripePaymentIntentId) {
+      return { success: false, error: 'No payment intent found' };
+    }
+
+    const coach = await db.query.coachProfile.findFirst({
+      where: eq(coachProfile.userId, bookingRecord.coachId),
+      columns: {
+        stripeAccountId: true,
+      },
+    });
+
+    if (!coach?.stripeAccountId) {
+      console.error(`[TRANSFER] Coach has no Stripe account for booking ${bookingId}`);
+      return { success: false, error: 'Coach Stripe account not configured' };
+    }
+
+    const coachPayoutAmount = parseFloat(bookingRecord.coachPayout);
+
+    console.log(`[TRANSFER] Transferring $${coachPayoutAmount} to coach for booking ${bookingId}`);
+    const transfer = await transferToCoach(
+      coachPayoutAmount,
+      coach.stripeAccountId,
+      {
+        bookingId: bookingRecord.id,
+        paymentIntentId: bookingRecord.stripePaymentIntentId,
+        coachId: bookingRecord.coachId,
+      }
+    );
+
+    console.log(`[TRANSFER] Transfer successful: ${transfer.id}`);
+
+    const updateResult = await db
+      .update(booking)
+      .set({
+        stripeTransferId: transfer.id,
+        updatedAt: new Date(),
+      })
+      .where(
+        and(
+          eq(booking.id, bookingId),
+          sql`${booking.stripeTransferId} IS NULL`
+        )
+      );
+
+    return { success: true };
+  } catch (error) {
+    console.error(`[TRANSFER] Failed to transfer funds for booking ${bookingId}:`, error);
+    return { success: false, error: error instanceof Error ? error.message : 'Transfer failed' };
+  }
+}
+
 export async function acceptBooking(bookingId: string) {
   try {
-    // Validate input
     const validatedBookingId = validateInput(uuidSchema, bookingId);
 
     const session = await getSession();
@@ -54,50 +116,59 @@ export async function acceptBooking(bookingId: string) {
       return { success: false, error: 'Booking not found' };
     }
 
-    if (!bookingRecord.stripePaymentIntentId) {
-      return { success: false, error: 'No payment intent found' };
-    }
+    const paymentDueAt = new Date(Date.now() + 24 * 60 * 60 * 1000);
 
-    // Capture the held payment first
-    await captureBookingPayment(bookingRecord.stripePaymentIntentId!);
-
-    // Then update booking status
     await db
       .update(booking)
       .set({
-        status: 'accepted',
+        status: 'awaiting_payment',
         coachRespondedAt: new Date(),
+        paymentDueAt,
         updatedAt: new Date(),
       })
-         .where(eq(booking.id, validatedBookingId));
+      .where(eq(booking.id, validatedBookingId));
 
     console.log(`Booking accepted: ${validatedBookingId}`);
-    console.log(`Payment captured: ${bookingRecord.stripePaymentIntentId}`);
+    console.log(`Payment due by: ${paymentDueAt.toISOString()}`);
 
-    // Send email notification to client
     const startDate = new Date(bookingRecord.scheduledStartAt);
-    const endDate = new Date(bookingRecord.scheduledEndAt);
     
-    const emailTemplate = getBookingAcceptedEmailTemplate(
-      bookingRecord.client.name,
-      session.user.name,
-      {
-        date: startDate.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' }),
-        time: `${startDate.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })} - ${endDate.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })}`,
-        duration: bookingRecord.duration,
-        location: `${bookingRecord.location.name}, ${bookingRecord.location.address}`,
-        amount: parseFloat(bookingRecord.clientPaid).toFixed(2),
-      }
-    );
-
     await sendEmail({
       to: bookingRecord.client.email,
-      subject: emailTemplate.subject,
-      html: emailTemplate.html,
-      text: emailTemplate.text,
+      subject: `Lesson Accepted - Payment Required`,
+      html: `
+        <h2>Great news! Your lesson has been accepted</h2>
+        <p>Hi ${bookingRecord.client.name},</p>
+        <p>Your coach has accepted your lesson request for ${startDate.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' })} at ${startDate.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })}!</p>
+        
+        <h3>⏰ Payment Required</h3>
+        <p><strong>You have 24 hours to complete payment</strong> or this booking will be automatically cancelled.</p>
+        <p><strong>Payment Deadline:</strong> ${paymentDueAt.toLocaleString('en-US', { 
+          weekday: 'long', 
+          month: 'long', 
+          day: 'numeric', 
+          year: 'numeric',
+          hour: 'numeric',
+          minute: '2-digit'
+        })}</p>
+        
+        <p><strong>Amount:</strong> $${parseFloat(bookingRecord.clientPaid).toFixed(2)}</p>
+        
+        <p style="margin: 30px 0;">
+          <a href="${process.env.NEXT_PUBLIC_URL}/dashboard/bookings" 
+             style="background: linear-gradient(to right, #FF6B4A, #FF8C5A); color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px; font-weight: 600;">
+            Pay Now
+          </a>
+        </p>
+        
+        <p style="color: #666; font-size: 14px;">
+          You'll receive reminder emails at 12 hours and 30 minutes before the deadline.
+        </p>
+      `,
+      text: `Hi ${bookingRecord.client.name}, Your lesson has been accepted! Please complete payment within 24 hours. Payment deadline: ${paymentDueAt.toLocaleString()}. Amount: $${parseFloat(bookingRecord.clientPaid).toFixed(2)}. Visit ${process.env.NEXT_PUBLIC_URL}/dashboard/bookings to pay now.`,
     });
 
-    console.log(`Booking accepted email sent to: ${bookingRecord.client.email}`);
+    console.log(`Payment request email sent to: ${bookingRecord.client.email}`);
 
     return { success: true };
   } catch (error) {
@@ -106,10 +177,6 @@ export async function acceptBooking(bookingId: string) {
   }
 }
 
-/**
- * Coach declines a booking request
- * Cancels the held payment
- */
 export async function declineBooking(bookingId: string, reason?: string) {
   try {
     const session = await getSession();
@@ -134,10 +201,8 @@ export async function declineBooking(bookingId: string, reason?: string) {
       return { success: false, error: 'No payment intent found' };
     }
 
-    // Cancel the held payment first
     await cancelBookingPayment(bookingRecord.stripePaymentIntentId!);
 
-    // Then update booking status
     await db
       .update(booking)
       .set({
@@ -158,10 +223,6 @@ export async function declineBooking(bookingId: string, reason?: string) {
   }
 }
 
-/**
- * Cancel a booking
- * Either party can cancel before the session
- */
 export async function cancelBooking(bookingId: string, reason: string) {
   try {
     const session = await getSession();
@@ -192,14 +253,12 @@ export async function cancelBooking(bookingId: string, reason: string) {
       return { success: false, error: 'No payment intent found' };
     }
 
-    // Process payment refund/cancel first
     if (bookingRecord.status === 'accepted') {
       await refundBookingPayment(bookingRecord.stripePaymentIntentId!);
     } else {
       await cancelBookingPayment(bookingRecord.stripePaymentIntentId!);
     }
 
-    // Then update booking
     await db
       .update(booking)
       .set({
@@ -223,9 +282,6 @@ export async function cancelBooking(bookingId: string, reason: string) {
   }
 }
 
-/**
- * Mark booking as complete (coach marks after session)
- */
 export async function markBookingComplete(bookingId: string) {
   try {
     const session = await getSession();
@@ -240,23 +296,70 @@ export async function markBookingComplete(bookingId: string) {
         eq(booking.coachId, session.user.id),
         eq(booking.status, 'accepted')
       ),
+      with: {
+        client: {
+          columns: {
+            name: true,
+            email: true,
+          },
+        },
+        coach: {
+          columns: {
+            name: true,
+          },
+        },
+      },
     });
 
     if (!bookingRecord) {
       return { success: false, error: 'Booking not found' };
     }
 
-    // Update booking
+    const newStatus = bookingRecord.confirmedByClient ? 'completed' : 'accepted';
+
     await db
       .update(booking)
       .set({
         markedCompleteByCoach: true,
         markedCompleteByCoachAt: new Date(),
-        // If client already confirmed, mark as completed
-        status: bookingRecord.confirmedByClient ? 'completed' : 'accepted',
+        status: newStatus,
         updatedAt: new Date(),
       })
       .where(eq(booking.id, bookingId));
+
+    if (!bookingRecord.confirmedByClient) {
+      const startDate = new Date(bookingRecord.scheduledStartAt);
+      
+      await sendEmail({
+        to: bookingRecord.client.email,
+        subject: `Please confirm lesson completion with ${bookingRecord.coach.name}`,
+        html: `
+          <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+            <h2 style="color: #FF6B4A;">Lesson Completion Confirmation</h2>
+            <p>Hi ${bookingRecord.client.name},</p>
+            <p>${bookingRecord.coach.name} has marked your lesson on <strong>${startDate.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })}</strong> as complete.</p>
+            <p>Please confirm that the lesson was completed successfully:</p>
+            <p style="margin: 30px 0; text-align: center;">
+              <a href="${process.env.NEXT_PUBLIC_URL}/dashboard/bookings" 
+                 style="background: linear-gradient(to right, #FF6B4A, #FF8C5A); color: white; padding: 12px 32px; text-decoration: none; border-radius: 6px; font-weight: 600; display: inline-block;">
+                Confirm Completion
+              </a>
+            </p>
+            <p style="font-size: 14px; color: #666; border-top: 1px solid #eee; padding-top: 15px; margin-top: 30px;">
+              <strong>Note:</strong> If we don't hear from you within 7 days, we'll automatically confirm the lesson and release payment to the coach. If there was an issue with the lesson, please contact support immediately.
+            </p>
+          </div>
+        `,
+        text: `Hi ${bookingRecord.client.name}, ${bookingRecord.coach.name} has marked your lesson on ${startDate.toLocaleDateString()} as complete. Please log in to confirm at ${process.env.NEXT_PUBLIC_URL}/dashboard/bookings or contact support if there was an issue.`,
+      });
+
+      console.log(`Completion confirmation email sent to: ${bookingRecord.client.email}`);
+    }
+
+    // If BOTH have now confirmed (client confirmed first, coach marking now), transfer funds
+    if (newStatus === 'completed') {
+      await processCoachPayoutSafely(bookingId);
+    }
 
     console.log(`Booking marked complete by coach: ${bookingId}`);
 
@@ -267,9 +370,6 @@ export async function markBookingComplete(bookingId: string) {
   }
 }
 
-/**
- * Client confirms booking completion
- */
 export async function confirmBookingComplete(bookingId: string) {
   try {
     const session = await getSession();
@@ -290,10 +390,8 @@ export async function confirmBookingComplete(bookingId: string) {
       return { success: false, error: 'Booking not found' };
     }
 
-    // Determine new status
     const newStatus = bookingRecord.markedCompleteByCoach ? 'completed' : 'accepted';
 
-    // Update booking
     await db
       .update(booking)
       .set({
@@ -304,33 +402,8 @@ export async function confirmBookingComplete(bookingId: string) {
       })
       .where(eq(booking.id, bookingId));
 
-    // If booking is now completed, capture the payment
-    if (newStatus === 'completed' && bookingRecord.stripePaymentIntentId) {
-      try {
-        console.log(`Capturing payment for completed booking: ${bookingId}`);
-
-        // Capture the payment (this also creates the transfer to coach)
-        const paymentIntent = await stripe.paymentIntents.capture(
-          bookingRecord.stripePaymentIntentId
-        );
-
-        console.log(`Payment captured successfully: ${paymentIntent.id}`);
-
-        // Update booking with captured amount and status
-        await db
-          .update(booking)
-          .set({
-            // Store the final captured amount (should match what we calculated)
-            clientPaid: (paymentIntent.amount_received / 100).toString(),
-            updatedAt: new Date(),
-          })
-          .where(eq(booking.id, bookingId));
-
-      } catch (error) {
-        console.error(`Failed to capture payment for booking ${bookingId}:`, error);
-        // Don't fail the entire operation - booking is still completed
-        // The payment can be captured manually later
-      }
+    if (newStatus === 'completed') {
+      await processCoachPayoutSafely(bookingId);
     }
 
     console.log(`Booking confirmed by client: ${bookingId}`);

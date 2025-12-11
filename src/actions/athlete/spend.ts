@@ -14,7 +14,6 @@ export async function getAthleteSpendSummary(): Promise<AthleteSpendSummary> {
   const session = await requireRole('client');
   const athleteId = session.user.id;
 
-  // Get all completed bookings where athlete is the client
   const completedBookings = await db.query.booking.findMany({
     where: and(
       eq(booking.clientId, athleteId),
@@ -25,7 +24,6 @@ export async function getAthleteSpendSummary(): Promise<AthleteSpendSummary> {
     },
   });
 
-  // Calculate total spent
   const totalSpent = completedBookings.reduce(
     (sum, b) => sum + parseFloat(b.clientPaid as unknown as string),
     0

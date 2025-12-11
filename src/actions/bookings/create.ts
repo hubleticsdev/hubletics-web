@@ -1,21 +1,22 @@
 'use server';
 
+import crypto from 'crypto';
 import { getSession } from '@/lib/auth/session';
 import { db } from '@/lib/db';
 import { booking, coachProfile } from '@/lib/db/schema';
-import { eq } from 'drizzle-orm';
+import { eq, and, or, gte, lte, sql } from 'drizzle-orm';
 import { createBookingPaymentIntent } from '@/lib/stripe';
 import { calculateBookingPricing } from '@/lib/pricing';
 import { sendEmail } from '@/lib/email/resend';
 import { getBookingRequestEmailTemplate } from '@/lib/email/templates/booking-notifications';
 import { z } from 'zod';
 import { createBookingSchema, validateInput } from '@/lib/validations';
+import { withTransaction } from '@/lib/db/transactions';
 
 export type CreateBookingInput = z.infer<typeof createBookingSchema>;
 
 export async function createBooking(input: CreateBookingInput) {
   try {
-    // Validate input
     const validatedInput = validateInput(createBookingSchema, input);
 
     const session = await getSession();
@@ -24,7 +25,78 @@ export async function createBooking(input: CreateBookingInput) {
       return { success: false, error: 'Unauthorized' };
     }
 
-    // Get coach details including user platform fee
+    const idempotencyKey = crypto
+      .createHash('sha256')
+      .update(
+        JSON.stringify({
+          clientId: session.user.id,
+          coachId: validatedInput.coachId,
+          start: validatedInput.scheduledStartAt.toISOString(),
+          end: validatedInput.scheduledEndAt.toISOString(),
+          location: validatedInput.location,
+        })
+      )
+      .digest('hex');
+
+    const existingBooking = await db.query.booking.findFirst({
+      where: eq(booking.idempotencyKey, idempotencyKey),
+      columns: {
+        id: true,
+        status: true,
+        createdAt: true,
+      },
+    });
+
+    if (existingBooking) {
+      const ageHours = (Date.now() - new Date(existingBooking.createdAt).getTime()) / (1000 * 60 * 60);
+
+      if (ageHours < 24) {
+        console.log(`[IDEMPOTENCY] Returning existing booking ${existingBooking.id} (${ageHours.toFixed(1)}h old)`);
+        return {
+          success: true,
+          bookingId: existingBooking.id,
+        };
+      }
+    }
+
+    const now = new Date();
+    const conflicts = await db.query.booking.findMany({
+      where: and(
+        eq(booking.coachId, validatedInput.coachId),
+        or(
+          and(
+            gte(booking.scheduledStartAt, validatedInput.scheduledStartAt),
+            lte(booking.scheduledStartAt, validatedInput.scheduledEndAt)
+          ),
+          and(
+            gte(booking.scheduledEndAt, validatedInput.scheduledStartAt),
+            lte(booking.scheduledEndAt, validatedInput.scheduledEndAt)
+          ),
+          and(
+            lte(booking.scheduledStartAt, validatedInput.scheduledStartAt),
+            gte(booking.scheduledEndAt, validatedInput.scheduledEndAt)
+          )
+        ),
+        or(
+          sql`${booking.status} IN ('pending', 'awaiting_payment', 'accepted', 'open')`,
+          sql`${booking.lockedUntil} > ${now}`
+        )
+      ),
+      columns: {
+        id: true,
+        status: true,
+        lockedUntil: true,
+      },
+    });
+
+    if (conflicts.length > 0) {
+      console.log(`[CONFLICT] Time slot conflict for coach ${validatedInput.coachId}:`, conflicts);
+      return {
+        success: false,
+        error: 'This time slot is no longer available. Please select a different time.',
+      };
+    }
+
     const coach = await db.query.coachProfile.findFirst({
       where: eq(coachProfile.userId, validatedInput.coachId),
       with: {
@@ -45,13 +117,11 @@ export async function createBooking(input: CreateBookingInput) {
       return { success: false, error: 'Coach payment setup incomplete' };
     }
 
-    // Calculate duration in minutes
     const duration = Math.round(
       (validatedInput.scheduledEndAt.getTime() - validatedInput.scheduledStartAt.getTime()) /
         (1000 * 60)
     );
 
-    // Calculate pricing with proper formula
     const coachRateNum = parseFloat(coach.hourlyRate);
     const platformFee = coach.user?.platformFeePercentage
       ? parseFloat(coach.user.platformFeePercentage as unknown as string)
@@ -59,27 +129,7 @@ export async function createBooking(input: CreateBookingInput) {
 
     const pricing = calculateBookingPricing(coachRateNum, duration, platformFee);
 
-    // Create booking record
     const bookingId = crypto.randomUUID();
-    
-    let paymentIntentId: string;
-
-    // If paymentIntentId provided, use it (payment already confirmed)
-    // Otherwise, create a new PaymentIntent (backward compatibility)
-    if (validatedInput.paymentIntentId) {
-      paymentIntentId = validatedInput.paymentIntentId;
-    } else {
-      const paymentIntent = await createBookingPaymentIntent(
-        pricing.clientPays,
-        coach.stripeAccountId,
-        {
-          bookingId,
-          clientId: session.user.id,
-          coachId: input.coachId,
-        }
-      );
-      paymentIntentId = paymentIntent.id;
-    }
     
     await db.insert(booking).values({
       id: bookingId,
@@ -90,19 +140,19 @@ export async function createBooking(input: CreateBookingInput) {
       duration,
       location: validatedInput.location,
       clientMessage: validatedInput.clientMessage,
-      coachRate: pricing.coachDesiredRate.toString(), // What coach set (what they receive)
+      coachRate: pricing.coachDesiredRate.toString(),
       clientPaid: pricing.clientPays.toString(),
       platformFee: pricing.platformFee.toString(),
       stripeFee: pricing.stripeFee.toString(),
       coachPayout: pricing.coachPayout.toString(),
-      stripePaymentIntentId: paymentIntentId,
+      stripePaymentIntentId: null,
       status: 'pending',
+      idempotencyKey,
+      lockedUntil: new Date(Date.now() + 5 * 60 * 1000),
     });
 
-    console.log(`Booking created: ${bookingId}`);
-    console.log(`Payment intent: ${paymentIntentId}`);
+    console.log(`Booking created (deferred payment): ${bookingId}`);
 
-    // Send email notification to coach
     const emailTemplate = getBookingRequestEmailTemplate(
       coach.fullName,
       session.user.name,
