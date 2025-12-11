@@ -1,19 +1,18 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { loadStripe } from '@stripe/stripe-js';
-import { Elements, PaymentElement, useStripe, useElements } from '@stripe/react-stripe-js';
 import { createBooking } from '@/actions/bookings/create';
+import { createPrivateGroupBooking } from '@/actions/group-bookings/create-private-group';
 import { BookingCalendar } from './booking-calendar';
+import { ParticipantSelector } from '../group-bookings/participant-selector';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
-import { Loader2 } from 'lucide-react';
-
-const stripePromise = loadStripe(process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY!);
+import { Loader2, Clock } from 'lucide-react';
+import { toast } from 'sonner';
 
 interface BookingModalProps {
   coachId: string;
@@ -23,15 +22,12 @@ interface BookingModalProps {
   availability: Record<string, { start: string; end: string }[]>;
   blockedDates: string[];
   existingBookings: Array<{ scheduledStartAt: Date; scheduledEndAt: Date }>;
+  preferredLocations: Array<{ name: string; address: string; notes?: string }>;
+  mode?: 'private' | 'group';
   onClose: () => void;
 }
 
-interface BookingFormProps extends BookingModalProps {
-  clientSecret: string;
-  serverPricing?: { clientPays: number; coachReceives: number } | null;
-}
-
-function BookingForm({
+export function BookingModal({
   coachId,
   coachName,
   hourlyRate,
@@ -39,28 +35,41 @@ function BookingForm({
   availability,
   blockedDates,
   existingBookings,
+  preferredLocations,
+  mode = 'private',
   onClose,
-  clientSecret,
-  serverPricing,
-}: BookingFormProps) {
+}: BookingModalProps) {
   const router = useRouter();
-  const stripe = useStripe();
-  const elements = useElements();
 
   const [selectedSlot, setSelectedSlot] = useState<{ start: Date; end: Date } | null>(null);
+  const [selectedLocationIndex, setSelectedLocationIndex] = useState<number>(-1);
   const [locationName, setLocationName] = useState('');
   const [locationAddress, setLocationAddress] = useState('');
   const [locationNotes, setLocationNotes] = useState('');
   const [message, setMessage] = useState('');
+  const [participantUsernames, setParticipantUsernames] = useState<string[]>([]);
   const [isProcessing, setIsProcessing] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [step, setStep] = useState<'datetime' | 'details' | 'payment'>('datetime');
+  const [step, setStep] = useState<'datetime' | 'details' | 'review'>('datetime');
 
-  // Use server-calculated price
-  const totalCost = serverPricing?.clientPays || hourlyRate * (sessionDuration / 60);
+  const handleLocationSelect = (index: number) => {
+    setSelectedLocationIndex(index);
+    if (index >= 0 && preferredLocations[index]) {
+      const location = preferredLocations[index];
+      setLocationName(location.name);
+      setLocationAddress(location.address);
+      setLocationNotes(location.notes || '');
+    } else {
+      setLocationName('');
+      setLocationAddress('');
+      setLocationNotes('');
+    }
+  };
+
+  const baseSessionCost = hourlyRate * (sessionDuration / 60);
 
   const handleSubmit = async () => {
-    if (!stripe || !elements || !selectedSlot || !clientSecret) {
+    if (!selectedSlot) {
       return;
     }
 
@@ -68,70 +77,73 @@ function BookingForm({
     setError(null);
 
     try {
-      // Submit payment element to get payment method
-      const { error: submitError } = await elements.submit();
-      
-      if (submitError) {
-        throw new Error(submitError.message);
+      let bookingResult;
+
+      if (mode === 'group') {
+        if (participantUsernames.length === 0) {
+          throw new Error('Please add at least one participant');
+        }
+
+        bookingResult = await createPrivateGroupBooking({
+          coachId,
+          scheduledStartAt: selectedSlot.start,
+          scheduledEndAt: selectedSlot.end,
+          duration: sessionDuration,
+          location: {
+            name: locationName,
+            address: locationAddress,
+            notes: locationNotes || undefined,
+          },
+          participantUsernames,
+          clientMessage: message || undefined,
+        });
+      } else {
+        bookingResult = await createBooking({
+          coachId,
+          scheduledStartAt: selectedSlot.start,
+          scheduledEndAt: selectedSlot.end,
+          location: {
+            name: locationName,
+            address: locationAddress,
+            notes: locationNotes || undefined,
+          },
+          clientMessage: message || undefined,
+        });
       }
-
-      // Confirm payment with Stripe (holds funds)
-      const { error: confirmError, paymentIntent } = await stripe.confirmPayment({
-        elements,
-        clientSecret,
-        redirect: 'if_required',
-        confirmParams: {
-          return_url: `${window.location.origin}/dashboard/athlete`,
-        },
-      });
-
-      if (confirmError) {
-        throw new Error(confirmError.message);
-      }
-
-      if (!paymentIntent) {
-        throw new Error('Payment confirmation failed');
-      }
-
-      // Payment confirmed, create the booking record
-      const bookingResult = await createBooking({
-        coachId,
-        scheduledStartAt: selectedSlot.start,
-        scheduledEndAt: selectedSlot.end,
-        location: {
-          name: locationName,
-          address: locationAddress,
-          notes: locationNotes || undefined,
-        },
-        clientMessage: message || undefined,
-        paymentIntentId: paymentIntent.id,
-      });
 
       if (!bookingResult.success) {
-        throw new Error(bookingResult.error || 'Failed to create booking');
+        throw new Error(bookingResult.error || 'Failed to create booking request');
       }
 
-      // Success, close the modal and redirect to dashboard
+      const successMessage = mode === 'group' 
+        ? `Group booking request sent for ${participantUsernames.length + 1} participants!`
+        : 'Booking request sent!';
+
+      toast.success(successMessage, {
+        description: 'You\'ll be notified when the coach responds. If accepted, you\'ll have 24 hours to complete payment.',
+      });
+
       onClose();
-      router.push('/dashboard/athlete');
+      router.push('/dashboard/bookings');
       router.refresh();
     } catch (err) {
       setError(err instanceof Error ? err.message : 'An error occurred');
+      toast.error('Failed to send booking request');
     } finally {
       setIsProcessing(false);
     }
   };
 
   const canProceedToDetails = selectedSlot !== null;
-  const canProceedToPayment = locationName && locationAddress;
+  const canProceedToReview = locationName && locationAddress;
 
   return (
     <Dialog open={true} onOpenChange={onClose}>
       <DialogContent className="sm:max-w-4xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle>Book Session with {coachName}</DialogTitle>
+          <DialogTitle>Request Session with {coachName}</DialogTitle>
           <DialogDescription>
-            Complete the 3-step booking process to secure your session
+            Send a booking request to the coach. If accepted, you'll have 24 hours to complete payment.
           </DialogDescription>
           <div className="flex items-center gap-4 mt-2 text-sm text-muted-foreground">
             <span className={step === 'datetime' ? 'text-[#FF6B4A] font-semibold' : ''}>
@@ -142,8 +154,8 @@ function BookingForm({
               2. Details
             </span>
             <span className="text-gray-300">→</span>
-            <span className={step === 'payment' ? 'text-[#FF6B4A] font-semibold' : ''}>
-              3. Payment
+            <span className={step === 'review' ? 'text-[#FF6B4A] font-semibold' : ''}>
+              3. Review
             </span>
           </div>
         </DialogHeader>
@@ -155,7 +167,6 @@ function BookingForm({
             </div>
           )}
 
-          {/* Step 1: Date & Time Selection */}
           {step === 'datetime' && (
             <div className="space-y-6">
               <BookingCalendar
@@ -194,8 +205,8 @@ function BookingForm({
                       </div>
                     </div>
                     <div className="text-right">
-                      <div className="text-2xl font-bold text-[#FF6B4A]">${totalCost.toFixed(2)}</div>
-                      <div className="text-xs text-gray-600">Total cost</div>
+                      <div className="text-2xl font-bold text-[#FF6B4A]">${baseSessionCost.toFixed(2)}</div>
+                      <div className="text-xs text-gray-600">Session cost</div>
                     </div>
                   </div>
                 </div>
@@ -222,44 +233,87 @@ function BookingForm({
             </div>
           )}
 
-          {/* Step 2: Location & Message */}
           {step === 'details' && (
             <div className="space-y-6">
-              <div className="space-y-2">
-                <Label htmlFor="locationName">
-                  Location Name *
-                </Label>
-                <Input
-                  id="locationName"
-                  value={locationName}
-                  onChange={(e) => setLocationName(e.target.value)}
-                  placeholder="e.g., Central Park, LA Fitness"
-                />
-              </div>
+              {preferredLocations.length > 0 && (
+                <div className="space-y-2">
+                  <Label htmlFor="preferredLocation">
+                    Select Location *
+                  </Label>
+                  <select
+                    id="preferredLocation"
+                    value={selectedLocationIndex}
+                    onChange={(e) => handleLocationSelect(parseInt(e.target.value))}
+                    className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-[#FF6B4A] focus:outline-none focus:ring-1 focus:ring-[#FF6B4A]"
+                  >
+                    <option value={-1}>Custom location</option>
+                    {preferredLocations.map((location, index) => (
+                      <option key={index} value={index}>
+                        {location.name} - {location.address}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              )}
 
-              <div className="space-y-2">
-                <Label htmlFor="locationAddress">
-                  Address *
-                </Label>
-                <Input
-                  id="locationAddress"
-                  value={locationAddress}
-                  onChange={(e) => setLocationAddress(e.target.value)}
-                  placeholder="Full address"
-                />
-              </div>
+              {(preferredLocations.length === 0 || selectedLocationIndex === -1) && (
+                <>
+                  <div className="space-y-2">
+                    <Label htmlFor="locationName">
+                      Location Name *
+                    </Label>
+                    <Input
+                      id="locationName"
+                      value={locationName}
+                      onChange={(e) => setLocationName(e.target.value)}
+                      placeholder="e.g., Central Park, LA Fitness"
+                    />
+                  </div>
 
-              <div className="space-y-2">
-                <Label htmlFor="locationNotes">
-                  Location Notes (Optional)
-                </Label>
-                <Input
-                  id="locationNotes"
-                  value={locationNotes}
-                  onChange={(e) => setLocationNotes(e.target.value)}
-                  placeholder="e.g., Meet at main entrance"
-                />
-              </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="locationAddress">
+                      Address *
+                    </Label>
+                    <Input
+                      id="locationAddress"
+                      value={locationAddress}
+                      onChange={(e) => setLocationAddress(e.target.value)}
+                      placeholder="Full address"
+                    />
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label htmlFor="locationNotes">
+                      Location Notes (Optional)
+                    </Label>
+                    <Input
+                      id="locationNotes"
+                      value={locationNotes}
+                      onChange={(e) => setLocationNotes(e.target.value)}
+                      placeholder="e.g., Meet at main entrance"
+                    />
+                  </div>
+                </>
+              )}
+
+              {preferredLocations.length > 0 && selectedLocationIndex >= 0 && (
+                <div className="p-4 bg-gray-50 rounded-lg space-y-2">
+                  <div>
+                    <p className="text-xs font-semibold text-gray-500">LOCATION</p>
+                    <p className="text-sm text-gray-900">{locationName}</p>
+                  </div>
+                  <div>
+                    <p className="text-xs font-semibold text-gray-500">ADDRESS</p>
+                    <p className="text-sm text-gray-900">{locationAddress}</p>
+                  </div>
+                  {locationNotes && (
+                    <div>
+                      <p className="text-xs font-semibold text-gray-500">NOTES</p>
+                      <p className="text-sm text-gray-900">{locationNotes}</p>
+                    </div>
+                  )}
+                </div>
+              )}
 
               <div className="space-y-2">
                 <Label htmlFor="message">
@@ -274,6 +328,20 @@ function BookingForm({
                 />
               </div>
 
+              {mode === 'group' && (
+                <div className="space-y-2">
+                  <Label>Participants *</Label>
+                  <ParticipantSelector
+                    selectedUsernames={participantUsernames}
+                    onAdd={(username) => setParticipantUsernames(prev => [...prev, username])}
+                    onRemove={(username) => setParticipantUsernames(prev => prev.filter(u => u !== username))}
+                  />
+                  <p className="text-sm text-gray-500">
+                    Total: You + {participantUsernames.length} participant{participantUsernames.length !== 1 ? 's' : ''} = {participantUsernames.length + 1} people
+                  </p>
+                </div>
+              )}
+
               <div className="flex gap-3 mt-6">
                 <Button
                   type="button"
@@ -285,43 +353,65 @@ function BookingForm({
                 </Button>
                 <Button
                   type="button"
-                  onClick={() => setStep('payment')}
-                  disabled={!canProceedToPayment}
+                  onClick={() => setStep('review')}
+                  disabled={!canProceedToReview}
                   className="flex-1 bg-gradient-to-r from-[#FF6B4A] to-[#FF8C5A] hover:opacity-90"
                 >
-                  Continue to Payment
+                  Review Request
                 </Button>
               </div>
             </div>
           )}
 
-          {/* Step 3: Payment */}
-          {step === 'payment' && (
+          {step === 'review' && (
             <div className="space-y-6">
-              <div className="p-4 bg-gray-50 rounded-lg">
-                <div className="flex items-center justify-between mb-2">
-                  <span className="text-gray-700">Session ({sessionDuration} min)</span>
-                  <span className="font-semibold">${totalCost.toFixed(2)}</span>
+              <div className="p-4 bg-gray-50 rounded-lg space-y-4">
+                <div>
+                  <h3 className="text-sm font-semibold text-gray-500 uppercase mb-2">Session Details</h3>
+                  <div className="space-y-1 text-gray-900">
+                    <div className="font-medium">
+                      {selectedSlot?.start.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })}
+                    </div>
+                    <div className="text-sm">
+                      {selectedSlot?.start.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })}
+                      {' - '}
+                      {selectedSlot?.end.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })}
+                      {' • '}
+                      {sessionDuration} minutes
+                    </div>
+                  </div>
                 </div>
-                <div className="text-sm text-gray-600">
-                  {selectedSlot?.start.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })}
-                  {' at '}
-                  {selectedSlot?.start.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })}
+
+                <div className="border-t border-gray-200 pt-3">
+                  <h3 className="text-sm font-semibold text-gray-500 uppercase mb-2">Location</h3>
+                  <div className="space-y-1 text-gray-900">
+                    <div className="font-medium">{locationName}</div>
+                    <div className="text-sm">{locationAddress}</div>
+                    {locationNotes && <div className="text-sm text-gray-600">{locationNotes}</div>}
+                  </div>
+                </div>
+
+                {message && (
+                  <div className="border-t border-gray-200 pt-3">
+                    <h3 className="text-sm font-semibold text-gray-500 uppercase mb-2">Your Message</h3>
+                    <div className="text-sm text-gray-900">{message}</div>
+                  </div>
+                )}
+
+                <div className="border-t border-gray-200 pt-3">
+                  <h3 className="text-sm font-semibold text-gray-500 uppercase mb-2">Estimated Cost</h3>
+                  <div className="text-2xl font-bold text-[#FF6B4A]">${baseSessionCost.toFixed(2)}</div>
+                  <div className="text-xs text-gray-600 mt-1">Plus platform fees (calculated at payment)</div>
                 </div>
               </div>
 
-              <div>
-                <h3 className="text-lg font-semibold text-gray-900 mb-3">Payment Details</h3>
-                <PaymentElement />
-              </div>
-
-              <div className="p-4 bg-blue-50 border border-blue-200 rounded-lg">
+              <div className="p-4 bg-orange-50 border border-orange-200 rounded-lg">
                 <div className="flex items-start gap-2">
-                  <svg className="w-5 h-5 text-blue-600 mt-0.5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                  </svg>
-                  <div className="text-sm text-blue-800">
-                    <strong>Payment Hold:</strong> Your payment will be authorized but not charged until the coach accepts your request. If declined, the authorization will be released immediately.
+                  <Clock className="w-5 h-5 text-orange-600 mt-0.5 shrink-0" />
+                  <div className="text-sm text-orange-900">
+                    <strong>No payment required yet.</strong> Your request will be sent to {coachName}.
+                    If they accept, you'll have <strong>24 hours</strong> to complete payment.
+                    If declined, no charges will be made.
                   </div>
                 </div>
               </div>
@@ -339,16 +429,16 @@ function BookingForm({
                 <Button
                   type="button"
                   onClick={handleSubmit}
-                  disabled={isProcessing || !stripe || !elements}
+                  disabled={isProcessing}
                   className="flex-1 bg-gradient-to-r from-[#FF6B4A] to-[#FF8C5A] hover:opacity-90"
                 >
                   {isProcessing ? (
                     <>
                       <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                      Processing...
+                      Sending Request...
                     </>
                   ) : (
-                    `Pay $${totalCost.toFixed(2)}`
+                    'Send Booking Request'
                   )}
                 </Button>
               </div>
@@ -357,68 +447,6 @@ function BookingForm({
         </div>
       </DialogContent>
     </Dialog>
-  );
-}
-
-export function BookingModal(props: BookingModalProps) {
-  const [clientSecret, setClientSecret] = useState<string | null>(null);
-  const [serverPricing, setServerPricing] = useState<{ clientPays: number; coachReceives: number } | null>(null);
-
-  useEffect(() => {
-    // Create the PaymentIntent upfront to get client_secret
-    fetch('/api/bookings/create-intent', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        coachId: props.coachId,
-        sessionDuration: props.sessionDuration,
-      }),
-    })
-      .then(res => res.json())
-      .then(data => {
-        if (data.clientSecret) {
-          setClientSecret(data.clientSecret);
-          if (data.pricing) {
-            setServerPricing(data.pricing);
-          }
-        }
-      })
-      .catch(err => {
-        console.error('Failed to create payment intent:', err);
-      });
-  }, [props.coachId, props.sessionDuration]);
-
-  if (!clientSecret) {
-    return (
-      <Dialog open={true} onOpenChange={props.onClose}>
-        <DialogContent className="sm:max-w-md" showCloseButton={false}>
-          <DialogHeader>
-            <DialogTitle>Loading...</DialogTitle>
-          </DialogHeader>
-          <div className="flex flex-col items-center justify-center py-8">
-            <Loader2 className="h-12 w-12 animate-spin text-[#FF6B4A]" />
-            <p className="mt-4 text-gray-600">Preparing booking form...</p>
-          </div>
-        </DialogContent>
-      </Dialog>
-    );
-  }
-
-  return (
-    <Elements
-      stripe={stripePromise}
-      options={{
-        clientSecret,
-        appearance: {
-          theme: 'stripe',
-          variables: {
-            colorPrimary: '#FF6B4A',
-          },
-        },
-      }}
-    >
-      <BookingForm {...props} clientSecret={clientSecret} serverPricing={serverPricing} />
-    </Elements>
   );
 }
 

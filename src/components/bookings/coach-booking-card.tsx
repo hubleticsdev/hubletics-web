@@ -81,7 +81,6 @@ export function CoachBookingCard({ booking, onUpdate }: BookingCardProps) {
         </div>
       )}
 
-      {/* Client Info */}
       <div className="flex items-center gap-4 mb-4 pb-4 border-b border-gray-200">
         <div className="relative w-12 h-12 rounded-full overflow-hidden bg-gray-200 flex-shrink-0">
           {booking.client.image ? (
@@ -98,7 +97,6 @@ export function CoachBookingCard({ booking, onUpdate }: BookingCardProps) {
         </div>
       </div>
 
-      {/* Booking Details */}
       <div className="space-y-3 mb-4">
         <div className="flex items-start gap-3">
           <svg className="w-5 h-5 text-[#FF6B4A] mt-0.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -198,8 +196,7 @@ export function CoachBookingCard({ booking, onUpdate }: BookingCardProps) {
           </div>
         </div>
       </div>
-
-      {/* Actions */}
+      
       {booking.status === 'pending' && !showDeclineForm && (
         <div className="flex gap-3 pt-4 border-t border-gray-200">
           <button

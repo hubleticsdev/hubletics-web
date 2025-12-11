@@ -4,9 +4,9 @@ import { useState, useMemo } from 'react';
 import { Button } from '@/components/ui/button';
 
 interface BookingCalendarProps {
-  coachAvailability: Record<string, { start: string; end: string }[]>; // e.g., { "monday": [{ start: "09:00", end: "17:00" }] }
-  blockedDates: string[]; // ISO date strings
-  sessionDuration: number; // minutes
+  coachAvailability: Record<string, { start: string; end: string }[]>;
+  blockedDates: string[];
+  sessionDuration: number;
   existingBookings: Array<{ scheduledStartAt: Date; scheduledEndAt: Date }>;
   onSelectSlot: (startTime: Date, endTime: Date) => void;
   selectedSlot: { start: Date; end: Date } | null;
@@ -22,7 +22,6 @@ export function BookingCalendar({
 }: BookingCalendarProps) {
   const [selectedDate, setSelectedDate] = useState<Date | null>(null);
 
-  // Generate next 30 days that have actual available time slots
   const availableDates = useMemo(() => {
     const dates: Date[] = [];
     const today = new Date();
@@ -35,14 +34,11 @@ export function BookingCalendar({
       const dayName = date.toLocaleDateString('en-US', { weekday: 'long' }).toLowerCase();
       const dateString = date.toISOString().split('T')[0];
 
-      // Skip if date is blocked
       if (blockedDates.includes(dateString)) continue;
 
-      // Skip if coach has no availability for this day of week
       const dayAvailability = coachAvailability[dayName];
       if (!dayAvailability || dayAvailability.length === 0) continue;
 
-      // Check if there are any available time slots for this date (not conflicting with existing bookings)
       let hasAvailableSlots = false;
 
       for (const { start, end } of dayAvailability) {
@@ -60,7 +56,6 @@ export function BookingCalendar({
         while (currentSlot.getTime() + sessionDuration * 60000 <= endTime.getTime()) {
           const slotEnd = new Date(currentSlot.getTime() + sessionDuration * 60000);
 
-          // Check if slot conflicts with existing bookings
           const isAvailable = !existingBookings.some(booking => {
             const bookingStart = new Date(booking.scheduledStartAt);
             const bookingEnd = new Date(booking.scheduledEndAt);
@@ -71,13 +66,12 @@ export function BookingCalendar({
             );
           });
 
-          // Check if slot is in the future
           if (isAvailable && currentSlot > new Date()) {
             hasAvailableSlots = true;
             break;
           }
 
-          currentSlot = new Date(currentSlot.getTime() + 30 * 60000); // 30 min intervals
+          currentSlot = new Date(currentSlot.getTime() + 30 * 60000);
         }
 
         if (hasAvailableSlots) break;
@@ -91,7 +85,6 @@ export function BookingCalendar({
     return dates;
   }, [coachAvailability, blockedDates, sessionDuration, existingBookings]);
 
-  // Generate time slots for selected date
   const timeSlots = useMemo(() => {
     if (!selectedDate) return [];
 
@@ -117,7 +110,6 @@ export function BookingCalendar({
       while (currentSlot.getTime() + sessionDuration * 60000 <= endTime.getTime()) {
         const slotEnd = new Date(currentSlot.getTime() + sessionDuration * 60000);
         
-        // Check if slot conflicts with existing bookings
         const isAvailable = !existingBookings.some(booking => {
           const bookingStart = new Date(booking.scheduledStartAt);
           const bookingEnd = new Date(booking.scheduledEndAt);
@@ -128,7 +120,6 @@ export function BookingCalendar({
           );
         });
 
-        // Only show future slots
         if (currentSlot > new Date()) {
           slots.push({
             start: new Date(currentSlot),
@@ -137,7 +128,7 @@ export function BookingCalendar({
           });
         }
 
-        currentSlot = new Date(currentSlot.getTime() + 30 * 60000); // 30 min intervals
+        currentSlot = new Date(currentSlot.getTime() + 30 * 60000);
       }
     });
 
@@ -161,7 +152,6 @@ export function BookingCalendar({
 
   return (
     <div className="space-y-6">
-      {/* Development Debug Info */}
       {process.env.NODE_ENV === 'development' && availableDates.length === 0 && (
         <div className="p-4 bg-yellow-50 border border-yellow-200 rounded-lg text-sm">
           <p className="font-semibold text-yellow-900 mb-2">Debug Info:</p>
@@ -175,7 +165,6 @@ export function BookingCalendar({
         </div>
       )}
 
-      {/* Date Selection */}
       <div>
         <h3 className="text-lg font-semibold text-gray-900 mb-3">Select a Date</h3>
         {availableDates.length === 0 ? (
@@ -216,7 +205,6 @@ export function BookingCalendar({
         )}
       </div>
 
-      {/* Time Slot Selection */}
       {selectedDate && (
         <div>
           <h3 className="text-lg font-semibold text-gray-900 mb-3">

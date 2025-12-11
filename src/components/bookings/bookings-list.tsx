@@ -1,12 +1,24 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
-import { Calendar, MapPin, Clock, DollarSign, User, Loader2 } from 'lucide-react';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
+import { Calendar, MapPin, Clock, DollarSign, User, Loader2, Star, AlertCircle } from 'lucide-react';
 import { acceptBooking, declineBooking } from '@/actions/bookings/respond';
+import { ReviewModal } from '@/components/reviews/review-modal';
+import { PaymentModal } from '@/components/bookings/payment-modal';
 import { useRouter } from 'next/navigation';
 
-type BookingStatus = 'pending' | 'accepted' | 'declined' | 'cancelled' | 'completed' | 'disputed';
+type BookingStatus = 'pending' | 'awaiting_payment' | 'accepted' | 'declined' | 'cancelled' | 'completed' | 'disputed' | 'open';
 
 interface Booking {
   id: string;
@@ -22,6 +34,7 @@ interface Booking {
   clientPaid: string;
   status: BookingStatus;
   coachRespondedAt: Date | null;
+  paymentDueAt?: Date | null;
   client?: {
     id: string;
     name: string;
@@ -34,6 +47,10 @@ interface Booking {
     email: string;
     image: string | null;
   };
+  review?: {
+    id: string;
+    rating: number;
+  } | null;
 }
 
 interface BookingsListProps {
@@ -47,10 +64,23 @@ export function BookingsList({ bookings, userRole, userId }: BookingsListProps) 
   const [filter, setFilter] = useState<'all' | 'pending' | 'upcoming' | 'past'>('all');
   const [processingBookingId, setProcessingBookingId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [reviewModalOpen, setReviewModalOpen] = useState(false);
+  const [selectedBooking, setSelectedBooking] = useState<{
+    id: string;
+    coachName: string;
+  } | null>(null);
+  const [paymentModalOpen, setPaymentModalOpen] = useState(false);
+  const [selectedPayment, setSelectedPayment] = useState<{
+    id: string;
+    coachName: string;
+    amount: number;
+    paymentDueAt: Date;
+  } | null>(null);
+  const [declineDialogOpen, setDeclineDialogOpen] = useState(false);
+  const [bookingToDecline, setBookingToDecline] = useState<string | null>(null);
 
   const now = new Date();
 
-  // Filter bookings based on selected filter
   const filteredBookings = bookings.filter((booking) => {
     const bookingDate = new Date(booking.scheduledStartAt);
     const isPast = bookingDate < now;
@@ -73,6 +103,8 @@ export function BookingsList({ bookings, userRole, userId }: BookingsListProps) 
     switch (status) {
       case 'pending':
         return 'bg-yellow-100 text-yellow-800';
+      case 'awaiting_payment':
+        return 'bg-orange-100 text-orange-800';
       case 'accepted':
         return 'bg-green-100 text-green-800';
       case 'declined':
@@ -83,6 +115,8 @@ export function BookingsList({ bookings, userRole, userId }: BookingsListProps) 
         return 'bg-blue-100 text-blue-800';
       case 'disputed':
         return 'bg-purple-100 text-purple-800';
+      case 'open':
+        return 'bg-teal-100 text-teal-800';
       default:
         return 'bg-gray-100 text-gray-800';
     }
@@ -118,15 +152,19 @@ export function BookingsList({ bookings, userRole, userId }: BookingsListProps) 
     }
   };
 
-  const handleDecline = async (bookingId: string) => {
-    // TODO: Add a confirmation dialog with reason input
-    const confirmed = confirm('Are you sure you want to decline this booking request?');
-    if (!confirmed) return;
+  const handleDecline = (bookingId: string) => {
+    setBookingToDecline(bookingId);
+    setDeclineDialogOpen(true);
+  };
 
-    setProcessingBookingId(bookingId);
+  const confirmDecline = async () => {
+    if (!bookingToDecline) return;
+
+    setProcessingBookingId(bookingToDecline);
     setError(null);
+    setDeclineDialogOpen(false);
 
-    const result = await declineBooking(bookingId);
+    const result = await declineBooking(bookingToDecline);
 
     if (result.success) {
       router.refresh();
@@ -134,18 +172,18 @@ export function BookingsList({ bookings, userRole, userId }: BookingsListProps) 
       setError(result.error || 'Failed to decline booking');
       setProcessingBookingId(null);
     }
+
+    setBookingToDecline(null);
   };
 
   return (
     <div>
-      {/* Error Message */}
       {error && (
         <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-lg">
           <p className="text-sm text-red-800">{error}</p>
         </div>
       )}
 
-      {/* Filter Tabs */}
       <div className="bg-white rounded-lg shadow mb-6">
         <div className="border-b border-gray-200">
           <nav className="flex -mb-px">
@@ -200,7 +238,6 @@ export function BookingsList({ bookings, userRole, userId }: BookingsListProps) 
         </div>
       </div>
 
-      {/* Bookings List */}
       {filteredBookings.length === 0 ? (
         <div className="bg-white rounded-lg shadow p-12 text-center">
           <div className="text-gray-400 mb-4">
@@ -226,7 +263,6 @@ export function BookingsList({ bookings, userRole, userId }: BookingsListProps) 
                 <div className="p-6">
                   <div className="flex items-start justify-between">
                     <div className="flex-1">
-                      {/* Status Badge */}
                       <div className="flex items-center gap-3 mb-3">
                         <span
                           className={`px-3 py-1 rounded-full text-xs font-semibold uppercase ${getStatusColor(
@@ -240,7 +276,6 @@ export function BookingsList({ bookings, userRole, userId }: BookingsListProps) 
                         )}
                       </div>
 
-                      {/* Other User Info */}
                       <div className="flex items-center gap-3 mb-4">
                         <div className="w-12 h-12 rounded-full bg-gray-200 flex items-center justify-center overflow-hidden">
                           {otherUser?.image ? (
@@ -257,7 +292,6 @@ export function BookingsList({ bookings, userRole, userId }: BookingsListProps) 
                         </div>
                       </div>
 
-                      {/* Booking Details */}
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                         <div className="flex items-start gap-2">
                           <Calendar className="h-5 w-5 text-gray-400 mt-0.5" />
@@ -297,7 +331,6 @@ export function BookingsList({ bookings, userRole, userId }: BookingsListProps) 
                         </div>
                       </div>
 
-                      {/* Client Message */}
                       {booking.clientMessage && (
                         <div className="mt-4 p-3 bg-gray-50 rounded-lg">
                           <div className="text-xs font-semibold text-gray-700 mb-1">Message from client:</div>
@@ -306,37 +339,91 @@ export function BookingsList({ bookings, userRole, userId }: BookingsListProps) 
                       )}
                     </div>
 
-                    {/* Actions */}
-                    {booking.status === 'pending' && userRole === 'coach' && (
-                      <div className="ml-6 flex flex-col gap-2">
+                    <div className="ml-6 flex flex-col gap-2">
+                      {booking.status === 'pending' && userRole === 'coach' && (
+                        <>
+                          <Button
+                            type="button"
+                            onClick={() => handleAccept(booking.id)}
+                            disabled={processingBookingId === booking.id}
+                            className="bg-green-600 hover:bg-green-700 text-white"
+                            size="sm"
+                          >
+                            {processingBookingId === booking.id ? (
+                              <>
+                                <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                                Processing...
+                              </>
+                            ) : (
+                              'Accept'
+                            )}
+                          </Button>
+                          <Button
+                            type="button"
+                            onClick={() => handleDecline(booking.id)}
+                            disabled={processingBookingId === booking.id}
+                            variant="outline"
+                            className="border-red-300 text-red-600 hover:bg-red-50"
+                            size="sm"
+                          >
+                            Decline
+                          </Button>
+                        </>
+                      )}
+
+                      {booking.status === 'awaiting_payment' && userRole === 'client' && booking.paymentDueAt && (
+                        <>
+                          <Button
+                            type="button"
+                            onClick={() => {
+                              if (booking.paymentDueAt) {
+                                setSelectedPayment({
+                                  id: booking.id,
+                                  coachName: booking.coach?.name || 'Coach',
+                                  amount: parseFloat(booking.clientPaid),
+                                  paymentDueAt: new Date(booking.paymentDueAt),
+                                });
+                                setPaymentModalOpen(true);
+                              }
+                            }}
+                            className="bg-gradient-to-r from-[#FF6B4A] to-[#FF8C5A] hover:opacity-90 text-white"
+                            size="sm"
+                          >
+                            <DollarSign className="h-4 w-4 mr-2" />
+                            Pay Now
+                          </Button>
+                          <div className="px-2 py-1 bg-orange-50 rounded text-xs text-orange-700 flex items-center gap-1">
+                            <AlertCircle className="h-3 w-3" />
+                            <CountdownTimer deadline={new Date(booking.paymentDueAt)} />
+                          </div>
+                        </>
+                      )}
+
+                      {booking.status === 'completed' && userRole === 'client' && !booking.review && (
                         <Button
                           type="button"
-                          onClick={() => handleAccept(booking.id)}
-                          disabled={processingBookingId === booking.id}
-                          className="bg-green-600 hover:bg-green-700 text-white"
+                          onClick={() => {
+                            setSelectedBooking({
+                              id: booking.id,
+                              coachName: booking.coach?.name || 'Coach',
+                            });
+                            setReviewModalOpen(true);
+                          }}
+                          className="bg-gradient-to-r from-[#FF6B4A] to-[#FF8C5A] hover:opacity-90 text-white"
                           size="sm"
                         >
-                          {processingBookingId === booking.id ? (
-                            <>
-                              <Loader2 className="h-4 w-4 animate-spin mr-2" />
-                              Processing...
-                            </>
-                          ) : (
-                            'Accept'
-                          )}
+                          <Star className="h-4 w-4 mr-2" />
+                          Leave Review
                         </Button>
-                        <Button
-                          type="button"
-                          onClick={() => handleDecline(booking.id)}
-                          disabled={processingBookingId === booking.id}
-                          variant="outline"
-                          className="border-red-300 text-red-600 hover:bg-red-50"
-                          size="sm"
-                        >
-                          Decline
-                        </Button>
-                      </div>
-                    )}
+                      )}
+
+                      {booking.status === 'completed' && userRole === 'client' && booking.review && (
+                        <div className="flex items-center gap-2 px-3 py-2 bg-green-50 rounded-md border border-green-200">
+                          <Star className="h-4 w-4 text-[#FF6B4A] fill-[#FF6B4A]" />
+                          <span className="text-sm text-green-800 font-medium">Review submitted</span>
+                        </div>
+                      )}
+                    </div>
                   </div>
                 </div>
               </div>
@@ -344,6 +431,92 @@ export function BookingsList({ bookings, userRole, userId }: BookingsListProps) 
           })}
         </div>
       )}
+
+      {selectedBooking && (
+        <ReviewModal
+          isOpen={reviewModalOpen}
+          onClose={() => {
+            setReviewModalOpen(false);
+            setSelectedBooking(null);
+          }}
+          bookingId={selectedBooking.id}
+          coachName={selectedBooking.coachName}
+          onSuccess={() => {
+            router.refresh();
+          }}
+        />
+      )}
+
+      {selectedPayment && (
+        <PaymentModal
+          isOpen={paymentModalOpen}
+          onClose={() => {
+            setPaymentModalOpen(false);
+            setSelectedPayment(null);
+          }}
+          bookingId={selectedPayment.id}
+          coachName={selectedPayment.coachName}
+          amount={selectedPayment.amount}
+          paymentDueAt={selectedPayment.paymentDueAt}
+          onSuccess={() => {
+            router.refresh();
+            setPaymentModalOpen(false);
+            setSelectedPayment(null);
+          }}
+        />
+      )}
+
+      <AlertDialog open={declineDialogOpen} onOpenChange={setDeclineDialogOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Decline Booking Request?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Are you sure you want to decline this booking request? The client will be notified and can book a different time slot.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={confirmDecline}
+              className="bg-red-600 hover:bg-red-700"
+            >
+              Decline Booking
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
+}
+
+function CountdownTimer({ deadline }: { deadline: Date }) {
+  const [timeLeft, setTimeLeft] = useState('');
+
+  useEffect(() => {
+    const updateCountdown = () => {
+      const now = new Date().getTime();
+      const distance = deadline.getTime() - now;
+
+      if (distance < 0) {
+        setTimeLeft('Expired');
+        return;
+      }
+
+      const hours = Math.floor(distance / (1000 * 60 * 60));
+      const minutes = Math.floor((distance % (1000 * 60 * 60)) / (1000 * 60));
+
+      if (hours > 0) {
+        setTimeLeft(`${hours}h ${minutes}m left`);
+      } else {
+        setTimeLeft(`${minutes}m left`);
+      }
+    };
+
+    updateCountdown();
+    const interval = setInterval(updateCountdown, 60000);
+
+    return () => clearInterval(interval);
+  }, [deadline]);
+
+  return <span>{timeLeft}</span>;
 }

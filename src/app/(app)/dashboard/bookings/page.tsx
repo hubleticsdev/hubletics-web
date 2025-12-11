@@ -2,7 +2,7 @@ import { getSession } from '@/lib/auth/session';
 import { redirect } from 'next/navigation';
 import { db } from '@/lib/db';
 import { booking } from '@/lib/db/schema';
-import { eq, and, gte, or, desc } from 'drizzle-orm';
+import { eq, desc } from 'drizzle-orm';
 import { BookingsList } from '@/components/bookings/bookings-list';
 
 export default async function BookingsPage() {
@@ -11,12 +11,10 @@ export default async function BookingsPage() {
     redirect('/login');
   }
 
-  // Fetch bookings based on user role
   const now = new Date();
   let bookings;
 
   if (session.user.role === 'coach') {
-    // For coaches: all bookings where they are the coach
     bookings = await db.query.booking.findMany({
       where: eq(booking.coachId, session.user.id),
       with: {
@@ -28,11 +26,16 @@ export default async function BookingsPage() {
             image: true,
           },
         },
+        review: {
+          columns: {
+            id: true,
+            rating: true,
+          },
+        },
       },
       orderBy: [desc(booking.scheduledStartAt)],
     });
   } else {
-    // For clients: all bookings where they are the client
     bookings = await db.query.booking.findMany({
       where: eq(booking.clientId, session.user.id),
       with: {
@@ -42,6 +45,12 @@ export default async function BookingsPage() {
             name: true,
             email: true,
             image: true,
+          },
+        },
+        review: {
+          columns: {
+            id: true,
+            rating: true,
           },
         },
       },
