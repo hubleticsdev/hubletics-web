@@ -57,6 +57,11 @@ export const auth = betterAuth({
 
   user: {
     additionalFields: {
+      username: {
+        type: 'string',
+        required: true,
+        input: false,
+      },
       role: {
         type: 'string',
         required: true,
@@ -91,18 +96,18 @@ export const auth = betterAuth({
   },
 
   session: {
-    expiresIn: 60 * 60 * 24 * 30, // 30 days
-    updateAge: 60 * 60 * 24, // Update session every 24 hours
+    expiresIn: 60 * 60 * 24 * 30,
+    updateAge: 60 * 60 * 24,
     cookieCache: {
       enabled: true,
-      maxAge: 60 * 30, // 30 minutes (balances performance with data freshness)
+      maxAge: 60 * 30,
     }
   },
 
   rateLimit: {
     enabled: true,
-    window: 60, // 1 minute
-    max: 10, // 10 requests per window
+    window: 60,
+    max: 10,
   },
 
   advanced: {

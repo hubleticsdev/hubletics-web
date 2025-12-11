@@ -17,7 +17,6 @@ export function Step4Bio({ formData, setFormData }: Step4Props) {
         </p>
       </div>
 
-      {/* Bio */}
       <div>
         <label htmlFor="bio" className="block text-sm font-semibold text-gray-900 mb-2">
           Bio <span className="text-red-500">*</span>
@@ -40,7 +39,6 @@ export function Step4Bio({ formData, setFormData }: Step4Props) {
         </div>
       </div>
 
-      {/* Accomplishments */}
       <div>
         <label htmlFor="accomplishments" className="block text-sm font-semibold text-gray-900 mb-2">
           Notable Accomplishments (Optional)
@@ -58,7 +56,6 @@ export function Step4Bio({ formData, setFormData }: Step4Props) {
         </p>
       </div>
 
-      {/* Preview Card */}
       {formData.bio && (
         <div className="mt-8 p-6 bg-gradient-to-br from-orange-50 to-red-50 border-2 border-orange-100 rounded-lg">
           <h3 className="text-sm font-semibold text-orange-900 mb-3">Profile Preview</h3>

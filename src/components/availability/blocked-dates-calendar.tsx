@@ -23,7 +23,6 @@ export function BlockedDatesCalendar({
 
   const addBlockedDate = () => {
     if (newDate && !blockedDates.includes(newDate)) {
-      // Check if there's a booking on this date
       const hasBooking = upcomingBookings.some((booking) => {
         const bookingDate = new Date(booking.scheduledStartAt).toISOString().split('T')[0];
         return bookingDate === newDate;
@@ -55,12 +54,10 @@ export function BlockedDatesCalendar({
     });
   };
 
-  // Get minimum date (today)
   const today = new Date().toISOString().split('T')[0];
 
   return (
     <div className="space-y-4">
-      {/* Add new blocked date */}
       <div className="flex gap-3">
         <input
           type="date"
@@ -79,7 +76,6 @@ export function BlockedDatesCalendar({
         </Button>
       </div>
 
-      {/* List of blocked dates */}
       {blockedDates.length === 0 ? (
         <p className="text-sm text-gray-500 italic text-center py-8">
           No blocked dates. Add dates when you're unavailable.

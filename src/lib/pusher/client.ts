@@ -1,9 +1,3 @@
-/**
- * Pusher client-side setup
- *
- * Provides hooks and utilities for real-time messaging in React components
- */
-
 'use client';
 
 import { useEffect, useState, useRef } from 'react';
@@ -12,16 +6,12 @@ import { clientEnv } from '@/lib/env';
 
 let pusherInstance: PusherJS | null = null;
 
-/**
- * Get or create Pusher client instance (singleton)
- */
 export function getPusherClient(): PusherJS {
   if (!pusherInstance) {
     pusherInstance = new PusherJS(clientEnv.PUSHER_KEY, {
       cluster: clientEnv.PUSHER_CLUSTER,
       auth: {
         headers: {
-          //  custom headers?
         }
       },
       authEndpoint: '/api/pusher/auth',
@@ -30,9 +20,6 @@ export function getPusherClient(): PusherJS {
   return pusherInstance;
 }
 
-/**
- * Hook to subscribe to a Pusher channel
- */
 export function usePusherChannel(channelName: string) {
   const [channel, setChannel] = useState<ReturnType<PusherJS['subscribe']> | null>(null);
   const pusher = useRef<PusherJS | null>(null);
@@ -50,9 +37,6 @@ export function usePusherChannel(channelName: string) {
   return channel;
 }
 
-/**
- * Hook to listen for events on a Pusher channel
- */
 export function usePusherEvent<T = unknown>(
   channelName: string,
   eventName: string,
@@ -71,9 +55,6 @@ export function usePusherEvent<T = unknown>(
   }, [channel, eventName, callback]);
 }
 
-/**
- * Hook for conversation messages with real-time updates
- */
 export function useConversationMessages(conversationId: string) {
   const [messages, setMessages] = useState<unknown[]>([]);
   const channelName = `private-conversation-${conversationId}`;
@@ -85,9 +66,6 @@ export function useConversationMessages(conversationId: string) {
   return { messages, setMessages };
 }
 
-/**
- * Hook for typing indicators
- */
 export function useTypingIndicator(conversationId: string) {
   const [typingUsers, setTypingUsers] = useState<Record<string, string>>({});
   const channelName = `private-conversation-${conversationId}`;

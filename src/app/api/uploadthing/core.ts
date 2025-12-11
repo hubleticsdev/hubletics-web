@@ -4,10 +4,8 @@ import { getSessionFromRequest } from '@/lib/auth/session';
 const f = createUploadthing();
 
 export const ourFileRouter = {
-  // Profile images for both athletes and coaches
   profileImage: f({ image: { maxFileSize: '4MB', maxFileCount: 1 } })
     .middleware(async ({ req }) => {
-      // Using cached session helper - prevents duplicate queries!
       const session = await getSessionFromRequest(req);
 
       if (!session) throw new Error('Unauthorized');
@@ -21,10 +19,8 @@ export const ourFileRouter = {
       return { uploadedBy: metadata.userId, url: file.ufsUrl };
     }),
 
-  // Coach intro videos (max 50MB as per spec)
   coachIntroVideo: f({ video: { maxFileSize: '64MB', maxFileCount: 1 } })
     .middleware(async ({ req }) => {
-      // Using cached session helper
       const session = await getSessionFromRequest(req);
 
       if (!session) throw new Error('Unauthorized');
@@ -39,10 +35,8 @@ export const ourFileRouter = {
       return { uploadedBy: metadata.userId, url: file.ufsUrl };
     }),
 
-  // Coach certification PDFs
   coachCertification: f({ pdf: { maxFileSize: '8MB', maxFileCount: 1 } })
     .middleware(async ({ req }) => {
-      // Using cached session helper
       const session = await getSessionFromRequest(req);
 
       if (!session) throw new Error('Unauthorized');

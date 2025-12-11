@@ -41,10 +41,8 @@ export default function SignUpPage() {
         email,
         password,
         name,
-        // Role defaults to 'pending' and will be set on /auth/select-role page
       });
 
-      // Check if sign-up was successful
       if (result.error) {
         const errorMessage = result.error.message || 'Failed to create account';
         setError(errorMessage);
@@ -53,7 +51,6 @@ export default function SignUpPage() {
         return;
       }
 
-      // Redirect to email verification notice
       router.push(authPaths.verifyEmail(email));
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to create account');
@@ -68,8 +65,6 @@ export default function SignUpPage() {
     setLoading(true);
 
     try {
-      // OAuth signup uses signIn.social - it auto-creates account if it doesn't exist
-      // User will be created with role='pending' and will select role after authentication
       await signIn.social({
         provider: 'google',
         callbackURL: '/auth/signin',

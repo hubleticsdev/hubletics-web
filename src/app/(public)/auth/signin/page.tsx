@@ -27,7 +27,6 @@ export default function SignInPage() {
         password,
       });
 
-      // Check if sign-in was successful
       if (result.error) {
         const errorMessage = result.error.message || 'Failed to sign in';
         setError(errorMessage);
@@ -36,9 +35,7 @@ export default function SignInPage() {
         return;
       }
 
-      // Only show success if no error
       toast.success('Signed in successfully!');
-      // Proxy will handle redirection based on role and profile completion
       router.refresh();
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'Failed to sign in';
@@ -56,8 +53,6 @@ export default function SignInPage() {
     try {
       await signIn.social({
         provider: 'google',
-        // For signin (not signup), go directly back to signin page
-        // Proxy will handle redirect to dashboard or onboarding
         callbackURL: '/auth/signin',
       });
     } catch (err) {

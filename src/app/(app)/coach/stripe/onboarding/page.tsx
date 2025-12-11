@@ -77,20 +77,17 @@ export default async function StripeOnboardingPage() {
     );
   }
 
-  // Get current host for callback URLs
   const headersList = await headers();
   const host = headersList.get('host') || 'localhost:3000';
   const protocol = process.env.NODE_ENV === 'production' ? 'https' : 'http';
   const baseUrl = `${protocol}://${host}`;
 
-  // Generate Stripe onboarding link
   const accountLink = await createAccountLink(
     coach.stripeAccountId,
     `${baseUrl}/coach/stripe/onboarding/refresh`,
     `${baseUrl}/coach/stripe/onboarding/return`
   );
 
-  // Redirect to Stripe onboarding
   redirect(accountLink.url);
 }
 

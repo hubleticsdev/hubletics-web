@@ -30,7 +30,6 @@ export default function SelectRolePage() {
 
       toast.success('Role set successfully! Redirecting...');
 
-      // Small delay to ensure DB update and cache invalidation complete, then redirect
       setTimeout(() => {
         window.location.href = '/auth/signin';
       }, 500);
@@ -67,7 +66,6 @@ export default function SelectRolePage() {
 
         <div className="bg-white rounded-xl shadow-lg border border-gray-100 p-8">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            {/* Client/Athlete Option */}
             <button
               type="button"
               onClick={() => setSelectedRole('client')}
@@ -106,7 +104,6 @@ export default function SelectRolePage() {
               )}
             </button>
 
-            {/* Coach Option */}
             <button
               type="button"
               onClick={() => setSelectedRole('coach')}

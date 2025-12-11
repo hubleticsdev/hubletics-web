@@ -12,12 +12,12 @@ type Message = {
   id: string;
   content: string;
   createdAt: Date;
-  senderId: string;
+  senderId: string | null;
   sender: {
     id: string;
     name: string;
     image: string | null;
-  };
+  } | null;
 };
 
 interface MessageThreadProps {
@@ -45,10 +45,8 @@ export function MessageThread({
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
-  // Listen for new messages in real-time
   usePusherEvent<Message>(`private-conversation-${conversationId}`, 'new-message', (message) => {
     setMessages((prev) => {
-      // Avoid duplicates
       if (prev.some((m) => m.id === message.id)) {
         return prev;
       }
@@ -56,7 +54,6 @@ export function MessageThread({
     });
   });
 
-  // Scroll to bottom when messages change
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);
@@ -66,9 +63,8 @@ export function MessageThread({
 
     setSending(true);
     const messageContent = newMessage.trim();
-    setNewMessage(''); // Clear input immediately for better UX
+    setNewMessage('');
 
-    // Optimistic UI update - create temporary message
     const tempMessage: Message = {
       id: `temp-${Date.now()}`,
       content: messageContent,
@@ -81,22 +77,18 @@ export function MessageThread({
       },
     };
 
-    // Add message optimistically
     setMessages((prev) => [...prev, tempMessage]);
 
     try {
       const serverMessage = await sendMessage(conversationId, messageContent);
 
-      // Replace temp message with real one from server
       setMessages((prev) =>
         prev.map((m) => (m.id === tempMessage.id ? serverMessage : m))
       );
-      // Pusher will also send the message, but duplicate check prevents double display
     } catch (error) {
-      // Remove temp message on error
       setMessages((prev) => prev.filter((m) => m.id !== tempMessage.id));
       toast.error(error instanceof Error ? error.message : 'Failed to send message');
-      setNewMessage(messageContent); // Restore message on error
+      setNewMessage(messageContent);
     } finally {
       setSending(false);
       textareaRef.current?.focus();
@@ -139,11 +131,9 @@ export function MessageThread({
     });
   };
 
-    // Deduplicate messages by ID (keep the most recent one)
     const deduplicatedMessages = messages.reduce((unique: Message[], message) => {
       const existingIndex = unique.findIndex((m) => m.id === message.id);
       if (existingIndex >= 0) {
-        // Replace with the more complete message (prefer one with sender info)
         if (message.sender && message.sender.name && !unique[existingIndex].sender?.name) {
           unique[existingIndex] = message;
         }
@@ -153,7 +143,6 @@ export function MessageThread({
       return unique;
     }, []);
   
-    // Group messages by date
     const groupedMessages = deduplicatedMessages.reduce((groups: Record<string, Message[]>, message) => {
     const dateKey = new Date(message.createdAt).toDateString();
     if (!groups[dateKey]) {
@@ -165,7 +154,6 @@ export function MessageThread({
 
   return (
     <div className="flex flex-col h-full">
-      {/* Header */}
       <div className="flex items-center gap-4 p-4 border-b border-gray-200 bg-white">
         <div className="w-10 h-10 rounded-full overflow-hidden bg-gray-200">
           <Image
@@ -182,18 +170,15 @@ export function MessageThread({
         </div>
       </div>
 
-      {/* Messages */}
       <div className="flex-1 overflow-y-auto p-4 space-y-6 message-scroll">
         {Object.entries(groupedMessages).map(([dateKey, dateMessages]) => (
           <div key={dateKey}>
-            {/* Date separator */}
             <div className="flex items-center justify-center mb-4">
               <div className="bg-gray-100 text-gray-600 text-xs font-medium px-3 py-1 rounded-full">
                 {formatDate(new Date(dateKey))}
               </div>
             </div>
 
-            {/* Messages for this date */}
             <div className="space-y-3">
               {dateMessages.map((message) => {
                 const isOwn = message.senderId === currentUserId;
@@ -206,8 +191,8 @@ export function MessageThread({
                       {!isOwn && (
                         <div className="w-8 h-8 rounded-full overflow-hidden bg-gray-200 flex-shrink-0">
                           <Image
-                            src={message.sender.image || '/placeholder-avatar.png'}
-                            alt={message.sender.name}
+                            src={message.sender?.image || '/placeholder-avatar.png'}
+                            alt={message.sender?.name || 'User'}
                             width={32}
                             height={32}
                             className="object-cover"
@@ -242,7 +227,6 @@ export function MessageThread({
         <div ref={messagesEndRef} />
       </div>
 
-      {/* Input */}
       <div className="p-4 border-t border-gray-200 bg-white">
         <div className="flex gap-3 items-end">
           <Textarea

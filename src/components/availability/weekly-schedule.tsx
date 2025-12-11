@@ -53,12 +53,11 @@ export function WeeklySchedule({ availability, onChange, upcomingBookings }: Wee
     onChange(newAvailability);
   };
 
-  // Check if there's a booking on a specific day
   const hasBookingOnDay = (day: string) => {
     const dayIndex = DAYS.indexOf(day);
     return upcomingBookings.some((booking) => {
       const bookingDay = new Date(booking.scheduledStartAt).getDay();
-      const adjustedDay = bookingDay === 0 ? 6 : bookingDay - 1; // Convert Sunday=0 to Sunday=6
+      const adjustedDay = bookingDay === 0 ? 6 : bookingDay - 1;
       return adjustedDay === dayIndex;
     });
   };

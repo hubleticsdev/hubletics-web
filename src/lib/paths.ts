@@ -1,14 +1,5 @@
-/**
- * Centralized path definitions for the application.
- * All routes should be referenced through these helpers to ensure consistency
- * and make refactoring easier.
- */
-
 import type { UserRole } from '@/types/auth';
 
-/**
- * Authentication routes
- */
 export const authPaths = {
   signIn: () => '/auth/signin',
   signUp: () => '/auth/signup',
@@ -20,23 +11,16 @@ export const authPaths = {
   suspended: () => '/auth/suspended',
 } as const;
 
-/**
- * Onboarding routes
- */
 export const onboardingPaths = {
   athlete: () => '/onboarding/athlete',
   coach: () => '/onboarding/coach',
   forRole: (role: UserRole) => {
     if (role === 'client') return onboardingPaths.athlete();
     if (role === 'coach') return onboardingPaths.coach();
-    // Admins don't have onboarding
     return dashboardPaths.admin();
   },
 } as const;
 
-/**
- * Dashboard routes
- */
 export const dashboardPaths = {
   athlete: () => '/dashboard/athlete',
   coach: () => '/dashboard/coach',
@@ -49,9 +33,6 @@ export const dashboardPaths = {
   },
 } as const;
 
-/**
- * Booking routes
- */
 export const bookingPaths = {
   list: () => '/dashboard/bookings',
   details: (bookingId: string) => `/dashboard/bookings/${bookingId}`,
@@ -59,34 +40,22 @@ export const bookingPaths = {
     coachId ? `/dashboard/bookings/new?coachId=${coachId}` : '/dashboard/bookings/new',
 } as const;
 
-/**
- * Coach discovery and profile routes
- */
 export const coachPaths = {
   discover: () => '/coaches',
   profile: (coachId: string) => `/coaches/${coachId}`,
   availability: (coachId: string) => `/coaches/${coachId}/availability`,
 } as const;
 
-/**
- * Athlete profile routes
- */
 export const athletePaths = {
   profile: (athleteId?: string) =>
     athleteId ? `/dashboard/athletes/${athleteId}` : '/dashboard/profile',
 } as const;
 
-/**
- * Message routes
- */
 export const messagePaths = {
   inbox: () => '/dashboard/messages',
   conversation: (conversationId: string) => `/dashboard/messages/${conversationId}`,
 } as const;
 
-/**
- * Admin routes
- */
 export const adminPaths = {
   dashboard: () => '/admin',
   users: () => '/admin/users',
@@ -100,9 +69,6 @@ export const adminPaths = {
   settings: () => '/admin/settings',
 } as const;
 
-/**
- * Marketing/public routes
- */
 export const publicPaths = {
   home: () => '/',
   about: () => '/about',
@@ -113,9 +79,6 @@ export const publicPaths = {
   privacy: () => '/privacy',
 } as const;
 
-/**
- * API routes
- */
 export const apiPaths = {
   auth: {
     base: () => '/api/auth',
@@ -129,9 +92,6 @@ export const apiPaths = {
   uploadthing: () => '/api/uploadthing',
 } as const;
 
-/**
- * Helper to determine the appropriate post-login redirect based on user role and profile status
- */
 export function getPostLoginRedirect(role: UserRole, profileComplete: boolean): string {
   if (!profileComplete) {
     return onboardingPaths.forRole(role);
@@ -139,17 +99,11 @@ export function getPostLoginRedirect(role: UserRole, profileComplete: boolean): 
   return dashboardPaths.forRole(role);
 }
 
-/**
- * Helper to check if a path matches a pattern
- */
 export function pathMatches(pathname: string, pattern: string): boolean {
   // Simple exact match for now, can be enhanced with pattern matching if needed
   return pathname === pattern || pathname.startsWith(pattern + '/');
 }
 
-/**
- * Helper to check if path is in a specific section
- */
 export const pathChecks = {
   isAuth: (pathname: string) => pathname.startsWith('/auth'),
   isDashboard: (pathname: string) => pathname.startsWith('/dashboard'),

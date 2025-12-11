@@ -22,6 +22,7 @@ export function OnboardingWizard({ initialName, googleAvatar, savedPhotoUrl }: O
   const [loading, setLoading] = useState(false);
 
   const [formData, setFormData] = useState<AthleteProfileData>({
+    username: '',
     fullName: initialName || '',
     city: '',
     state: '',
@@ -36,10 +37,13 @@ export function OnboardingWizard({ initialName, googleAvatar, savedPhotoUrl }: O
   });
 
   const handleNext = () => {
-    // Validate current step
     if (currentStep === 1) {
-      if (!formData.fullName || !formData.city || !formData.state) {
+      if (!formData.username || !formData.fullName || !formData.city || !formData.state) {
         toast.error('Please fill in all required fields');
+        return;
+      }
+      if (formData.username.length < 3) {
+        toast.error('Username must be at least 3 characters');
         return;
       }
     } else if (currentStep === 2) {
@@ -47,7 +51,6 @@ export function OnboardingWizard({ initialName, googleAvatar, savedPhotoUrl }: O
         toast.error('Please select at least one sport');
         return;
       }
-      // Check that all selected sports have experience levels
       for (const sport of formData.sports) {
         if (!formData.experienceLevels[sport]) {
           toast.error(`Please select an experience level for ${sport}`);
@@ -73,7 +76,6 @@ export function OnboardingWizard({ initialName, googleAvatar, savedPhotoUrl }: O
   };
 
   const handleSubmit = async () => {
-    // Prevent double-submit (redundant with server check, but good UX)
     if (loading) return;
     
     setLoading(true);
@@ -87,7 +89,6 @@ export function OnboardingWizard({ initialName, googleAvatar, savedPhotoUrl }: O
         toast.success('Profile created successfully!');
       }
 
-      // Small delay to ensure DB update and cache invalidation complete, then redirect
       setTimeout(() => {
         window.location.href = '/dashboard/athlete';
       }, 500);
@@ -101,7 +102,6 @@ export function OnboardingWizard({ initialName, googleAvatar, savedPhotoUrl }: O
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-50 via-white to-orange-50/30 py-24 px-4 sm:px-6 lg:px-8">
       <div className="mx-auto max-w-3xl">
-        {/* Progress bar */}
         <div className="mb-8">
           <div className="flex items-center justify-between mb-3">
             <div>
@@ -122,7 +122,6 @@ export function OnboardingWizard({ initialName, googleAvatar, savedPhotoUrl }: O
           </div>
         </div>
 
-        {/* Step content */}
         <div className="bg-white rounded-xl shadow-lg border border-gray-100 p-8">
           {currentStep === 1 && (
             <Step1BasicInfo formData={formData} setFormData={setFormData} googleAvatar={googleAvatar} />
@@ -140,7 +139,6 @@ export function OnboardingWizard({ initialName, googleAvatar, savedPhotoUrl }: O
             <Step4Bio formData={formData} setFormData={setFormData} />
           )}
 
-          {/* Navigation buttons */}
           <div className="mt-10 flex items-center justify-between pt-6 border-t border-gray-200">
             <div>
               {currentStep > 1 && (

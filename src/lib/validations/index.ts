@@ -1,19 +1,11 @@
-/**
- * Centralized Zod validation schemas for the entire application
- *
- * This file contains all validation schemas used throughout the app
- * for input validation, type safety, and data integrity.
- */
-
 import { z } from 'zod';
 
-// Common validation patterns
 export const uuidSchema = z.string().regex(/^[a-zA-Z0-9]{32}$|^[a-fA-F0-9]{8}-[a-fA-F0-9]{4}-[a-fA-F0-9]{4}-[a-fA-F0-9]{4}-[a-fA-F0-9]{12}$/, 'Invalid ID format');
 export const stripePaymentIntentIdSchema = z.string().regex(/^pi_[a-zA-Z0-9_]+$/, 'Invalid payment intent ID format');
 
 export const emailSchema = z
   .email('Invalid email format')
-  .max(254, 'Email too long'); // RFC 3696 limit
+  .max(254, 'Email too long');
 
 export const passwordSchema = z
   .string()
@@ -30,12 +22,10 @@ export const positiveNumberSchema = z.number().positive('Must be positive');
 
 export const nonEmptyStringSchema = z.string().trim().min(1, 'Required');
 
-// User-related schemas
 export const userRoleSchema = z.enum(['client', 'coach', 'admin']);
 
 export const userStatusSchema = z.enum(['active', 'inactive', 'suspended']);
 
-// Location schemas
 export const locationSchema = z.object({
   name: z.string().min(1, 'Location name required').max(100, 'Location name too long'),
   address: z.string().min(1, 'Address required').max(500, 'Address too long'),
@@ -47,14 +37,12 @@ export const athleteLocationSchema = z.object({
   state: z.string().min(1, 'State required').max(50, 'State name too long'),
 });
 
-// Message validation
 export const messageContentSchema = z
   .string()
   .trim()
   .min(1, 'Message cannot be empty')
   .max(5000, 'Message too long (max 5000 characters)');
 
-// Booking validation
 export const bookingDurationSchema = z
   .number()
   .int()
@@ -103,7 +91,6 @@ export const createBookingSchema = z.object({
   }
 );
 
-// Coach profile validation
 export const specialtySchema = z.object({
   sport: z.string().min(1, 'Sport required').max(50, 'Sport name too long'),
   tags: z.array(z.string().max(30, 'Tag too long')).max(10, 'Too many tags'),
@@ -122,7 +109,40 @@ export const availabilitySlotSchema = z.object({
   end: z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/, 'Invalid time format (HH:MM)'),
 });
 
+const usernameRegex = /^[a-zA-Z0-9]([a-zA-Z0-9_-]{1,28}[a-zA-Z0-9])?$/;
+
+export const usernameSchema = z
+  .string()
+  .min(3, 'Username must be at least 3 characters')
+  .max(30, 'Username must be at most 30 characters')
+  .regex(usernameRegex, 'Username can only contain letters, numbers, underscores, and hyphens')
+  .refine(
+    (val) => !val.includes('__') && !val.includes('--') && !val.includes('_-') && !val.includes('-_'),
+    'Username cannot contain consecutive special characters'
+  );
+
+export function generateUsernameFromName(name: string): string {
+  let username = name
+    .toLowerCase()
+    .replace(/[^a-z0-9\s]/g, '')
+    .replace(/\s+/g, '_')
+    .slice(0, 30);
+
+  if (!/^[a-z0-9]/.test(username)) {
+    username = 'user_' + username;
+  }
+
+  username = username.replace(/_+$/, '');
+
+  if (username.length < 3) {
+    username = username + Math.floor(Math.random() * 1000);
+  }
+
+  return username;
+}
+
 export const coachProfileSchema = z.object({
+  username: usernameSchema,
   fullName: z.string().min(1, 'Full name required').max(100, 'Name too long'),
   profilePhotoUrl: urlSchema.nullable().optional(),
   introVideoUrl: urlSchema,
@@ -141,10 +161,10 @@ export const coachProfileSchema = z.object({
   preferredLocations: z.array(locationSchema).max(10, 'Too many locations'),
 });
 
-// Athlete profile validation
 export const experienceLevelSchema = z.enum(['beginner', 'intermediate', 'advanced', 'expert']);
 
 export const athleteProfileSchema = z.object({
+  username: usernameSchema,
   fullName: z.string().min(1, 'Full name required').max(100, 'Name too long'),
   city: z.string().min(1, 'City required').max(100, 'City name too long'),
   state: z.string().min(1, 'State required').max(50, 'State name too long'),
@@ -164,7 +184,6 @@ export const athleteProfileSchema = z.object({
   }
 );
 
-// Admin validation
 export const adminActionSchema = z.enum([
   'approved_coach',
   'rejected_coach',
@@ -181,7 +200,6 @@ export const platformFeeSchema = z
   .max(50, 'Maximum 50% platform fee')
   .multipleOf(0.01, 'Must be in cents (0.01 precision)');
 
-// Upload validation
 export const uploadThingUrlSchema = z
   .string()
   .url()
@@ -198,7 +216,6 @@ export const uploadThingUrlSchema = z
     'URL must be from UploadThing (uploadthing.com or utfs.io)'
   );
 
-// Webhook validation
 export const stripeWebhookSchema = z.object({
   id: z.string(),
   object: z.string(),
@@ -212,8 +229,6 @@ export const stripeWebhookSchema = z.object({
   }).optional(),
 });
 
-// API route validation helpers
-// Profile Update Validation Schemas
 export const updateUserAccountSchema = z.object({
   name: z.string().min(1, 'Name cannot be empty').max(100, 'Name too long').trim(),
 });
@@ -275,7 +290,6 @@ export const updateCoachProfileSchema = z.object({
   })).optional(),
 });
 
-// Coach Search Validation Schemas
 export const coachSearchFiltersSchema = z.object({
   sport: z.string().min(1, 'Sport cannot be empty').max(50, 'Sport too long').optional(),
   location: z.string().min(1, 'Location cannot be empty').max(100, 'Location too long').optional(),

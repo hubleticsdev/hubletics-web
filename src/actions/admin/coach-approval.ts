@@ -13,10 +13,6 @@ import {
   getCoachRejectedEmailTemplate,
 } from '@/lib/email/templates/coach-notifications';
 
-/**
- * Approve a coach profile
- * Creates Stripe Connect account and sends email
- */
 export async function approveCoach(coachUserId: string, notes?: string) {
   try {
     const session = await getSession();
@@ -25,10 +21,8 @@ export async function approveCoach(coachUserId: string, notes?: string) {
       return { success: false, error: 'Unauthorized' };
     }
 
-    // Validate coachUserId
     const validatedCoachUserId = validateInput(uuidSchema, coachUserId);
 
-    // Get coach profile and user
     const coach = await db.query.coachProfile.findFirst({
       where: eq(coachProfile.userId, validatedCoachUserId),
       with: {
@@ -44,11 +38,9 @@ export async function approveCoach(coachUserId: string, notes?: string) {
       return { success: false, error: 'Coach already processed' };
     }
 
-    // Create Stripe account, update profile, and log admin action atomically
     let stripeAccountId = coach.stripeAccountId;
 
     await withTransaction(async (tx) => {
-      // Create Stripe Connect account if needed
       if (!stripeAccountId) {
         const stripeAccount = await createConnectAccount(
           coach.user.email,
@@ -57,7 +49,6 @@ export async function approveCoach(coachUserId: string, notes?: string) {
         stripeAccountId = stripeAccount.id;
       }
 
-      // Update coach profile
       await tx
         .update(coachProfile)
         .set({
@@ -70,7 +61,6 @@ export async function approveCoach(coachUserId: string, notes?: string) {
         })
         .where(eq(coachProfile.userId, validatedCoachUserId));
 
-      // Log admin action
       await tx.insert(adminAction).values({
         adminId: session.user.id,
         action: 'approved_coach',
@@ -80,7 +70,6 @@ export async function approveCoach(coachUserId: string, notes?: string) {
       });
     });
 
-    // Send approval email
     const emailTemplate = getCoachApprovedEmailTemplate(coach.fullName);
     await sendEmail({
       to: coach.user.email,
@@ -100,9 +89,6 @@ export async function approveCoach(coachUserId: string, notes?: string) {
   }
 }
 
-/**
- * Reject a coach profile
- */
 export async function rejectCoach(
   coachUserId: string,
   reason: string,
@@ -115,10 +101,8 @@ export async function rejectCoach(
       return { success: false, error: 'Unauthorized' };
     }
 
-    // Validate coachUserId
     const validatedCoachUserId = validateInput(uuidSchema, coachUserId);
 
-    // Get coach profile
     const coach = await db.query.coachProfile.findFirst({
       where: eq(coachProfile.userId, validatedCoachUserId),
       with: {
@@ -134,9 +118,7 @@ export async function rejectCoach(
       return { success: false, error: 'Coach already processed' };
     }
 
-    // Update profile and log admin action atomically
     await withTransaction(async (tx) => {
-      // Update coach profile
       await tx
         .update(coachProfile)
         .set({
@@ -148,7 +130,6 @@ export async function rejectCoach(
         })
         .where(eq(coachProfile.userId, validatedCoachUserId));
 
-      // Log admin action
       await tx.insert(adminAction).values({
         adminId: session.user.id,
         action: 'rejected_coach',
@@ -158,7 +139,6 @@ export async function rejectCoach(
       });
     });
 
-    // Send rejection email
     const emailTemplate = getCoachRejectedEmailTemplate(coach.fullName, reason);
     await sendEmail({
       to: coach.user.email,
@@ -178,9 +158,6 @@ export async function rejectCoach(
   }
 }
 
-/**
- * Get all pending coach approvals
- */
 export async function getPendingCoaches() {
   try {
     const session = await getSession();

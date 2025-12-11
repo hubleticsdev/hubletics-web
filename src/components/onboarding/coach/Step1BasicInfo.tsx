@@ -1,10 +1,12 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { UploadButton } from '@/lib/uploadthing';
 import { toast } from 'sonner';
 import type { CoachProfileData } from '@/actions/onboarding/coach';
 import { saveTempPhoto, saveTempVideo } from '@/actions/onboarding/save-temp-files';
+import { checkUsernameAvailability } from '@/actions/auth/validate-username';
+import { generateUsernameFromName } from '@/lib/validations';
 import Image from 'next/image';
 
 type Step1Props = {
@@ -25,9 +27,42 @@ export function Step1BasicInfo({ formData, setFormData, googleAvatar }: Step1Pro
   const [uploadingPhoto, setUploadingPhoto] = useState(false);
   const [uploadingVideo, setUploadingVideo] = useState(false);
   const [newCity, setNewCity] = useState('');
+  const [usernameChecking, setUsernameChecking] = useState(false);
+  const [usernameError, setUsernameError] = useState<string | null>(null);
+  const [usernameAvailable, setUsernameAvailable] = useState(false);
 
-  // Use Google avatar as default if available and no custom photo uploaded
   const displayPhoto = formData.profilePhotoUrl || googleAvatar || null;
+
+  useEffect(() => {
+    if (formData.fullName && !formData.username) {
+      const suggested = generateUsernameFromName(formData.fullName);
+      setFormData({ ...formData, username: suggested });
+    }
+  }, [formData.fullName]);
+
+  useEffect(() => {
+    if (!formData.username || formData.username.length < 3) {
+      setUsernameError(null);
+      setUsernameAvailable(false);
+      return;
+    }
+
+    const timeoutId = setTimeout(async () => {
+      setUsernameChecking(true);
+      const result = await checkUsernameAvailability(formData.username);
+      setUsernameChecking(false);
+      
+      if (result.available) {
+        setUsernameError(null);
+        setUsernameAvailable(true);
+      } else {
+        setUsernameError(result.error || 'Username unavailable');
+        setUsernameAvailable(false);
+      }
+    }, 500);
+
+    return () => clearTimeout(timeoutId);
+  }, [formData.username]);
 
   const addCity = () => {
     const trimmedCity = newCity.trim();
@@ -62,13 +97,11 @@ export function Step1BasicInfo({ formData, setFormData, googleAvatar }: Step1Pro
         </p>
       </div>
 
-      {/* Profile Photo Upload */}
       <div>
         <label className="block text-sm font-semibold text-gray-900 mb-3">
           Profile Photo
         </label>
         <div className="flex items-start gap-6">
-          {/* Avatar Preview */}
           <div className="flex-shrink-0 relative group">
             <div className="w-24 h-24 rounded-full overflow-hidden bg-gradient-to-br from-orange-100 to-red-100 border-2 border-orange-200 flex items-center justify-center">
               {displayPhoto ? (
@@ -114,7 +147,6 @@ export function Step1BasicInfo({ formData, setFormData, googleAvatar }: Step1Pro
             )}
           </div>
 
-          {/* Upload Button */}
           <div className="flex-1">
             {uploadingPhoto ? (
               <div className="flex items-center gap-3 p-4 bg-orange-50 border-2 border-orange-200 rounded-lg">
@@ -162,7 +194,6 @@ export function Step1BasicInfo({ formData, setFormData, googleAvatar }: Step1Pro
         </div>
       </div>
 
-      {/* Intro Video Upload - REQUIRED */}
       <div>
         <label className="block text-sm font-semibold text-gray-900 mb-3">
           Intro Video <span className="text-red-500">*</span>
@@ -241,7 +272,6 @@ export function Step1BasicInfo({ formData, setFormData, googleAvatar }: Step1Pro
         </div>
       </div>
 
-      {/* Full Name */}
       <div>
         <label htmlFor="fullName" className="block text-sm font-semibold text-gray-900 mb-2">
           Full Name <span className="text-red-500">*</span>
@@ -256,7 +286,56 @@ export function Step1BasicInfo({ formData, setFormData, googleAvatar }: Step1Pro
         />
       </div>
 
-      {/* Cities (Multiple) */}
+      <div>
+        <label htmlFor="username" className="block text-sm font-semibold text-gray-900 mb-2">
+          Username <span className="text-red-500">*</span>
+        </label>
+        <div className="relative">
+          <div className="absolute inset-y-0 left-0 flex items-center pl-4 pointer-events-none">
+            <span className="text-gray-500 text-base">@</span>
+          </div>
+          <input
+            id="username"
+            type="text"
+            value={formData.username}
+            onChange={(e) => {
+              const value = e.target.value.toLowerCase().replace(/[^a-z0-9_-]/g, '');
+              setFormData({ ...formData, username: value });
+            }}
+            className={`block w-full rounded-lg border-2 px-4 py-3 pl-8 shadow-sm transition-colors focus:outline-none focus:ring-2 text-base ${
+              usernameError
+                ? 'border-red-500 focus:border-red-500 focus:ring-red-500/20'
+                : usernameAvailable
+                ? 'border-green-500 focus:border-green-500 focus:ring-green-500/20'
+                : 'border-gray-200 focus:border-[#FF6B4A] focus:ring-[#FF6B4A]/20'
+            }`}
+            placeholder="your_username"
+            maxLength={30}
+          />
+          {usernameChecking && (
+            <div className="absolute inset-y-0 right-0 flex items-center pr-4">
+              <div className="animate-spin rounded-full h-4 w-4 border-2 border-[#FF6B4A] border-t-transparent"></div>
+            </div>
+          )}
+          {!usernameChecking && usernameAvailable && (
+            <div className="absolute inset-y-0 right-0 flex items-center pr-4">
+              <svg className="h-5 w-5 text-green-500" fill="currentColor" viewBox="0 0 20 20">
+                <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+              </svg>
+            </div>
+          )}
+        </div>
+        {usernameError && (
+          <p className="mt-1 text-sm text-red-600">{usernameError}</p>
+        )}
+        {!usernameError && usernameAvailable && (
+          <p className="mt-1 text-sm text-green-600">Username is available!</p>
+        )}
+        <p className="mt-1 text-xs text-gray-500">
+          3-30 characters. Letters, numbers, underscores, and hyphens only.
+        </p>
+      </div>
+
       <div>
         <label className="block text-sm font-semibold text-gray-900 mb-2">
           Cities You Serve <span className="text-red-500">*</span>
@@ -309,7 +388,6 @@ export function Step1BasicInfo({ formData, setFormData, googleAvatar }: Step1Pro
         </div>
       </div>
 
-      {/* State */}
       <div>
         <label htmlFor="state" className="block text-sm font-semibold text-gray-900 mb-2">
           State <span className="text-red-500">*</span>

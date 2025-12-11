@@ -20,11 +20,9 @@ export default async function StripeOnboardingReturnPage() {
     redirect('/dashboard/coach');
   }
 
-  // Check if onboarding is complete
   const isComplete = await isAccountOnboarded(coach.stripeAccountId);
 
   if (isComplete && !coach.stripeOnboardingComplete) {
-    // Update database to mark onboarding as complete
     await db
       .update(coachProfile)
       .set({

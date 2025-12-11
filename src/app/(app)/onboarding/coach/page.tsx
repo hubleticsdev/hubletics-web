@@ -10,7 +10,6 @@ export default async function CoachOnboardingPage() {
   const userName = session.user.name || '';
   const googleAvatar = session.user.image || null;
 
-  // Fetch temp onboarding files from user table to prevent orphaned uploads
   const userData = await db.query.user.findFirst({
     where: eq(user.id, session.user.id),
     columns: {

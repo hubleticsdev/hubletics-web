@@ -27,7 +27,6 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // Validate inputs
     const validatedCoachId = validateInput(uuidSchema, coachId);
     if (typeof sessionDuration !== 'number' || sessionDuration < 30 || sessionDuration > 480) {
       return NextResponse.json(
@@ -36,7 +35,6 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // Get coach's Stripe account and rate
     const coach = await db.query.coachProfile.findFirst({
       where: eq(coachProfile.userId, validatedCoachId),
       with: {
@@ -55,7 +53,6 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // Calculate pricing server-side
     const coachRate = parseFloat(coach.hourlyRate);
     const platformFee = coach.user?.platformFeePercentage
       ? parseFloat(coach.user.platformFeePercentage as unknown as string)
@@ -67,7 +64,6 @@ export async function POST(req: NextRequest) {
       platformFee
     );
 
-    // Create PaymentIntent with manual capture
     const paymentIntent = await stripe.paymentIntents.create({
       amount: Math.round(pricing.clientPays * 100),
       currency: 'usd',
@@ -99,4 +95,3 @@ export async function POST(req: NextRequest) {
     );
   }
 }
-

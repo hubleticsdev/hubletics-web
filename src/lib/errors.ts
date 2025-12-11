@@ -1,8 +1,5 @@
-// centralized error handling utilities for consistent error management across the application.
-
 import { getStripeErrorMessage } from './stripe';
 
-// Base application error class
 export class AppError extends Error {
   constructor(
     message: string,
@@ -13,12 +10,10 @@ export class AppError extends Error {
     super(message);
     this.name = 'AppError';
 
-    // Maintains proper stack trace for where our error was thrown
     Error.captureStackTrace(this, this.constructor);
   }
 }
 
-// Specific error types for different domains
 export class ValidationError extends AppError {
   constructor(message: string, field?: string) {
     super(
@@ -65,20 +60,16 @@ export class DatabaseError extends AppError {
   }
 }
 
-// Convert various error types to user-friendly messages
 export function getErrorMessage(error: unknown): string {
-  // Handle our custom errors
   if (error instanceof AppError) {
     return error.message;
   }
 
-  // Handle Stripe errors using Stripe's built-in error types
   const stripeMessage = getStripeErrorMessage(error);
   if (stripeMessage !== 'An unexpected payment error occurred. Please try again.') {
     return stripeMessage;
   }
 
-  // Handle database errors (Drizzle/PostgreSQL)
   if (error instanceof Error) {
     if (error.message.includes('duplicate key') || error.message.includes('unique constraint')) {
       return 'This action would create a duplicate record.';
@@ -91,12 +82,10 @@ export function getErrorMessage(error: unknown): string {
     }
   }
 
-  // Default fallback
   console.error('Unhandled error:', error);
   return 'An unexpected error occurred. Please try again.';
 }
 
-// Utility for server actions to return consistent error responses
 export function createErrorResponse(error: unknown): { success: false; error: string; statusCode: number } {
   const message = getErrorMessage(error);
   const statusCode = error instanceof AppError ? error.statusCode : 500;
@@ -108,7 +97,6 @@ export function createErrorResponse(error: unknown): { success: false; error: st
   };
 }
 
-// Utility for server actions to handle errors consistently
 export async function withErrorHandling<T>(
   operation: () => Promise<T>,
   context?: string
@@ -125,7 +113,6 @@ export async function withErrorHandling<T>(
   }
 }
 
-// Type guard to check if response is an error
 export function isErrorResponse<T>(
   response: { success: true; data: T } | { success: false; error: string; statusCode: number }
 ): response is { success: false; error: string; statusCode: number } {

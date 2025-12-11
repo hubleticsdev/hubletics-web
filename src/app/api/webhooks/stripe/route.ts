@@ -41,7 +41,6 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  // Validate webhook event structure
   const validation = safeValidateInput(stripeWebhookSchema, event);
   if (!validation.success) {
     console.error('Invalid webhook structure:', validation.error);
@@ -53,11 +52,10 @@ export async function POST(request: NextRequest) {
 
   console.log(`Stripe webhook received: ${event.type}`);
 
-  // Check idempotency - prevent duplicate processing
   const existingKey = await db.query.idempotencyKey.findFirst({
     where: and(
       eq(idempotencyKey.key, event.id),
-      gt(idempotencyKey.expiresAt, new Date()) // Not expired
+      gt(idempotencyKey.expiresAt, new Date())
     ),
   });
 
@@ -72,13 +70,11 @@ export async function POST(request: NextRequest) {
         const account = event.data.object as Stripe.Account;
         console.log(`Account updated: ${account.id}`);
 
-        // Check if the account is fully onboarded
         const isOnboarded = account.charges_enabled && account.payouts_enabled;
 
         if (isOnboarded) {
           console.log(`Account ${account.id} is now fully onboarded`);
 
-          // Update coach profile to mark Stripe onboarding as complete
           const result = await db
             .update(coachProfile)
             .set({
@@ -96,15 +92,12 @@ export async function POST(request: NextRequest) {
         const paymentIntent = event.data.object as Stripe.PaymentIntent;
         console.log(`Payment intent succeeded: ${paymentIntent.id}`);
 
-        // Find booking by payment intent ID and ensure it's in correct state
         const bookingRecord = await db.query.booking.findFirst({
           where: eq(booking.stripePaymentIntentId, paymentIntent.id),
         });
 
         if (bookingRecord) {
           console.log(`Payment confirmed for booking: ${bookingRecord.id}`);
-          // Payment intent succeeded - this validates our payment flow
-          // Booking status should already be 'pending' or 'accepted'
         } else {
           console.warn(`Payment intent ${paymentIntent.id} not found in bookings`);
         }
@@ -115,7 +108,6 @@ export async function POST(request: NextRequest) {
         const paymentIntent = event.data.object as Stripe.PaymentIntent;
         console.log(`Payment intent failed: ${paymentIntent.id}`);
 
-        // Find booking and mark as cancelled
         const bookingRecord = await db.query.booking.findFirst({
           where: eq(booking.stripePaymentIntentId, paymentIntent.id),
         });
@@ -140,7 +132,6 @@ export async function POST(request: NextRequest) {
         const charge = event.data.object as Stripe.Charge;
         console.log(`Charge refunded: ${charge.id}, amount: $${charge.amount_refunded / 100}`);
 
-        // Find booking by charge ID (if stored) or payment intent
         // Note: We might need to store charge IDs for better refund tracking
         const bookingRecord = await db.query.booking.findFirst({
           where: eq(booking.stripePaymentIntentId, charge.payment_intent as string),
@@ -208,7 +199,7 @@ export async function POST(request: NextRequest) {
         });
 
         if (bookingRecord) {
-          // Transfer was reversed (refund scenario)
+          // Transfer was reversed
           await db
             .update(booking)
             .set({
@@ -229,9 +220,8 @@ export async function POST(request: NextRequest) {
         console.log(`Unhandled event type: ${event.type}`);
     }
 
-    // Store idempotency key to prevent duplicate processing
     const expiresAt = new Date();
-    expiresAt.setHours(expiresAt.getHours() + 24); // Expire in 24 hours
+    expiresAt.setHours(expiresAt.getHours() + 24);
 
     await db
       .insert(idempotencyKey)
@@ -240,7 +230,7 @@ export async function POST(request: NextRequest) {
         result: { processed: true, eventType: event.type },
         expiresAt,
       })
-      .onConflictDoNothing(); // Handle any race conditions gracefully
+      .onConflictDoNothing();
 
     return NextResponse.json({ received: true });
   } catch (error) {

@@ -47,7 +47,6 @@ export function Step3Certifications({ formData, setFormData }: Step3Props) {
       return;
     }
 
-    // Add to form data
     setFormData({
       ...formData,
       certifications: [
@@ -62,7 +61,6 @@ export function Step3Certifications({ formData, setFormData }: Step3Props) {
       ],
     });
 
-    // Reset form
     setCurrentCert({
       name: '',
       org: '',
@@ -91,7 +89,6 @@ export function Step3Certifications({ formData, setFormData }: Step3Props) {
         </p>
       </div>
 
-      {/* Existing Certifications */}
       {formData.certifications.length > 0 && (
         <div className="space-y-4">
           <h3 className="text-lg font-semibold text-gray-900">Your Certifications</h3>
@@ -143,7 +140,6 @@ export function Step3Certifications({ formData, setFormData }: Step3Props) {
         </div>
       )}
 
-      {/* Add New Certification */}
       {isAdding ? (
         <div className="border-2 border-orange-200 rounded-lg p-6 bg-orange-50/30 space-y-4">
           <h3 className="text-lg font-semibold text-gray-900">Add Certification</h3>

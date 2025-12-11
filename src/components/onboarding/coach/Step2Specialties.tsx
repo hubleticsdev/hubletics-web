@@ -36,7 +36,6 @@ export function Step2Specialties({ formData, setFormData }: Step2Props) {
   const [newTag, setNewTag] = useState<Record<string, string>>({});
 
   const addSport = (sport: string) => {
-    // Check if sport already exists
     if (formData.specialties.some((s) => s.sport === sport)) {
       toast.error('Sport already added');
       return;
@@ -77,7 +76,6 @@ export function Step2Specialties({ formData, setFormData }: Step2Props) {
       ),
     });
 
-    // Clear input
     setNewTag({ ...newTag, [sport]: '' });
   };
 
@@ -101,7 +99,6 @@ export function Step2Specialties({ formData, setFormData }: Step2Props) {
         </p>
       </div>
 
-      {/* Sport Selection */}
       <div>
         <label className="block text-sm font-semibold text-gray-900 mb-3">
           Select Sports <span className="text-red-500">*</span>
@@ -127,7 +124,6 @@ export function Step2Specialties({ formData, setFormData }: Step2Props) {
         </div>
       </div>
 
-      {/* Tags for Each Sport */}
       {formData.specialties.length > 0 && (
         <div className="space-y-6">
           <h3 className="text-lg font-bold text-gray-900">Add Expertise Tags</h3>
@@ -135,7 +131,6 @@ export function Step2Specialties({ formData, setFormData }: Step2Props) {
             <div key={specialty.sport} className="border-2 border-gray-200 rounded-lg p-6">
               <h4 className="font-semibold text-gray-900 mb-4">{specialty.sport}</h4>
               
-              {/* Add Tag Input */}
               <div className="flex gap-2 mb-4">
                 <input
                   type="text"
@@ -161,7 +156,6 @@ export function Step2Specialties({ formData, setFormData }: Step2Props) {
                 </button>
               </div>
 
-              {/* Display Tags */}
               {specialty.tags.length > 0 ? (
                 <div className="flex flex-wrap gap-2">
                   {specialty.tags.map((tag) => (

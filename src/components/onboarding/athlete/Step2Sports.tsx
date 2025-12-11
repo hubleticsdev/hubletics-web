@@ -32,7 +32,6 @@ const EXPERIENCE_LEVELS = [
 export function Step2Sports({ formData, setFormData }: Step2Props) {
   const toggleSport = (sport: string) => {
     if (formData.sports.includes(sport)) {
-      // Remove sport and its experience level
       const newSports = formData.sports.filter(s => s !== sport);
       const newLevels = { ...formData.experienceLevels };
       delete newLevels[sport];
@@ -42,7 +41,6 @@ export function Step2Sports({ formData, setFormData }: Step2Props) {
         experienceLevels: newLevels,
       });
     } else {
-      // Add sport
       setFormData({
         ...formData,
         sports: [...formData.sports, sport],
@@ -69,7 +67,6 @@ export function Step2Sports({ formData, setFormData }: Step2Props) {
         </p>
       </div>
 
-      {/* Sports Selection */}
       <div>
         <label className="block text-sm font-semibold text-gray-900 mb-4">
           Select Sports <span className="text-red-500">*</span>
@@ -91,8 +88,7 @@ export function Step2Sports({ formData, setFormData }: Step2Props) {
           ))}
         </div>
       </div>
-
-      {/* Experience Levels */}
+      
       {formData.sports.length > 0 && (
         <div className="space-y-5">
           <label className="block text-sm font-semibold text-gray-900">

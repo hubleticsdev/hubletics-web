@@ -11,10 +11,8 @@ export async function updateUserPlatformFee(
   platformFeePercentage: number
 ): Promise<{ success: boolean; error?: string }> {
   try {
-    // Require admin role
     await requireRole('admin');
 
-    // Validate platform fee percentage
     if (platformFeePercentage < 0 || platformFeePercentage > 100) {
       return {
         success: false,
@@ -22,7 +20,6 @@ export async function updateUserPlatformFee(
       };
     }
 
-    // Update the user's platform fee
     await db
       .update(user)
       .set({

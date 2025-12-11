@@ -11,7 +11,6 @@ export default async function AthleteOnboardingPage() {
   const googleAvatar = session?.user?.image || null;
   const userId = session?.user?.id || '';
 
-  // Fetch temp onboarding files from user table to prevent orphaned uploads
   const userData = await db.query.user.findFirst({
     where: eq(user.id, userId),
     columns: {

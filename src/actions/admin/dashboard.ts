@@ -14,15 +14,12 @@ export type AdminDashboardMetrics = {
 export async function getAdminDashboardMetrics(): Promise<AdminDashboardMetrics> {
   await requireRole('admin');
 
-  // Get total users count (excluding deleted users)
   const totalUsers = await db.$count(user, isNull(user.deletedAt));
 
-  // Get monthly revenue - sum of platform fees from completed bookings this month
   const startOfMonth = new Date();
   startOfMonth.setDate(1);
   startOfMonth.setHours(0, 0, 0, 0);
 
-  // Count completed bookings this month
   const completedBookingsThisMonth = await db.$count(
     booking,
     and(
@@ -31,7 +28,6 @@ export async function getAdminDashboardMetrics(): Promise<AdminDashboardMetrics>
     )
   );
 
-  // Sum platform fees from completed bookings this month
   const monthlyRevenueResult = await db
     .select({
       total: sql<number>`COALESCE(SUM(${booking.platformFee}::numeric), 0)`

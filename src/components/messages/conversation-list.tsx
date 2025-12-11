@@ -17,7 +17,7 @@ type Conversation = {
   lastMessage: {
     content: string;
     createdAt: Date;
-    senderId: string;
+    senderId: string | null;
   } | null;
   lastMessageAt: Date | null;
 };
@@ -31,12 +31,10 @@ export function ConversationList({ initialConversations, currentUserId }: Conver
   const [conversations, setConversations] = useState(initialConversations);
   const pathname = usePathname();
 
-  // Listen for conversation updates (only for new conversations or metadata changes)
   usePusherEvent<Conversation>(`user-${currentUserId}`, 'conversation-update', (updatedConv) => {
     setConversations((prev) => {
       const exists = prev.find((c) => c.id === updatedConv.id);
       if (exists) {
-        // Update existing conversation (e.g., lastMessageAt changed)
         return prev
           .map((c) => (c.id === updatedConv.id ? { ...c, ...updatedConv } : c))
           .sort((a, b) => {
@@ -45,7 +43,6 @@ export function ConversationList({ initialConversations, currentUserId }: Conver
             return bTime - aTime;
           });
       } else {
-        // Add new conversation
         return [updatedConv, ...prev];
       }
     });

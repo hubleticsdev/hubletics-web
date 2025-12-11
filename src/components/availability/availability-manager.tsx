@@ -76,7 +76,6 @@ export function AvailabilityManager({
 
   return (
     <div className="space-y-6">
-      {/* Save bar */}
       {hasChanges && (
         <div className="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 p-4 shadow-lg z-50">
           <div className="max-w-7xl mx-auto flex items-center justify-between">
@@ -107,9 +106,7 @@ export function AvailabilityManager({
       )}
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Main content - Weekly Schedule */}
         <div className="lg:col-span-2 space-y-6">
-          {/* Session Duration */}
           <div className="bg-white rounded-lg shadow p-6">
             <h2 className="text-xl font-semibold text-gray-900 mb-4">Session Duration</h2>
             <p className="text-sm text-gray-600 mb-4">
@@ -132,7 +129,6 @@ export function AvailabilityManager({
             </div>
           </div>
 
-          {/* Weekly Schedule */}
           <div className="bg-white rounded-lg shadow p-6">
             <h2 className="text-xl font-semibold text-gray-900 mb-4">Weekly Schedule</h2>
             <p className="text-sm text-gray-600 mb-6">
@@ -145,7 +141,6 @@ export function AvailabilityManager({
             />
           </div>
 
-          {/* Blocked Dates */}
           <div className="bg-white rounded-lg shadow p-6">
             <h2 className="text-xl font-semibold text-gray-900 mb-4">Block Specific Dates</h2>
             <p className="text-sm text-gray-600 mb-6">
@@ -159,7 +154,6 @@ export function AvailabilityManager({
           </div>
         </div>
 
-        {/* Sidebar - Upcoming Bookings */}
         <div className="lg:col-span-1">
           <div className="bg-white rounded-lg shadow p-6 sticky top-6">
             <h2 className="text-xl font-semibold text-gray-900 mb-4">Upcoming Sessions</h2>
