@@ -7,7 +7,10 @@ import { getCoachBookings } from '@/actions/coaches/availability';
 import { getCoachPublicProfile } from '@/actions/coaches/search';
 import { BookingModalTrigger } from '@/components/bookings/booking-modal-trigger';
 import { getSession } from '@/lib/auth/session';
-import { getClientDisplayRate } from '@/lib/pricing';
+import { ReviewsList } from '@/components/reviews/reviews-list';
+import { getCoachReviews } from '@/actions/reviews/create';
+import { getPublicGroupLessons } from '@/actions/group-bookings/queries';
+import { PublicLessonsListWrapper } from '@/components/group-bookings/public-lessons-list-wrapper';
 
 export default async function CoachProfilePage({
   params,
@@ -26,20 +29,17 @@ export default async function CoachProfilePage({
   const reputationScore = parseFloat(coach.reputationScore as unknown as string);
   const rating = Number.isFinite(reputationScore) ? reputationScore / 20 : 0;
   const coachHourlyRate = Number.parseFloat(coach.hourlyRate as unknown as string);
-  const platformFee = coach.user?.platformFeePercentage
-    ? Number.parseFloat(coach.user.platformFeePercentage as unknown as string)
-    : 15;
-
-  // Calculate what client pays (includes platform & Stripe fees)
-  const clientDisplayRate = getClientDisplayRate(coachHourlyRate, platformFee);
 
   const locationDisplay = coach.location
     ? `${coach.location.cities.join(', ')}, ${coach.location.state}`
     : 'Location shared after booking';
 
   const canBook = !!session && session.user.role === 'client';
+  const isOwner = !!session && session.user.id === userId;
 
   const { bookings: existingBookings } = await getCoachBookings(userId);
+  const { reviews } = await getCoachReviews(userId, 20);
+  const { lessons: publicLessons } = await getPublicGroupLessons(userId);
 
   const sortedBookings = [...existingBookings].sort(
     (a, b) =>
@@ -47,7 +47,6 @@ export default async function CoachProfilePage({
       new Date(b.scheduledStartAt).getTime(),
   );
 
-  // Normalize availability keys to lowercase to match calendar expectations
   const rawAvailability = coach.weeklyAvailability || {};
   const availability = Object.keys(rawAvailability).length > 0
     ? Object.fromEntries(
@@ -71,7 +70,7 @@ export default async function CoachProfilePage({
   );
 
   return (
-    <div className="relative isolate min-h-screen bg-slate-50 text-slate-900">
+    <div className="relative isolate min-h-screen bg-slate-50 text-slate-900 pt-16">
       <header className="border-b border-slate-200 bg-white/95 backdrop-blur">
         <div className="mx-auto flex max-w-6xl items-center justify-between px-4 py-6 sm:px-6 lg:px-8">
           <Link
@@ -83,9 +82,22 @@ export default async function CoachProfilePage({
             </svg>
             Back to coaches
           </Link>
-          <span className="text-xs font-semibold uppercase tracking-[0.35em] text-slate-400">
-            Verified coach profile
-          </span>
+          <div className="flex items-center gap-3">
+            {isOwner && (
+              <Link
+                href="/dashboard/profile"
+                className="inline-flex items-center gap-2 rounded-full border border-[#FF6B4A]/40 bg-[#FF6B4A]/10 px-4 py-2 text-xs font-semibold uppercase tracking-[0.35em] text-[#FF6B4A] transition hover:bg-[#FF6B4A]/20"
+              >
+                <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                </svg>
+                Edit Profile
+              </Link>
+            )}
+            <span className="text-xs font-semibold uppercase tracking-[0.35em] text-slate-400">
+              Verified coach profile
+            </span>
+          </div>
         </div>
       </header>
 
@@ -109,13 +121,39 @@ export default async function CoachProfilePage({
             nextSession={nextSession}
             introVideo={coach.introVideo}
             coachHourlyRate={coachHourlyRate}
-            clientDisplayRate={clientDisplayRate}
           />
         </section>
 
         <section className="grid gap-10 lg:grid-cols-[minmax(0,1.15fr)_minmax(0,0.85fr)]">
           <AboutSection coach={coach} />
           <ExperienceSection coach={coach} />
+        </section>
+
+        {publicLessons && publicLessons.length > 0 && (
+          <section className="space-y-6">
+            <div className="flex items-center justify-between">
+              <h2 className="text-2xl font-bold text-slate-900">Upcoming Group Lessons</h2>
+            </div>
+            <PublicLessonsListWrapper lessons={publicLessons} canJoin={canBook} coachName={coach.fullName} />
+          </section>
+        )}
+
+        <section className="space-y-6">
+          <div className="flex items-center justify-between">
+            <h2 className="text-2xl font-bold text-slate-900">
+              Reviews {coach.totalReviews > 0 && `(${coach.totalReviews})`}
+            </h2>
+            {coach.totalReviews > 0 && reputationScore > 0 && (
+              <div className="flex items-center gap-2 px-4 py-2 bg-white/90 rounded-full border border-white/70 shadow-sm backdrop-blur">
+                <svg className="h-5 w-5 text-[#FF6B4A]" fill="currentColor" viewBox="0 0 20 20">
+                  <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
+                </svg>
+                <span className="font-semibold text-slate-900">{rating.toFixed(1)}</span>
+                <span className="text-sm text-slate-600">average</span>
+              </div>
+            )}
+          </div>
+          <ReviewsList reviews={reviews} coachName={coach.fullName} />
         </section>
       </main>
     </div>
@@ -146,6 +184,9 @@ function ProfileSummary({
             <h1 className="text-3xl font-semibold tracking-tight sm:text-4xl">
               {coach.fullName}
             </h1>
+            <span className="text-xl text-slate-500 font-normal">
+              @{coach.user.username}
+            </span>
           </div>
           <div className="flex flex-wrap items-center gap-4 text-sm text-slate-600">
             <RatingDisplay rating={rating} reviews={coach.totalReviews} />
@@ -207,7 +248,6 @@ function BookingSummary({
   nextSession,
   introVideo,
   coachHourlyRate,
-  clientDisplayRate,
 }: {
   canBook: boolean;
   coach: NonNullable<Awaited<ReturnType<typeof getCoachPublicProfile>>>;
@@ -219,7 +259,6 @@ function BookingSummary({
   nextSession?: { scheduledStartAt: Date; scheduledEndAt: Date };
   introVideo?: string | null;
   coachHourlyRate: number;
-  clientDisplayRate: number;
 }) {
   return (
     <div className="flex flex-col gap-6 rounded-3xl border border-white/70 bg-white/90 p-8 shadow-[0_35px_100px_-70px_rgba(15,23,42,0.55)] backdrop-blur">
@@ -233,14 +272,14 @@ function BookingSummary({
 
       <div className="space-y-1">
         <p className="text-xs font-semibold uppercase tracking-[0.35em] text-slate-400">
-          Training investment
+          Hourly rate
         </p>
         <p className="text-4xl font-semibold text-[#FF6B4A]">
-          ${Number.isFinite(clientDisplayRate) ? clientDisplayRate.toFixed(2) : '0.00'}
+          ${Number.isFinite(coachHourlyRate) ? coachHourlyRate.toFixed(2) : '0.00'}
           <span className="ml-1 text-base font-medium text-slate-500">/hr</span>
         </p>
         <p className="text-sm text-slate-500">
-          Session duration: {sessionDuration} minutes • Coach receives ${coachHourlyRate}/hr
+          Session duration: {sessionDuration} minutes
         </p>
       </div>
 
@@ -269,22 +308,41 @@ function BookingSummary({
       </div>
 
       {canBook ? (
-        <div className="flex flex-wrap gap-3">
-          <Link
-            href={`/dashboard/messages?new=${userId}`}
-            className="inline-flex items-center justify-center rounded-full border border-[#FF6B4A]/40 bg-white px-6 py-2 text-sm font-semibold text-[#FF6B4A] transition hover:border-[#FF6B4A]"
-          >
-            Message coach
-          </Link>
-          <BookingModalTrigger
-            coachId={coach.userId}
-            coachName={coach.fullName}
-            hourlyRate={coachHourlyRate}
-            sessionDuration={sessionDuration}
-            availability={availability}
-            blockedDates={blockedDates}
-            existingBookings={existingBookings}
-          />
+        <div className="flex flex-col gap-3">
+          <div className="flex flex-wrap gap-3">
+            <Link
+              href={`/dashboard/messages?new=${userId}`}
+              className="inline-flex items-center justify-center rounded-full border border-[#FF6B4A]/40 bg-white px-6 py-2 text-sm font-semibold text-[#FF6B4A] transition hover:border-[#FF6B4A]"
+            >
+              Message coach
+            </Link>
+            <BookingModalTrigger
+              coachId={coach.userId}
+              coachName={coach.fullName}
+              hourlyRate={coachHourlyRate}
+              sessionDuration={sessionDuration}
+              availability={availability}
+              blockedDates={blockedDates}
+              existingBookings={existingBookings}
+              preferredLocations={coach.preferredLocations || []}
+            />
+          </div>
+          {coach.allowPrivateGroups && (
+            <div>
+              <BookingModalTrigger
+                coachId={coach.userId}
+                coachName={coach.fullName}
+                hourlyRate={coachHourlyRate}
+                sessionDuration={sessionDuration}
+                availability={availability}
+                blockedDates={blockedDates}
+                existingBookings={existingBookings}
+                preferredLocations={coach.preferredLocations || []}
+                mode="group"
+                buttonClass="w-full px-8 py-3 bg-white border-2 border-[#FF6B4A] text-[#FF6B4A] font-semibold rounded-lg hover:bg-[#FF6B4A] hover:text-white transition-all duration-200"
+              />
+            </div>
+          )}
         </div>
       ) : (
         <div className="rounded-2xl border border-slate-200 bg-slate-100 px-6 py-3 text-sm font-semibold text-slate-600">

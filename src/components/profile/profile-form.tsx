@@ -1,12 +1,14 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { updateUserAccount, updateAthleteProfile, updateCoachProfile } from '@/actions/profile/update';
+import { checkUsernameAvailability } from '@/actions/auth/validate-username';
 
 interface User {
   id: string;
   name: string;
+  username: string;
   email: string;
   image: string | null;
   role: 'client' | 'coach' | 'admin' | 'pending';
@@ -22,10 +24,42 @@ export function ProfileForm({ user, profile }: ProfileFormProps) {
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
 
-  // Account fields (common to all)
   const [name, setName] = useState(user.name);
+  const [username, setUsername] = useState(user.username);
+  const [usernameChecking, setUsernameChecking] = useState(false);
+  const [usernameError, setUsernameError] = useState<string | null>(null);
+  const [usernameAvailable, setUsernameAvailable] = useState(false);
 
-  // Athlete-specific fields
+  useEffect(() => {
+    if (username === user.username) {
+      setUsernameError(null);
+      setUsernameAvailable(false);
+      return;
+    }
+
+    if (!username || username.length < 3) {
+      setUsernameError('Username must be at least 3 characters');
+      setUsernameAvailable(false);
+      return;
+    }
+
+    const timeoutId = setTimeout(async () => {
+      setUsernameChecking(true);
+      const result = await checkUsernameAvailability(username);
+      setUsernameChecking(false);
+      
+      if (result.available) {
+        setUsernameError(null);
+        setUsernameAvailable(true);
+      } else {
+        setUsernameError(result.error || 'Username unavailable');
+        setUsernameAvailable(false);
+      }
+    }, 500);
+
+    return () => clearTimeout(timeoutId);
+  }, [username, user.username]);
+
   const [athleteData, setAthleteData] = useState(
     user.role === 'client' && profile
       ? {
@@ -41,7 +75,6 @@ export function ProfileForm({ user, profile }: ProfileFormProps) {
       : null
   );
 
-  // Coach-specific fields
   const [coachData, setCoachData] = useState(
     user.role === 'coach' && profile
       ? {
@@ -55,19 +88,26 @@ export function ProfileForm({ user, profile }: ProfileFormProps) {
           accomplishments: profile.accomplishments || '',
           hourlyRate: profile.hourlyRate || '',
           preferredLocations: profile.preferredLocations || [],
+          groupBookingsEnabled: profile.groupBookingsEnabled || false,
+          allowPrivateGroups: profile.allowPrivateGroups || false,
+          allowPublicGroups: profile.allowPublicGroups || false,
         }
       : null
   );
 
   const handleSave = async () => {
+    if (username !== user.username && (usernameError || !usernameAvailable)) {
+      setError('Please fix username errors before saving');
+      return;
+    }
+
     setSaving(true);
     setError(null);
     setSuccess(false);
 
     try {
-      // Update account info if changed
-      if (name !== user.name) {
-        const result = await updateUserAccount({ name });
+      if (name !== user.name || username !== user.username) {
+        const result = await updateUserAccount({ name, username });
         if (!result.success) {
           setError(result.error || 'Failed to update account');
           setSaving(false);
@@ -75,7 +115,6 @@ export function ProfileForm({ user, profile }: ProfileFormProps) {
         }
       }
 
-      // Update profile based on role
       if (user.role === 'client' && athleteData) {
         const result = await updateAthleteProfile(athleteData);
         if (!result.success) {
@@ -103,7 +142,6 @@ export function ProfileForm({ user, profile }: ProfileFormProps) {
 
   return (
     <div className="bg-white rounded-lg shadow">
-      {/* Account Section */}
       <div className="p-6 border-b border-gray-200">
         <h2 className="text-xl font-semibold text-gray-900 mb-4">Account Information</h2>
         <div className="space-y-4">
@@ -120,6 +158,52 @@ export function ProfileForm({ user, profile }: ProfileFormProps) {
             />
           </div>
           <div>
+            <label htmlFor="username" className="block text-sm font-medium text-gray-700 mb-1">
+              Username
+            </label>
+            <div className="relative">
+              <div className="absolute inset-y-0 left-0 flex items-center pl-4 pointer-events-none">
+                <span className="text-gray-500">@</span>
+              </div>
+              <input
+                type="text"
+                id="username"
+                value={username}
+                onChange={(e) => {
+                  const value = e.target.value.toLowerCase().replace(/[^a-z0-9_-]/g, '');
+                  setUsername(value);
+                }}
+                className={`w-full px-4 py-2 pl-8 border rounded-lg focus:ring-2 focus:border-transparent ${
+                  usernameError
+                    ? 'border-red-500 focus:ring-red-500'
+                    : usernameAvailable && username !== user.username
+                    ? 'border-green-500 focus:ring-green-500'
+                    : 'border-gray-300 focus:ring-[#FF6B4A]'
+                }`}
+                maxLength={30}
+              />
+              {usernameChecking && (
+                <div className="absolute inset-y-0 right-0 flex items-center pr-4">
+                  <div className="animate-spin rounded-full h-4 w-4 border-2 border-[#FF6B4A] border-t-transparent"></div>
+                </div>
+              )}
+              {!usernameChecking && usernameAvailable && username !== user.username && (
+                <div className="absolute inset-y-0 right-0 flex items-center pr-4">
+                  <svg className="h-5 w-5 text-green-500" fill="currentColor" viewBox="0 0 20 20">
+                    <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+                  </svg>
+                </div>
+              )}
+            </div>
+            {usernameError && (
+              <p className="text-xs text-red-600 mt-1">{usernameError}</p>
+            )}
+            {!usernameError && usernameAvailable && username !== user.username && (
+              <p className="text-xs text-green-600 mt-1">Username is available!</p>
+            )}
+            <p className="text-xs text-gray-500 mt-1">3-30 characters. Letters, numbers, underscores, and hyphens only.</p>
+          </div>
+          <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">
               Email
             </label>
@@ -131,7 +215,6 @@ export function ProfileForm({ user, profile }: ProfileFormProps) {
         </div>
       </div>
 
-      {/* Athlete Profile Section */}
       {user.role === 'client' && athleteData && (
         <div className="p-6 border-b border-gray-200">
           <h2 className="text-xl font-semibold text-gray-900 mb-4">Athlete Profile</h2>
@@ -256,7 +339,6 @@ export function ProfileForm({ user, profile }: ProfileFormProps) {
         </div>
       )}
 
-      {/* Coach Profile Section */}
       {user.role === 'coach' && coachData && (
         <div className="p-6 border-b border-gray-200">
           <h2 className="text-xl font-semibold text-gray-900 mb-4">Coach Profile</h2>
@@ -408,11 +490,81 @@ export function ProfileForm({ user, profile }: ProfileFormProps) {
                 placeholder="Notable achievements, awards, etc..."
               />
             </div>
+
+            <div className="pt-6 border-t border-gray-200">
+              <h3 className="text-lg font-semibold text-gray-900 mb-4">Group Booking Settings</h3>
+              
+              <div className="space-y-4">
+                <div className="flex items-center gap-3">
+                  <input
+                    type="checkbox"
+                    id="groupBookingsEnabled"
+                    checked={coachData.groupBookingsEnabled}
+                    onChange={(e) =>
+                      setCoachData({ ...coachData, groupBookingsEnabled: e.target.checked })
+                    }
+                    className="w-4 h-4 text-[#FF6B4A] border-gray-300 rounded focus:ring-[#FF6B4A]"
+                  />
+                  <label htmlFor="groupBookingsEnabled" className="text-sm font-medium text-gray-900">
+                    Enable Group Bookings
+                  </label>
+                </div>
+
+                {coachData.groupBookingsEnabled && (
+                  <>
+                    <div className="ml-7 space-y-3">
+                      <div className="flex items-center gap-3">
+                        <input
+                          type="checkbox"
+                          id="allowPrivateGroups"
+                          checked={coachData.allowPrivateGroups}
+                          onChange={(e) =>
+                            setCoachData({ ...coachData, allowPrivateGroups: e.target.checked })
+                          }
+                          className="w-4 h-4 text-[#FF6B4A] border-gray-300 rounded focus:ring-[#FF6B4A]"
+                        />
+                        <label htmlFor="allowPrivateGroups" className="text-sm text-gray-700">
+                          Allow Private Group Lessons (client books for multiple people)
+                        </label>
+                      </div>
+
+                      <div className="flex items-center gap-3">
+                        <input
+                          type="checkbox"
+                          id="allowPublicGroups"
+                          checked={coachData.allowPublicGroups}
+                          onChange={(e) =>
+                            setCoachData({ ...coachData, allowPublicGroups: e.target.checked })
+                          }
+                          className="w-4 h-4 text-[#FF6B4A] border-gray-300 rounded focus:ring-[#FF6B4A]"
+                        />
+                        <label htmlFor="allowPublicGroups" className="text-sm text-gray-700">
+                          Allow Public Group Lessons (you create open lessons)
+                        </label>
+                      </div>
+                    </div>
+
+                    {coachData.allowPrivateGroups && (
+                      <div className="ml-7 mt-4 p-4 bg-blue-50 rounded-lg border border-blue-200">
+                        <p className="text-sm text-gray-700 mb-2">
+                          ⚙️ <strong>Next step:</strong> Configure your pricing tiers for private groups
+                        </p>
+                        <a
+                          href="/dashboard/group-pricing"
+                          className="text-sm text-[#FF6B4A] hover:underline font-medium"
+                        >
+                          Set up pricing tiers →
+                        </a>
+                      </div>
+                    )}
+                  </>
+                )}
+              </div>
+            </div>
           </div>
         </div>
       )}
 
-      {/* Messages */}
       {error && (
         <div className="mx-6 mt-6 p-4 bg-red-50 border border-red-200 rounded-lg">
           <p className="text-sm text-red-600">{error}</p>
@@ -424,7 +576,6 @@ export function ProfileForm({ user, profile }: ProfileFormProps) {
         </div>
       )}
 
-      {/* Save Button */}
       <div className="p-6">
         <Button
           onClick={handleSave}

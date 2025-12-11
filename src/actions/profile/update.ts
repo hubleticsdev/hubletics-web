@@ -2,25 +2,48 @@
 
 import { db } from '@/lib/db';
 import { user, athleteProfile, coachProfile } from '@/lib/db/schema';
-import { eq } from 'drizzle-orm';
+import { eq, sql } from 'drizzle-orm';
 import { getSession } from '@/lib/auth/session';
 import { revalidatePath } from 'next/cache';
-import { updateUserAccountSchema, updateAthleteProfileSchema, updateCoachProfileSchema, validateInput } from '@/lib/validations';
+import { updateUserAccountSchema, updateAthleteProfileSchema, updateCoachProfileSchema, validateInput, usernameSchema } from '@/lib/validations';
+import { invalidateSessionCache } from '@/lib/auth/cache';
 
-/**
- * Update user account settings
- */
-export async function updateUserAccount({ name }: { name: string }) {
+export async function updateUserAccount({ name, username }: { name: string; username?: string }) {
   try {
     const session = await getSession();
     if (!session) {
       return { success: false, error: 'Unauthorized' };
     }
 
-    // Validate input
     const validatedData = validateInput(updateUserAccountSchema, { name });
+    
+    const updateData: { name: string; username?: string } = { name: validatedData.name };
 
-    await db.update(user).set({ name: validatedData.name }).where(eq(user.id, session.user.id));
+    if (username && username !== session.user.username) {
+      const usernameValidation = usernameSchema.safeParse(username);
+      if (!usernameValidation.success) {
+        const errorMessage = usernameValidation.error?.issues?.[0]?.message || 'Invalid username format';
+        return { success: false, error: errorMessage };
+      }
+
+      const existingUser = await db
+        .select({ id: user.id })
+        .from(user)
+        .where(sql`LOWER(${user.username}) = LOWER(${username})`)
+        .limit(1);
+
+      if (existingUser.length > 0 && existingUser[0].id !== session.user.id) {
+        return { success: false, error: 'Username is already taken' };
+      }
+
+      updateData.username = username;
+    }
+
+    await db.update(user).set(updateData).where(eq(user.id, session.user.id));
+
+    if (updateData.username) {
+      await invalidateSessionCache();
+    }
 
     revalidatePath('/dashboard/profile');
     return { success: true };
@@ -30,9 +53,6 @@ export async function updateUserAccount({ name }: { name: string }) {
   }
 }
 
-/**
- * Update athlete profile
- */
 export async function updateAthleteProfile(data: {
   fullName: string;
   profilePhoto?: string;
@@ -49,7 +69,6 @@ export async function updateAthleteProfile(data: {
       return { success: false, error: 'Unauthorized' };
     }
 
-    // Validate input
     const validatedData = validateInput(updateAthleteProfileSchema, data);
 
     await db
@@ -69,9 +88,6 @@ export async function updateAthleteProfile(data: {
   }
 }
 
-/**
- * Update coach profile
- */
 export async function updateCoachProfile(data: {
   fullName: string;
   profilePhoto?: string;
@@ -96,7 +112,6 @@ export async function updateCoachProfile(data: {
       return { success: false, error: 'Unauthorized' };
     }
 
-    // Validate input
     const validatedData = validateInput(updateCoachProfileSchema, data);
 
     await db

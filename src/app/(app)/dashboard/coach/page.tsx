@@ -11,6 +11,7 @@ import {
   ShieldCheck,
   Target,
   UserCog,
+  Users,
 } from 'lucide-react';
 import { format } from 'date-fns';
 
@@ -156,11 +157,27 @@ export default async function CoachDashboard() {
 
   const quickActions: QuickAction[] = [
     {
+      href: `/coaches/${session.user.id}`,
+      title: 'View my profile',
+      description: 'See your profile as athletes see it.',
+      icon: UserCog,
+    },
+    {
       href: '/dashboard/bookings',
       title: 'Respond to bookings',
       description: 'Confirm, reschedule, or decline athlete requests.',
       icon: CalendarClock,
     },
+    ...(coach.allowPublicGroups
+      ? [
+          {
+            href: '/dashboard/create-group-lesson',
+            title: 'Create group lesson',
+            description: 'Set up a public group lesson that athletes can join.',
+            icon: Users,
+          },
+        ]
+      : []),
     {
       href: '/dashboard/messages',
       title: 'Message athletes',
@@ -175,7 +192,7 @@ export default async function CoachDashboard() {
     },
     {
       href: '/dashboard/profile',
-      title: 'Update profile',
+      title: 'Edit profile',
       description: 'Refresh certifications, intro video, and pricing.',
       icon: UserCog,
     },

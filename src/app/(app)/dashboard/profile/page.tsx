@@ -11,7 +11,6 @@ export default async function ProfilePage() {
     redirect('/login');
   }
 
-  // Fetch user's profile based on role
   let profile = null;
   if (session.user.role === 'client') {
     profile = await db.query.athleteProfile.findFirst({
@@ -23,7 +22,6 @@ export default async function ProfilePage() {
     });
   }
 
-  // Redirect to onboarding if no profile exists
   if (!profile) {
     if (session.user.role === 'client') {
       redirect('/onboarding/athlete');
@@ -46,6 +44,7 @@ export default async function ProfilePage() {
           user={{
             id: session.user.id,
             name: session.user.name,
+            username: session.user.username,
             email: session.user.email,
             image: session.user.image ?? null,
             role: session.user.role as 'client' | 'coach' | 'admin' | 'pending',

@@ -47,7 +47,7 @@ export default async function CoachesPage({
   ].filter(Boolean) as { label: string; value: string }[];
 
   return (
-    <div className="relative isolate min-h-screen bg-slate-50 text-slate-900">
+    <div className="relative isolate min-h-screen bg-slate-50 text-slate-900 pt-16">
       <header className="border-b border-slate-200 bg-white/95 pt-6 sm:pt-10 backdrop-blur">
         <div className="mx-auto flex max-w-6xl flex-col gap-6 px-4 py-12 sm:px-6 lg:px-8">
           <div className="space-y-4">
@@ -91,7 +91,7 @@ export default async function CoachesPage({
 
       <main className="pb-14 pt-8 sm:pt-10">
         <div className="mx-auto grid max-w-6xl items-start gap-8 px-4 sm:px-6 lg:grid-cols-[320px,1fr] lg:px-8">
-          <aside className="lg:sticky lg:top-[7rem] lg:self-start lg:z-30">
+          <aside>
             <SearchFilters specialties={specialties} className="mb-0 shadow-[0_25px_80px_-60px_rgba(15,23,42,0.55)]" />
           </aside>
 
