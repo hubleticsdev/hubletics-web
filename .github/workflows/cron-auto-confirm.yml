@@ -1,0 +1,17 @@
+name: Auto-Confirm Bookings Cron
+
+on:
+  schedule:
+    - cron: '0 * * * *'
+  workflow_dispatch:
+
+jobs:
+  call-api:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Call auto-confirm API endpoint
+        run: |
+          curl -X GET "${{ secrets.APP_URL }}/api/cron/auto-confirm-bookings" \
+            -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}" \
+            -f -s -S -o /dev/null -w "Status: %{http_code}\n"
+
