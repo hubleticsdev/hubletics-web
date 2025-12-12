@@ -12,6 +12,7 @@ import { getBookingRequestEmailTemplate } from '@/lib/email/templates/booking-no
 import { z } from 'zod';
 import { createBookingSchema, validateInput } from '@/lib/validations';
 import { withTransaction } from '@/lib/db/transactions';
+import { sanitizeText } from '@/lib/utils';
 
 export type CreateBookingInput = z.infer<typeof createBookingSchema>;
 
@@ -139,7 +140,7 @@ export async function createBooking(input: CreateBookingInput) {
       scheduledEndAt: validatedInput.scheduledEndAt,
       duration,
       location: validatedInput.location,
-      clientMessage: validatedInput.clientMessage,
+      clientMessage: validatedInput.clientMessage ? sanitizeText(validatedInput.clientMessage) : validatedInput.clientMessage,
       coachRate: pricing.coachDesiredRate.toString(),
       clientPaid: pricing.clientPays.toString(),
       platformFee: pricing.platformFee.toString(),

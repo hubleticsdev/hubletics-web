@@ -77,10 +77,7 @@ export default async function StripeOnboardingPage() {
     );
   }
 
-  const headersList = await headers();
-  const host = headersList.get('host') || 'localhost:3000';
-  const protocol = process.env.NODE_ENV === 'production' ? 'https' : 'http';
-  const baseUrl = `${protocol}://${host}`;
+  const baseUrl = process.env.NEXT_PUBLIC_APP_URL;
 
   const accountLink = await createAccountLink(
     coach.stripeAccountId,

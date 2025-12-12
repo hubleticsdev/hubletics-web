@@ -4,7 +4,7 @@ import { requireRole } from '@/lib/auth/session';
 import { db } from '@/lib/db';
 import { withTransaction } from '@/lib/db/transactions';
 import { coachProfile, user as userTable } from '@/lib/db/schema';
-import { isValidUploadThingUrl } from '@/lib/utils';
+import { isValidUploadThingUrl, sanitizeText } from '@/lib/utils';
 import { z } from 'zod';
 import { coachProfileSchema, validateInput } from '@/lib/validations';
 
@@ -38,7 +38,7 @@ export async function createCoachProfile(data: CoachProfileData) {
         state: validatedData.state,
       },
       specialties: validatedData.specialties,
-      bio: validatedData.bio,
+      bio: sanitizeText(validatedData.bio),
       certifications: validatedData.certifications.length > 0 ? validatedData.certifications : undefined,
       accomplishments: validatedData.accomplishments || null,
       hourlyRate: validatedData.hourlyRate.toString(),

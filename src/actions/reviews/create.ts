@@ -7,6 +7,7 @@ import { eq, and, sql } from 'drizzle-orm';
 import { z } from 'zod';
 import { validateInput } from '@/lib/validations';
 import { revalidatePath } from 'next/cache';
+import { sanitizeText } from '@/lib/utils';
 
 const createReviewSchema = z.object({
   bookingId: z.string().uuid('Invalid booking ID'),
@@ -51,7 +52,7 @@ export async function createReview(input: CreateReviewInput) {
       reviewerId: session.user.id,
       coachId: bookingRecord.coachId,
       rating: validatedInput.rating,
-      reviewText: validatedInput.reviewText || null,
+      reviewText: validatedInput.reviewText ? sanitizeText(validatedInput.reviewText) : null,
     });
 
     const coachReviews = await db

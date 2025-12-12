@@ -4,7 +4,7 @@ import { requireRole } from '@/lib/auth/session';
 import { db } from '@/lib/db';
 import { withTransaction } from '@/lib/db/transactions';
 import { athleteProfile } from '@/lib/db/schema';
-import { isValidUploadThingUrl } from '@/lib/utils';
+import { isValidUploadThingUrl, sanitizeText } from '@/lib/utils';
 import { z } from 'zod';
 import { athleteProfileSchema, validateInput } from '@/lib/validations';
 
@@ -48,7 +48,7 @@ export async function createAthleteProfile(data: AthleteProfileData) {
         max: validatedData.budgetMax,
       },
       availability: {},
-      bio: validatedData.bio || null,
+      bio: validatedData.bio ? sanitizeText(validatedData.bio) : null,
     });
 
     const { user: userTable } = await import('@/lib/db/schema');
