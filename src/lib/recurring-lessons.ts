@@ -129,7 +129,7 @@ export async function cancelRecurringLesson(recurringId: string): Promise<Genera
       .set({ isActive: false })
       .where(eq(recurringGroupLesson.id, recurringId));
 
-    // We don't automatically cancel existing bookings that already have participants
+    // don't automatically cancel existing bookings that already have participants
     // should be handled individually by the coach
 
     console.log(`[RECURRING_LESSONS] Deactivated recurring lesson ${recurringId}`);
@@ -140,6 +140,39 @@ export async function cancelRecurringLesson(recurringId: string): Promise<Genera
     return {
       success: false,
       error: error instanceof Error ? error.message : 'Failed to cancel recurring lesson',
+    };
+  }
+}
+
+export async function updateRecurringLesson(
+  recurringId: string,
+  updates: Partial<RecurringLessonTemplate>
+): Promise<GenerateBookingsResult> {
+  try {
+    const existing = await db.query.recurringGroupLesson.findFirst({
+      where: eq(recurringGroupLesson.id, recurringId),
+    });
+
+    if (!existing) {
+      return { success: false, error: 'Recurring lesson not found' };
+    }
+
+    await db
+      .update(recurringGroupLesson)
+      .set({
+        ...updates,
+        updatedAt: new Date(),
+      })
+      .where(eq(recurringGroupLesson.id, recurringId));
+
+    console.log(`[RECURRING_LESSONS] Updated recurring lesson ${recurringId}`);
+
+    return { success: true };
+  } catch (error) {
+    console.error('[RECURRING_LESSONS] Error updating recurring lesson:', error);
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : 'Failed to update recurring lesson',
     };
   }
 }
