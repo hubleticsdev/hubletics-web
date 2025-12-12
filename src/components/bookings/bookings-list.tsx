@@ -50,10 +50,11 @@ interface Booking {
   paymentDueAt?: Date | null;
   isGroupBooking?: boolean;
   groupType?: 'private' | 'public' | null;
-  organizerId?: string | null;
   maxParticipants?: number | null;
   currentParticipants?: number | null;
   pricePerPerson?: string | null;
+  organizerId?: string | null;
+  pendingParticipantsCount?: number;
   client?: {
     id: string;
     name: string;
@@ -81,6 +82,7 @@ interface BookingsListProps {
 export function BookingsList({ bookings, userRole, userId }: BookingsListProps) {
   const router = useRouter();
   const [filter, setFilter] = useState<'all' | 'pending' | 'upcoming' | 'past'>('all');
+  const [dateRange, setDateRange] = useState<{ start?: Date; end?: Date }>({});
   const [processingBookingId, setProcessingBookingId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [reviewModalOpen, setReviewModalOpen] = useState(false);
@@ -117,16 +119,37 @@ export function BookingsList({ bookings, userRole, userId }: BookingsListProps) 
     const isUpcoming = bookingDate >= now && (booking.status === 'accepted' || booking.status === 'pending');
     const isPending = booking.status === 'pending';
 
+    let statusMatch = true;
     switch (filter) {
       case 'pending':
-        return isPending;
+        statusMatch = isPending;
+        break;
       case 'upcoming':
-        return isUpcoming && !isPast;
+        statusMatch = isUpcoming && !isPast;
+        break;
       case 'past':
-        return isPast || booking.status === 'completed' || booking.status === 'cancelled';
+        statusMatch = isPast || booking.status === 'completed' || booking.status === 'cancelled';
+        break;
       default:
-        return true;
+        statusMatch = true;
     }
+
+    let dateMatch = true;
+    if (dateRange.start || dateRange.end) {
+      const bookingStart = new Date(booking.scheduledStartAt);
+      if (dateRange.start && bookingStart < dateRange.start) {
+        dateMatch = false;
+      }
+      if (dateRange.end) {
+        const endOfDay = new Date(dateRange.end);
+        endOfDay.setHours(23, 59, 59, 999);
+        if (bookingStart > endOfDay) {
+          dateMatch = false;
+        }
+      }
+    }
+
+    return statusMatch && dateMatch;
   });
 
   const getStatusColor = (status: BookingStatus) => {
@@ -375,6 +398,43 @@ export function BookingsList({ bookings, userRole, userId }: BookingsListProps) 
             </button>
           </nav>
         </div>
+
+        <div className="p-4 border-t border-gray-200">
+          <div className="flex items-center gap-4">
+            <span className="text-sm font-medium text-gray-700">Filter by date:</span>
+            <div className="flex items-center gap-2">
+              <input
+                type="date"
+                value={dateRange.start ? dateRange.start.toISOString().split('T')[0] : ''}
+                onChange={(e) => setDateRange(prev => ({
+                  ...prev,
+                  start: e.target.value ? new Date(e.target.value) : undefined
+                }))}
+                className="px-3 py-1 border border-gray-300 rounded text-sm"
+                placeholder="From date"
+              />
+              <span className="text-gray-500">to</span>
+              <input
+                type="date"
+                value={dateRange.end ? dateRange.end.toISOString().split('T')[0] : ''}
+                onChange={(e) => setDateRange(prev => ({
+                  ...prev,
+                  end: e.target.value ? new Date(e.target.value) : undefined
+                }))}
+                className="px-3 py-1 border border-gray-300 rounded text-sm"
+                placeholder="To date"
+              />
+              {(dateRange.start || dateRange.end) && (
+                <button
+                  onClick={() => setDateRange({})}
+                  className="px-3 py-1 text-sm text-[#FF6B4A] hover:text-[#FF8C5A] font-medium"
+                >
+                  Clear
+                </button>
+              )}
+            </div>
+          </div>
+        </div>
       </div>
 
       {filteredBookings.length === 0 ? (
@@ -414,6 +474,12 @@ export function BookingsList({ bookings, userRole, userId }: BookingsListProps) 
                           <span className="px-3 py-1 rounded-full text-xs font-semibold bg-purple-100 text-purple-700 flex items-center gap-1">
                             <Users className="h-3 w-3" />
                             {booking.groupType === 'public' ? 'PUBLIC GROUP' : 'PRIVATE GROUP'}
+                          </span>
+                        )}
+                        {booking.pendingParticipantsCount && booking.pendingParticipantsCount > 0 && (
+                          <span className="px-3 py-1 rounded-full text-xs font-semibold bg-orange-100 text-orange-700 flex items-center gap-1">
+                            <AlertCircle className="h-3 w-3" />
+                            {booking.pendingParticipantsCount} pending approval
                           </span>
                         )}
                         {booking.status === 'pending' && userRole === 'coach' && (

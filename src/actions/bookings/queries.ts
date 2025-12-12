@@ -2,8 +2,8 @@
 
 import { getSession } from '@/lib/auth/session';
 import { db } from '@/lib/db';
-import { booking } from '@/lib/db/schema';
-import { eq, and, or, gte } from 'drizzle-orm';
+import { booking, bookingParticipant } from '@/lib/db/schema';
+import { eq, and, or, gte, inArray } from 'drizzle-orm';
 
 /**
  * Get bookings for the current user
@@ -50,7 +50,31 @@ export async function getMyBookings(status?: 'pending' | 'accepted' | 'declined'
       orderBy: (bookings, { desc }) => [desc(bookings.createdAt)],
     });
 
-    return { success: true, bookings };
+    const groupBookingIds = bookings.filter(b => b.isGroupBooking).map(b => b.id);
+    const participantCounts: Record<string, number> = {};
+
+    if (groupBookingIds.length > 0) {
+      const participants = await db.query.bookingParticipant.findMany({
+        where: and(
+          eq(bookingParticipant.paymentStatus, 'pending'),
+          inArray(bookingParticipant.bookingId, groupBookingIds)
+        ),
+        columns: {
+          bookingId: true,
+        },
+      });
+
+      participants.forEach(p => {
+        participantCounts[p.bookingId] = (participantCounts[p.bookingId] || 0) + 1;
+      });
+    }
+
+    const bookingsWithCounts = bookings.map(booking => ({
+      ...booking,
+      pendingParticipantsCount: booking.isGroupBooking ? (participantCounts[booking.id] || 0) : undefined,
+    }));
+
+    return { success: true, bookings: bookingsWithCounts };
   } catch (error) {
     console.error('Get bookings error:', error);
     return { success: false, error: 'Failed to fetch bookings', bookings: [] };
@@ -94,7 +118,7 @@ export async function getPendingBookingRequests() {
 }
 
 /**
- * Get upcoming bookings (accepted bookings scheduled in the future)
+ * Get upcoming bookings
  */
 export async function getUpcomingBookings() {
   try {
