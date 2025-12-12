@@ -406,6 +406,7 @@ export const booking = pgTable(
     minParticipants: integer('minParticipants'),
     pricePerPerson: decimal('pricePerPerson', { precision: 10, scale: 2 }),
     currentParticipants: integer('currentParticipants').default(0),
+    recurringLessonId: text('recurringLessonId'),
 
     createdAt: timestamp('createdAt').notNull().defaultNow(),
     updatedAt: timestamp('updatedAt').notNull().defaultNow(),
