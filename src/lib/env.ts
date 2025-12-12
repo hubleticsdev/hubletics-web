@@ -17,6 +17,9 @@ const serverSchema = z.object({
   PUSHER_APP_ID: z.string().min(1, 'PUSHER_APP_ID is required'),
   PUSHER_SECRET: z.string().min(1, 'PUSHER_SECRET is required'),
 
+  UPSTASH_REDIS_REST_URL: z.string().url().optional(),
+  UPSTASH_REDIS_REST_TOKEN: z.string().optional(),
+
   NODE_ENV: z.enum(['development', 'test', 'production']).default('development'),
 });
 

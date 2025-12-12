@@ -4,8 +4,12 @@ import { db } from '@/lib/db';
 import { conversation } from '@/lib/db/schema';
 import { eq } from 'drizzle-orm';
 import { pusherServer } from '@/lib/pusher/server';
+import { withRateLimit, apiRateLimit } from '@/lib/rate-limit';
 
 export async function POST(request: NextRequest) {
+  const rateLimitResponse = await withRateLimit(request, apiRateLimit);
+  if (rateLimitResponse) return rateLimitResponse;
+
   try {
     const session = await getSession();
 

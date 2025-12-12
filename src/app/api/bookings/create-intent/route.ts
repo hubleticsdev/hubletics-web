@@ -6,8 +6,12 @@ import { eq } from 'drizzle-orm';
 import { stripe } from '@/lib/stripe';
 import { calculateBookingPricing } from '@/lib/pricing';
 import { uuidSchema, validateInput } from '@/lib/validations';
+import { withRateLimit, bookingRateLimit } from '@/lib/rate-limit';
 
 export async function POST(req: NextRequest) {
+  const rateLimitResponse = await withRateLimit(req, bookingRateLimit);
+  if (rateLimitResponse) return rateLimitResponse;
+
   try {
     const session = await getSession();
 
