@@ -3,9 +3,13 @@ import Link from 'next/link';
 import { notFound } from 'next/navigation';
 
 import { db } from '@/lib/db';
-import { athleteProfile, user } from '@/lib/db/schema';
-import { eq, and, isNull } from 'drizzle-orm';
+import { athleteProfile } from '@/lib/db/schema';
+import { eq } from 'drizzle-orm';
 import { getSession } from '@/lib/auth/session';
+
+type Athlete = NonNullable<
+  Awaited<ReturnType<typeof db.query.athleteProfile.findFirst>>
+>;
 
 export default async function AthleteProfilePage({
   params,
@@ -82,28 +86,26 @@ export default async function AthleteProfilePage({
         </div>
       </header>
 
-      <main className="mx-auto flex max-w-5xl flex-col gap-12 px-4 py-10 sm:px-6 lg:px-8">
+      <main className="mx-auto flex max-w-6xl flex-col gap-12 px-4 py-10 sm:px-6 lg:px-8">
         <section className="rounded-[36px] border border-white/70 bg-white/95 p-8 shadow-[0_45px_120px_-80px_rgba(15,23,42,0.7)] backdrop-blur sm:p-12">
-          <div className="flex flex-col gap-8 lg:flex-row">
-            {/* Profile Image */}
+          <div className="flex flex-col gap-8 lg:flex-row lg:items-start">
             <div className="shrink-0">
               <div className="relative h-48 w-48 overflow-hidden rounded-[28px] shadow-[0_30px_90px_-60px_rgba(15,23,42,0.6)]">
                 <Image src={displayImage} alt={athlete.fullName} fill className="object-cover" />
               </div>
             </div>
 
-            {/* Profile Info */}
             <div className="flex-1 space-y-6">
-                  <div className="space-y-3">
-                    <div className="flex flex-wrap items-center gap-3">
-                      <h1 className="text-3xl font-semibold tracking-tight sm:text-4xl">
-                        {athlete.fullName}
-                      </h1>
-                      <span className="text-xl text-slate-500 font-normal">
-                        @{athlete.user.username}
-                      </span>
-                    </div>
-                    <div className="flex flex-wrap items-center gap-4 text-sm text-slate-600">
+              <div className="space-y-3">
+                <div className="flex flex-wrap items-center gap-3">
+                  <h1 className="text-3xl font-semibold tracking-tight sm:text-4xl">
+                    {athlete.fullName}
+                  </h1>
+                  <span className="text-xl font-normal text-slate-500">
+                    @{athlete.user.username}
+                  </span>
+                </div>
+                <div className="flex flex-wrap items-center gap-4 text-sm text-slate-600">
                   <span className="inline-flex items-center gap-2">
                     <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
@@ -114,7 +116,6 @@ export default async function AthleteProfilePage({
                 </div>
               </div>
 
-              {/* Budget */}
               <div className="rounded-2xl border border-[#FF6B4A]/20 bg-gradient-to-br from-orange-50 to-red-50 p-5">
                 <p className="text-xs font-semibold uppercase tracking-[0.35em] text-[#FF6B4A]">
                   Training budget
@@ -124,59 +125,8 @@ export default async function AthleteProfilePage({
                 </p>
               </div>
 
-              {/* Sports Interested */}
-              <div className="space-y-3">
-                <h2 className="text-sm font-semibold uppercase tracking-[0.3em] text-slate-500">
-                  Sports interested
-                </h2>
-                <div className="flex flex-wrap gap-2">
-                  {athlete.sportsInterested.map((sport, index) => (
-                    <span
-                      key={index}
-                      className="inline-flex items-center rounded-full border border-[#FF6B4A]/35 bg-[#FF6B4A]/10 px-3 py-1 text-sm font-semibold text-[#FF6B4A]"
-                    >
-                      {sport}
-                    </span>
-                  ))}
-                </div>
-              </div>
-
-              {/* Experience Levels */}
-              {Object.keys(athlete.experienceLevel).length > 0 && (
-                <div className="space-y-3">
-                  <h2 className="text-sm font-semibold uppercase tracking-[0.3em] text-slate-500">
-                    Experience levels
-                  </h2>
-                  <div className="grid gap-2 sm:grid-cols-2">
-                    {Object.entries(athlete.experienceLevel).map(([sport, exp]) => (
-                      <div
-                        key={sport}
-                        className="rounded-lg border border-slate-200 bg-white p-3"
-                      >
-                        <p className="font-semibold text-slate-900">{sport}</p>
-                        <p className="text-sm text-slate-600 capitalize">{exp.level}</p>
-                        {exp.notes && (
-                          <p className="mt-1 text-xs text-slate-500">{exp.notes}</p>
-                        )}
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
-
-              {/* Bio */}
-              {athlete.bio && (
-                <div className="space-y-3">
-                  <h2 className="text-sm font-semibold uppercase tracking-[0.3em] text-slate-500">
-                    About
-                  </h2>
-                  <p className="leading-relaxed text-slate-700">{athlete.bio}</p>
-                </div>
-              )}
-
-              {/* Message Button (for coaches) */}
               {isCoach && !isOwner && (
-                <div className="pt-4">
+                <div className="pt-2">
                   <Link
                     href={`/dashboard/messages?new=${userId}`}
                     className="inline-flex items-center justify-center rounded-full bg-gradient-to-r from-[#FF6B4A] via-[#FF8C5A] to-[#FFB84D] px-6 py-3 text-sm font-semibold text-white shadow-[0_12px_30px_-18px_rgba(255,107,74,0.8)] transition hover:scale-[1.02]"
@@ -191,8 +141,76 @@ export default async function AthleteProfilePage({
             </div>
           </div>
         </section>
+
+        <section className="grid gap-10 md:grid-cols-2">
+          <SportsInterestedSection athlete={athlete} />
+          <ExperienceLevelsSection athlete={athlete} />
+          <AthleteAboutSection athlete={athlete} />
+        </section>
       </main>
     </div>
   );
 }
 
+function SportsInterestedSection({ athlete }: { athlete: Athlete }) {
+  const sports = athlete.sportsInterested ?? [];
+  return (
+    <section className="space-y-4 rounded-3xl border border-white/70 bg-white/90 p-8 shadow-[0_35px_90px_-70px_rgba(15,23,42,0.55)] backdrop-blur">
+      <h2 className="text-2xl font-semibold text-slate-900">Sports interested</h2>
+      {sports.length > 0 ? (
+        <div className="flex flex-wrap gap-2">
+          {sports.map((sport, index) => (
+            <span
+              key={`${sport}-${index}`}
+              className="inline-flex items-center rounded-full border border-[#FF6B4A]/35 bg-[#FF6B4A]/10 px-3 py-1 text-sm font-semibold text-[#FF6B4A]"
+            >
+              {sport}
+            </span>
+          ))}
+        </div>
+      ) : (
+        <p className="text-sm leading-relaxed text-slate-600">
+          This athlete hasn’t added sports yet.
+        </p>
+      )}
+    </section>
+  );
+}
+
+function ExperienceLevelsSection({ athlete }: { athlete: Athlete }) {
+  const experienceEntries = Object.entries(athlete.experienceLevel ?? {});
+  return (
+    <section className="space-y-4 rounded-3xl border border-white/70 bg-white/90 p-8 shadow-[0_35px_90px_-70px_rgba(15,23,42,0.55)] backdrop-blur">
+      <h2 className="text-2xl font-semibold text-slate-900">Experience levels</h2>
+      {experienceEntries.length > 0 ? (
+        <div className="grid gap-2 sm:grid-cols-2">
+          {experienceEntries.map(([sport, exp]) => (
+            <div key={sport} className="rounded-lg border border-slate-200 bg-white p-3">
+              <p className="font-semibold text-slate-900">{sport}</p>
+              <p className="text-sm capitalize text-slate-600">{exp.level}</p>
+              {exp.notes && (
+                <p className="mt-1 text-xs text-slate-500">{exp.notes}</p>
+              )}
+            </div>
+          ))}
+        </div>
+      ) : (
+        <p className="text-sm leading-relaxed text-slate-600">
+          No experience levels shared yet.
+        </p>
+      )}
+    </section>
+  );
+}
+
+function AthleteAboutSection({ athlete }: { athlete: Athlete }) {
+  return (
+    <section className="space-y-4 rounded-3xl border border-white/70 bg-white/90 p-8 shadow-[0_35px_90px_-70px_rgba(15,23,42,0.55)] backdrop-blur md:col-span-2">
+      <h2 className="text-2xl font-semibold text-slate-900">About</h2>
+      <p className="whitespace-pre-line text-sm leading-relaxed text-slate-600">
+        {athlete.bio ||
+          'This athlete is updating their bio. Message them to learn more about their goals and training preferences.'}
+      </p>
+    </section>
+  );
+}

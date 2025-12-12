@@ -101,60 +101,68 @@ export default async function CoachProfilePage({
         </div>
       </header>
 
-      <main className="mx-auto flex max-w-6xl flex-col gap-12 px-4 py-10 sm:px-6 lg:px-8">
-        <section className="grid gap-10 rounded-[36px] border border-white/70 bg-white/95 p-8 shadow-[0_45px_120px_-80px_rgba(15,23,42,0.7)] backdrop-blur lg:grid-cols-[minmax(0,1.15fr)_minmax(0,0.85fr)] sm:p-12">
-          <ProfileSummary
-            coach={coach}
-            displayImage={displayImage}
-            rating={rating}
-            locationDisplay={locationDisplay}
-          />
-
-          <BookingSummary
-            canBook={canBook}
-            coach={coach}
-            userId={userId}
-            sessionDuration={sessionDuration}
-            availability={availability}
-            blockedDates={blockedDates}
-            existingBookings={existingBookings}
-            nextSession={nextSession}
-            introVideo={coach.introVideo}
-            coachHourlyRate={coachHourlyRate}
-          />
-        </section>
-
-        <section className="grid gap-10 lg:grid-cols-[minmax(0,1.15fr)_minmax(0,0.85fr)]">
-          <AboutSection coach={coach} />
-          <ExperienceSection coach={coach} />
-        </section>
-
-        {publicLessons && publicLessons.length > 0 && (
-          <section className="space-y-6">
-            <div className="flex items-center justify-between">
-              <h2 className="text-2xl font-bold text-slate-900">Upcoming Group Lessons</h2>
-            </div>
-            <PublicLessonsListWrapper lessons={publicLessons} canJoin={canBook} coachName={coach.fullName} />
+      <main className="mx-auto max-w-6xl px-4 py-10 sm:px-6 lg:px-8">
+        <div className="grid gap-12 lg:grid-cols-[minmax(0,1fr)_360px] lg:auto-rows-min lg:items-start">
+          <section className="rounded-[36px] border border-white/70 bg-white/95 p-8 shadow-[0_45px_120px_-80px_rgba(15,23,42,0.7)] backdrop-blur sm:p-12 lg:col-start-1">
+            <ProfileSummary
+              coach={coach}
+              displayImage={displayImage}
+              rating={rating}
+              locationDisplay={locationDisplay}
+            />
           </section>
-        )}
 
-        <section className="space-y-6">
-          <div className="flex items-center justify-between">
-            <h2 className="text-2xl font-bold text-slate-900">
-              Reviews {coach.totalReviews > 0 && `(${coach.totalReviews})`}
-            </h2>
-            {coach.totalReviews > 0 && reputationScore > 0 && (
-              <div className="flex items-center gap-2 px-4 py-2 bg-white/90 rounded-full border border-white/70 shadow-sm backdrop-blur">
-                <svg className="h-5 w-5 text-[#FF6B4A]" fill="currentColor" viewBox="0 0 20 20">
-                  <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
-                </svg>
-                <span className="font-semibold text-slate-900">{rating.toFixed(1)}</span>
-                <span className="text-sm text-slate-600">average</span>
-              </div>
-            )}
+          <aside className="self-start lg:sticky lg:top-24 lg:col-start-2 lg:row-start-1 lg:row-span-4">
+            <BookingSummary
+              canBook={canBook}
+              coach={coach}
+              userId={userId}
+              sessionDuration={sessionDuration}
+              availability={availability}
+              blockedDates={blockedDates}
+              existingBookings={existingBookings}
+              nextSession={nextSession}
+              introVideo={coach.introVideo}
+              coachHourlyRate={coachHourlyRate}
+            />
+          </aside>
+
+          <div className="grid gap-10 md:grid-cols-2 lg:col-start-1">
+            <AboutSection coach={coach} />
+            <ExperienceSection coach={coach} />
           </div>
-          <ReviewsList reviews={reviews} coachName={coach.fullName} />
-        </section>
+
+          {publicLessons && publicLessons.length > 0 && (
+            <section className="space-y-6 lg:col-start-1">
+              <div className="flex items-center justify-between">
+                <h2 className="text-2xl font-bold text-slate-900">Upcoming Group Lessons</h2>
+              </div>
+              <PublicLessonsListWrapper
+                lessons={publicLessons}
+                canJoin={canBook}
+                coachName={coach.fullName}
+              />
+            </section>
+          )}
+
+          <section className="space-y-6 rounded-3xl border border-white/70 bg-white/90 p-8 shadow-[0_35px_100px_-70px_rgba(15,23,42,0.55)] backdrop-blur lg:col-start-1">
+            <div className="flex items-center justify-between">
+              <h2 className="text-2xl font-bold text-slate-900">
+                Reviews {coach.totalReviews > 0 && `(${coach.totalReviews})`}
+              </h2>
+              {coach.totalReviews > 0 && reputationScore > 0 && (
+                <div className="flex items-center gap-2 rounded-full border border-white/70 bg-white/90 px-4 py-2 shadow-sm backdrop-blur">
+                  <svg className="h-5 w-5 text-[#FF6B4A]" fill="currentColor" viewBox="0 0 20 20">
+                    <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
+                  </svg>
+                  <span className="font-semibold text-slate-900">{rating.toFixed(1)}</span>
+                  <span className="text-sm text-slate-600">average</span>
+                </div>
+              )}
+            </div>
+            <ReviewsList reviews={reviews} coachName={coach.fullName} />
+          </section>
+        </div>
       </main>
     </div>
   );
