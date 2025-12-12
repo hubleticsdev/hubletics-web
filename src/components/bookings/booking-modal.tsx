@@ -23,7 +23,7 @@ interface BookingModalProps {
   blockedDates: string[];
   existingBookings: Array<{ scheduledStartAt: Date; scheduledEndAt: Date }>;
   preferredLocations: Array<{ name: string; address: string; notes?: string }>;
-  mode?: 'private' | 'group';
+  allowPrivateGroups?: boolean;
   onClose: () => void;
 }
 
@@ -36,11 +36,12 @@ export function BookingModal({
   blockedDates,
   existingBookings,
   preferredLocations,
-  mode = 'private',
+  allowPrivateGroups = false,
   onClose,
 }: BookingModalProps) {
   const router = useRouter();
 
+  const [bookingType, setBookingType] = useState<'individual' | 'group'>('individual');
   const [selectedSlot, setSelectedSlot] = useState<{ start: Date; end: Date } | null>(null);
   const [selectedLocationIndex, setSelectedLocationIndex] = useState<number>(-1);
   const [locationName, setLocationName] = useState('');
@@ -51,6 +52,20 @@ export function BookingModal({
   const [isProcessing, setIsProcessing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [step, setStep] = useState<'datetime' | 'details' | 'review'>('datetime');
+
+  const handleBookingTypeChange = (type: 'individual' | 'group') => {
+    setBookingType(type);
+    // Reset form when switching types
+    setSelectedSlot(null);
+    setSelectedLocationIndex(-1);
+    setLocationName('');
+    setLocationAddress('');
+    setLocationNotes('');
+    setMessage('');
+    setParticipantUsernames([]);
+    setStep('datetime');
+    setError(null);
+  };
 
   const handleLocationSelect = (index: number) => {
     setSelectedLocationIndex(index);
@@ -79,7 +94,7 @@ export function BookingModal({
     try {
       let bookingResult;
 
-      if (mode === 'group') {
+      if (bookingType === 'group') {
         if (participantUsernames.length === 0) {
           throw new Error('Please add at least one participant');
         }
@@ -115,7 +130,7 @@ export function BookingModal({
         throw new Error(bookingResult.error || 'Failed to create booking request');
       }
 
-      const successMessage = mode === 'group' 
+      const successMessage = bookingType === 'group'
         ? `Group booking request sent for ${participantUsernames.length + 1} participants!`
         : 'Booking request sent!';
 
@@ -145,7 +160,33 @@ export function BookingModal({
           <DialogDescription>
             Send a booking request to the coach. If accepted, you'll have 24 hours to complete payment.
           </DialogDescription>
-          <div className="flex items-center gap-4 mt-2 text-sm text-muted-foreground">
+
+          {allowPrivateGroups && (
+            <div className="flex border-b border-gray-200 mt-4 -mb-2">
+              <button
+                onClick={() => handleBookingTypeChange('individual')}
+                className={`px-6 py-3 text-sm font-medium border-b-2 transition-colors ${
+                  bookingType === 'individual'
+                    ? 'border-[#FF6B4A] text-[#FF6B4A]'
+                    : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                }`}
+              >
+                Individual
+              </button>
+              <button
+                onClick={() => handleBookingTypeChange('group')}
+                className={`px-6 py-3 text-sm font-medium border-b-2 transition-colors ${
+                  bookingType === 'group'
+                    ? 'border-[#FF6B4A] text-[#FF6B4A]'
+                    : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                }`}
+              >
+                Group
+              </button>
+            </div>
+          )}
+
+          <div className="flex items-center gap-4 mt-4 text-sm text-muted-foreground">
             <span className={step === 'datetime' ? 'text-[#FF6B4A] font-semibold' : ''}>
               1. Date & Time
             </span>
@@ -328,7 +369,7 @@ export function BookingModal({
                 />
               </div>
 
-              {mode === 'group' && (
+              {bookingType === 'group' && (
                 <div className="space-y-2">
                   <Label>Participants *</Label>
                   <ParticipantSelector

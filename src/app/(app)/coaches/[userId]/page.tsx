@@ -308,41 +308,24 @@ function BookingSummary({
       </div>
 
       {canBook ? (
-        <div className="flex flex-col gap-3">
-          <div className="flex flex-wrap gap-3">
-            <Link
-              href={`/dashboard/messages?new=${userId}`}
-              className="inline-flex items-center justify-center rounded-full border border-[#FF6B4A]/40 bg-white px-6 py-2 text-sm font-semibold text-[#FF6B4A] transition hover:border-[#FF6B4A]"
-            >
-              Message coach
-            </Link>
-            <BookingModalTrigger
-              coachId={coach.userId}
-              coachName={coach.fullName}
-              hourlyRate={coachHourlyRate}
-              sessionDuration={sessionDuration}
-              availability={availability}
-              blockedDates={blockedDates}
-              existingBookings={existingBookings}
-              preferredLocations={coach.preferredLocations || []}
-            />
-          </div>
-          {coach.allowPrivateGroups && (
-            <div>
-              <BookingModalTrigger
-                coachId={coach.userId}
-                coachName={coach.fullName}
-                hourlyRate={coachHourlyRate}
-                sessionDuration={sessionDuration}
-                availability={availability}
-                blockedDates={blockedDates}
-                existingBookings={existingBookings}
-                preferredLocations={coach.preferredLocations || []}
-                mode="group"
-                buttonClass="w-full px-8 py-3 bg-white border-2 border-[#FF6B4A] text-[#FF6B4A] font-semibold rounded-lg hover:bg-[#FF6B4A] hover:text-white transition-all duration-200"
-              />
-            </div>
-          )}
+        <div className="flex flex-wrap gap-3">
+          <Link
+            href={`/dashboard/messages?new=${userId}`}
+            className="inline-flex items-center justify-center rounded-full border border-[#FF6B4A]/40 bg-white px-6 py-2 text-sm font-semibold text-[#FF6B4A] transition hover:border-[#FF6B4A]"
+          >
+            Message coach
+          </Link>
+          <BookingModalTrigger
+            coachId={coach.userId}
+            coachName={coach.fullName}
+            hourlyRate={coachHourlyRate}
+            sessionDuration={sessionDuration}
+            availability={availability}
+            blockedDates={blockedDates}
+            existingBookings={existingBookings}
+            preferredLocations={coach.preferredLocations || []}
+            allowPrivateGroups={coach.allowPrivateGroups || false}
+          />
         </div>
       ) : (
         <div className="rounded-2xl border border-slate-200 bg-slate-100 px-6 py-3 text-sm font-semibold text-slate-600">

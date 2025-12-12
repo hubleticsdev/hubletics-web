@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
+import { Textarea } from '@/components/ui/textarea';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -12,9 +13,17 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
-import { Calendar, MapPin, Clock, DollarSign, User, Loader2, Star, AlertCircle, Users, MessageCircle } from 'lucide-react';
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+} from '@/components/ui/dialog';
+import { Calendar, MapPin, Clock, DollarSign, User, Loader2, Star, AlertCircle, Users, MessageCircle, Flag } from 'lucide-react';
 import { acceptBooking, declineBooking } from '@/actions/bookings/respond';
 import { leavePublicLesson, cancelPrivateGroupBooking, coachCancelGroupLesson } from '@/actions/group-bookings/cancel';
+import { initiateDispute } from '@/actions/admin/disputes';
 import Link from 'next/link';
 import { ReviewModal } from '@/components/reviews/review-modal';
 import { PaymentModal } from '@/components/bookings/payment-modal';
@@ -96,6 +105,9 @@ export function BookingsList({ bookings, userRole, userId }: BookingsListProps) 
   const [groupToCancel, setGroupToCancel] = useState<string | null>(null);
   const [coachCancelDialogOpen, setCoachCancelDialogOpen] = useState(false);
   const [groupToCancelByCoach, setGroupToCancelByCoach] = useState<string | null>(null);
+  const [disputeDialogOpen, setDisputeDialogOpen] = useState(false);
+  const [bookingToDispute, setBookingToDispute] = useState<Booking | null>(null);
+  const [disputeReason, setDisputeReason] = useState('');
 
   const now = new Date();
 
@@ -218,6 +230,37 @@ export function BookingsList({ bookings, userRole, userId }: BookingsListProps) 
     }
 
     setBookingToLeave(null);
+  };
+
+  const handleReportIssue = (booking: Booking) => {
+    setBookingToDispute(booking);
+    setDisputeDialogOpen(true);
+  };
+
+  const confirmDispute = async () => {
+    if (!bookingToDispute || !disputeReason.trim()) {
+      toast.error('Please provide a reason for the dispute');
+      return;
+    }
+
+    setProcessingBookingId(bookingToDispute.id);
+    setError(null);
+    setDisputeDialogOpen(false);
+
+    const initiatedBy = userRole === 'client' ? 'client' : 'coach';
+    const result = await initiateDispute(bookingToDispute.id, disputeReason, initiatedBy);
+
+    if (result.success) {
+      toast.success('Dispute submitted. Our team will review and contact you shortly.');
+      router.refresh();
+    } else {
+      toast.error(result.error || 'Failed to submit dispute');
+      setError(result.error || 'Failed to submit dispute');
+      setProcessingBookingId(null);
+    }
+
+    setBookingToDispute(null);
+    setDisputeReason('');
   };
 
   const handleCancelPrivateGroup = (bookingId: string) => {
@@ -567,6 +610,20 @@ export function BookingsList({ bookings, userRole, userId }: BookingsListProps) 
                         </Button>
                       )}
 
+                      {(booking.status === 'accepted' || booking.status === 'completed') && (
+                        <Button
+                          type="button"
+                          onClick={() => handleReportIssue(booking)}
+                          disabled={processingBookingId === booking.id}
+                          variant="outline"
+                          className="border-red-300 text-red-600 hover:bg-red-50"
+                          size="sm"
+                        >
+                          <Flag className="h-4 w-4 mr-2" />
+                          Report Issue
+                        </Button>
+                      )}
+
                       {booking.status === 'awaiting_payment' && userRole === 'client' && booking.paymentDueAt && (
                         <>
                           <Button
@@ -752,6 +809,74 @@ export function BookingsList({ bookings, userRole, userId }: BookingsListProps) 
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {/* Report Issue Dialog */}
+      <Dialog open={disputeDialogOpen} onOpenChange={setDisputeDialogOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Report an Issue</DialogTitle>
+            <DialogDescription>
+              Let us know if there was a problem with this booking. Our support team will review your case.
+            </DialogDescription>
+          </DialogHeader>
+
+          {bookingToDispute && (
+            <div className="space-y-4">
+              <div className="p-4 bg-gray-50 rounded-lg">
+                <p className="text-sm font-medium text-gray-900 mb-2">
+                  {userRole === 'coach' ? bookingToDispute.client?.name : bookingToDispute.coach?.name}
+                </p>
+                <p className="text-xs text-gray-600">
+                  {new Date(bookingToDispute.scheduledStartAt).toLocaleDateString()} at{' '}
+                  {new Date(bookingToDispute.scheduledStartAt).toLocaleTimeString([], {
+                    hour: '2-digit',
+                    minute: '2-digit',
+                  })}
+                </p>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Describe the issue
+                </label>
+                <Textarea
+                  value={disputeReason}
+                  onChange={(e) => setDisputeReason(e.target.value)}
+                  placeholder="Please provide details about what went wrong..."
+                  rows={5}
+                />
+                <p className="text-xs text-gray-500 mt-1">
+                  Be specific to help us resolve this quickly. Include times, locations, and any relevant details.
+                </p>
+              </div>
+
+              <div className="flex justify-end gap-3">
+                <Button
+                  variant="outline"
+                  onClick={() => setDisputeDialogOpen(false)}
+                  disabled={processingBookingId === bookingToDispute.id}
+                >
+                  Cancel
+                </Button>
+                <Button
+                  onClick={confirmDispute}
+                  disabled={processingBookingId === bookingToDispute.id || !disputeReason.trim()}
+                  className="bg-red-600 hover:bg-red-700 text-white"
+                >
+                  {processingBookingId === bookingToDispute.id ? (
+                    <>
+                      <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                      Submitting...
+                    </>
+                  ) : (
+                    'Submit Report'
+                  )}
+                </Button>
+              </div>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

@@ -12,7 +12,7 @@ interface BookingModalTriggerProps {
   blockedDates: string[];
   existingBookings: Array<{ scheduledStartAt: Date; scheduledEndAt: Date }>;
   preferredLocations: Array<{ name: string; address: string; notes?: string }>;
-  mode?: 'private' | 'group';
+  allowPrivateGroups?: boolean;
   buttonText?: string;
   buttonClass?: string;
 }
@@ -26,13 +26,11 @@ export function BookingModalTrigger({
   blockedDates,
   existingBookings,
   preferredLocations,
-  mode = 'private',
+  allowPrivateGroups = false,
   buttonText,
   buttonClass,
 }: BookingModalTriggerProps) {
   const [isOpen, setIsOpen] = useState(false);
-
-  const defaultButtonText = mode === 'group' ? 'Book Group Session' : 'Book a Session';
 
   return (
     <>
@@ -43,7 +41,7 @@ export function BookingModalTrigger({
           'px-8 py-3 bg-gradient-to-r from-[#FF6B4A] to-[#FF8C5A] text-white font-semibold rounded-lg hover:shadow-lg transition-all duration-200'
         }
       >
-        {buttonText || defaultButtonText}
+        {buttonText || 'Book a Session'}
       </button>
 
       {isOpen && (
@@ -56,7 +54,7 @@ export function BookingModalTrigger({
           blockedDates={blockedDates}
           existingBookings={existingBookings}
           preferredLocations={preferredLocations}
-          mode={mode}
+          allowPrivateGroups={allowPrivateGroups}
           onClose={() => setIsOpen(false)}
         />
       )}
