@@ -1,6 +1,7 @@
 import { getSession } from '@/lib/auth/session';
 import { redirect } from 'next/navigation';
 import Link from 'next/link';
+import { UserButton } from '@/components/navigation/user-button';
 
 export default async function MessagesLayout({
   children,
@@ -14,7 +15,7 @@ export default async function MessagesLayout({
 
   return (
     <div className="h-screen flex flex-col bg-white">
-      <div className="h-16 border-b border-gray-200 flex items-center px-4 bg-white flex-shrink-0">
+      <div className="h-16 border-b border-gray-200 flex items-center justify-between px-4 bg-white flex-shrink-0">
         <Link
           href={session.user.role === 'coach' ? '/dashboard/coach' : '/dashboard/athlete'}
           className="text-[#FF6B4A] hover:text-[#FF8C5A] font-semibold flex items-center gap-2"
@@ -29,6 +30,7 @@ export default async function MessagesLayout({
           </svg>
           Back to Dashboard
         </Link>
+        <UserButton user={session.user} />
       </div>
       <div className="flex-1 overflow-hidden">
         {children}
