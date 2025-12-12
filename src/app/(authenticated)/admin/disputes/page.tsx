@@ -1,13 +1,29 @@
 import { requireRole } from '@/lib/auth/session';
 import { getDisputedBookings } from '@/actions/admin/disputes';
 import { DisputesList } from '@/components/admin/disputes-list';
+import { Pagination } from '@/components/ui/pagination';
+import { getPaginationOptions } from '@/lib/pagination';
 
 export const dynamic = 'force-dynamic';
 
-export default async function AdminDisputesPage() {
+interface AdminDisputesPageProps {
+  searchParams: Promise<{ [key: string]: string | string[] | undefined }>;
+}
+
+export default async function AdminDisputesPage({ searchParams }: AdminDisputesPageProps) {
   await requireRole('admin');
 
-  const result = await getDisputedBookings();
+  const params = await searchParams;
+  const searchParamsObj = new URLSearchParams();
+  Object.entries(params).forEach(([key, value]) => {
+    if (typeof value === 'string') {
+      searchParamsObj.set(key, value);
+    }
+  });
+
+  const { page, limit } = getPaginationOptions(searchParamsObj);
+
+  const result = await getDisputedBookings(page, limit);
 
   if (!result.success) {
     return (
@@ -24,7 +40,7 @@ export default async function AdminDisputesPage() {
     );
   }
 
-  const { bookings = [] } = result;
+  const { bookings = [], pagination } = result;
 
   return (
     <div className="max-w-7xl mx-auto">
@@ -59,6 +75,13 @@ export default async function AdminDisputesPage() {
         </div>
       ) : (
         <DisputesList bookings={bookings} />
+      )}
+
+      {pagination && (
+        <Pagination
+          pagination={pagination}
+          baseUrl="/admin/disputes"
+        />
       )}
     </div>
   );

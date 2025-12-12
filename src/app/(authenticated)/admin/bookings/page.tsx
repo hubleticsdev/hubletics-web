@@ -3,11 +3,30 @@ import { db } from '@/lib/db';
 import { booking } from '@/lib/db/schema';
 import { desc } from 'drizzle-orm';
 import Image from 'next/image';
+import { Pagination } from '@/components/ui/pagination';
+import { getPaginationOptions, createPaginationResult, getOffset } from '@/lib/pagination';
 
 export const dynamic = 'force-dynamic';
 
-export default async function AdminBookingsPage() {
+interface AdminBookingsPageProps {
+  searchParams: Promise<{ [key: string]: string | string[] | undefined }>;
+}
+
+export default async function AdminBookingsPage({ searchParams }: AdminBookingsPageProps) {
   await requireRole('admin');
+
+  const params = await searchParams;
+  const searchParamsObj = new URLSearchParams();
+  Object.entries(params).forEach(([key, value]) => {
+    if (typeof value === 'string') {
+      searchParamsObj.set(key, value);
+    }
+  });
+
+  const { page, limit } = getPaginationOptions(searchParamsObj);
+  const offset = getOffset(page, limit);
+
+  const totalBookings = await db.$count(booking);
 
   const bookings = await db.query.booking.findMany({
     with: {
@@ -29,10 +48,14 @@ export default async function AdminBookingsPage() {
       },
     },
     orderBy: [desc(booking.createdAt)],
+    limit,
+    offset,
   });
 
+  const paginationResult = createPaginationResult(bookings, totalBookings, { page, limit });
+
   const stats = {
-    total: bookings.length,
+    total: totalBookings,
     pending: bookings.filter((b) => b.status === 'pending').length,
     accepted: bookings.filter((b) => b.status === 'accepted').length,
     completed: bookings.filter((b) => b.status === 'completed').length,
@@ -147,6 +170,11 @@ export default async function AdminBookingsPage() {
           </div>
         )}
       </div>
+
+      <Pagination
+        pagination={paginationResult.pagination}
+        baseUrl="/admin/bookings"
+      />
     </div>
   );
 }

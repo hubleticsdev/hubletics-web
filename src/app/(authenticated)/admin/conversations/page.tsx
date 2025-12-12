@@ -4,11 +4,30 @@ import { conversation } from '@/lib/db/schema';
 import { desc } from 'drizzle-orm';
 import Link from 'next/link';
 import Image from 'next/image';
+import { Pagination } from '@/components/ui/pagination';
+import { getPaginationOptions, createPaginationResult, getOffset } from '@/lib/pagination';
 
 export const dynamic = 'force-dynamic';
 
-export default async function AdminConversationsPage() {
+interface AdminConversationsPageProps {
+  searchParams: Promise<{ [key: string]: string | string[] | undefined }>;
+}
+
+export default async function AdminConversationsPage({ searchParams }: AdminConversationsPageProps) {
   await requireRole('admin');
+
+  const params = await searchParams;
+  const searchParamsObj = new URLSearchParams();
+  Object.entries(params).forEach(([key, value]) => {
+    if (typeof value === 'string') {
+      searchParamsObj.set(key, value);
+    }
+  });
+
+  const { page, limit } = getPaginationOptions(searchParamsObj);
+  const offset = getOffset(page, limit);
+
+  const totalConversations = await db.$count(conversation);
 
   const conversations = await db.query.conversation.findMany({
     with: {
@@ -36,7 +55,11 @@ export default async function AdminConversationsPage() {
       },
     },
     orderBy: [desc(conversation.lastMessageAt)],
+    limit,
+    offset,
   });
+
+  const paginationResult = createPaginationResult(conversations, totalConversations, { page, limit });
 
   return (
     <div className="max-w-7xl mx-auto">
@@ -125,9 +148,14 @@ export default async function AdminConversationsPage() {
 
       <div className="mt-6 bg-blue-50 border border-blue-200 rounded-lg p-4">
         <p className="text-sm text-blue-900">
-          <span className="font-semibold">Total Conversations:</span> {conversations.length}
+          <span className="font-semibold">Total Conversations:</span> {totalConversations}
         </p>
       </div>
+
+      <Pagination
+        pagination={paginationResult.pagination}
+        baseUrl="/admin/conversations"
+      />
     </div>
   );
 }

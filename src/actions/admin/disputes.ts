@@ -12,8 +12,12 @@ const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
 
 const resend = new Resend(process.env.RESEND_API_KEY!);
 
-export async function getDisputedBookings() {
+export async function getDisputedBookings(page = 1, limit = 25) {
   try {
+    const offset = (page - 1) * limit;
+
+    const totalDisputed = await db.$count(booking, eq(booking.status, 'disputed'));
+
     const bookings = await db.query.booking.findMany({
       where: eq(booking.status, 'disputed'),
       with: {
@@ -35,9 +39,22 @@ export async function getDisputedBookings() {
         },
       },
       orderBy: (bookings, { desc }) => [desc(bookings.createdAt)],
+      limit,
+      offset,
     });
 
-    return { success: true, bookings };
+    return {
+      success: true,
+      bookings,
+      pagination: {
+        page,
+        limit,
+        total: totalDisputed,
+        pages: Math.ceil(totalDisputed / limit),
+        hasNext: page < Math.ceil(totalDisputed / limit),
+        hasPrev: page > 1,
+      }
+    };
   } catch (error) {
     console.error('Error fetching disputed bookings:', error);
     return { success: false, error: 'Failed to fetch disputed bookings' };

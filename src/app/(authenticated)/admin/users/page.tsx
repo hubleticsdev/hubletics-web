@@ -1,12 +1,32 @@
 import { requireRole } from '@/lib/auth/session';
 import { db } from '@/lib/db';
+import { user as userTable } from '@/lib/db/schema';
 import Image from 'next/image';
 import { PlatformFeeEditor } from '@/components/admin/PlatformFeeEditor';
+import { Pagination } from '@/components/ui/pagination';
+import { getPaginationOptions, createPaginationResult, getOffset } from '@/lib/pagination';
 
 export const dynamic = 'force-dynamic';
 
-export default async function AdminUsersPage() {
+interface AdminUsersPageProps {
+  searchParams: Promise<{ [key: string]: string | string[] | undefined }>;
+}
+
+export default async function AdminUsersPage({ searchParams }: AdminUsersPageProps) {
   await requireRole('admin');
+
+  const params = await searchParams;
+  const searchParamsObj = new URLSearchParams();
+  Object.entries(params).forEach(([key, value]) => {
+    if (typeof value === 'string') {
+      searchParamsObj.set(key, value);
+    }
+  });
+
+  const { page, limit } = getPaginationOptions(searchParamsObj);
+  const offset = getOffset(page, limit);
+
+  const totalUsers = await db.$count(userTable);
 
   const users = await db.query.user.findMany({
     columns: {
@@ -22,7 +42,11 @@ export default async function AdminUsersPage() {
       lastLoginAt: true,
     },
     orderBy: (users, { desc }) => [desc(users.createdAt)],
+    limit,
+    offset,
   });
+
+  const paginationResult = createPaginationResult(users, totalUsers, { page, limit });
 
   return (
     <div className="max-w-7xl mx-auto">
@@ -34,7 +58,7 @@ export default async function AdminUsersPage() {
       <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
         <div className="bg-white rounded-lg shadow p-6">
           <div className="text-sm text-gray-600 mb-2">Total Users</div>
-          <div className="text-3xl font-bold text-gray-900">{users.length}</div>
+          <div className="text-3xl font-bold text-gray-900">{totalUsers}</div>
         </div>
         <div className="bg-white rounded-lg shadow p-6">
           <div className="text-sm text-gray-600 mb-2">Clients</div>
@@ -156,6 +180,11 @@ export default async function AdminUsersPage() {
           </table>
         </div>
       </div>
+
+      <Pagination
+        pagination={paginationResult.pagination}
+        baseUrl="/admin/users"
+      />
     </div>
   );
 }
