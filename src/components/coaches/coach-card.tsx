@@ -1,10 +1,12 @@
 import Link from 'next/link';
 import Image from 'next/image';
 import { CoachSearchResult } from '@/actions/coaches/search';
+import { getReputationDisplay } from '@/lib/reputation';
 
 export function CoachCard({ coach }: { coach: CoachSearchResult }) {
   const displayImage = coach.profilePhoto || coach.user.image || '/placeholder-avatar.png';
-  const rating = parseFloat(coach.reputationScore) / 20;
+  const reputation = getReputationDisplay(coach.reputationScore, coach.totalReviews || 0);
+  const rating = reputation.averageRating;
   const coachHourlyRate = parseFloat(coach.hourlyRate);
   const locationDisplay = `${coach.location.cities.join(', ')}, ${coach.location.state}`;
 

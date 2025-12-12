@@ -3,6 +3,7 @@
 import Link from 'next/link';
 import type { LucideIcon } from 'lucide-react';
 import type { CoachProfile } from '@/lib/db/schema';
+import { getReputationDisplay } from '@/lib/reputation';
 import {
   AlertTriangle,
   ArrowUpRight,
@@ -105,14 +106,8 @@ export function CoachDashboardClient({
   const [editLessonModalOpen, setEditLessonModalOpen] = useState(false);
   const [selectedLesson, setSelectedLesson] = useState<RecurringLesson | null>(null);
 
-  const reputationScoreValue = (() => {
-    const raw = coach.reputationScore;
-    const numeric =
-      typeof raw === 'number'
-        ? raw
-        : Number.parseFloat(typeof raw === 'string' ? raw : '0');
-    return Number.isFinite(numeric) ? numeric : 0;
-  })();
+  const reputation = getReputationDisplay(coach.reputationScore, coach.totalReviews || 0);
+  const reputationScoreValue = reputation.averageRating;
 
   const reviewsCount = (() => {
     const raw = coach.totalReviews;

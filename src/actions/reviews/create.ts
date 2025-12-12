@@ -8,6 +8,7 @@ import { z } from 'zod';
 import { validateInput } from '@/lib/validations';
 import { revalidatePath } from 'next/cache';
 import { sanitizeText } from '@/lib/utils';
+import { formatReputationScoreForStorage } from '@/lib/reputation';
 
 const createReviewSchema = z.object({
   bookingId: z.string().uuid('Invalid booking ID'),
@@ -63,15 +64,22 @@ export async function createReview(input: CreateReviewInput) {
       .from(review)
       .where(eq(review.coachId, bookingRecord.coachId));
 
-    if (coachReviews[0]) {
-      await db
-        .update(coachProfile)
-        .set({
-          reputationScore: coachReviews[0].avgRating.toFixed(2),
-          totalReviews: Number(coachReviews[0].totalReviews),
-          updatedAt: new Date(),
-        })
-        .where(eq(coachProfile.userId, bookingRecord.coachId));
+    if (coachReviews[0] && coachReviews[0].totalReviews > 0) {
+      const avgRating = coachReviews[0].avgRating;
+      const totalReviews = Number(coachReviews[0].totalReviews);
+
+      if (typeof avgRating === 'number' && !isNaN(avgRating) && avgRating >= 1 && avgRating <= 5) {
+        await db
+          .update(coachProfile)
+          .set({
+            reputationScore: formatReputationScoreForStorage(avgRating),
+            totalReviews,
+            updatedAt: new Date(),
+          })
+          .where(eq(coachProfile.userId, bookingRecord.coachId));
+      } else {
+        console.error('Invalid avgRating:', avgRating, 'for coach:', bookingRecord.coachId);
+      }
     }
 
     revalidatePath(`/coaches/${bookingRecord.coachId}`);
