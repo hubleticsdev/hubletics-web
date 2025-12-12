@@ -6,6 +6,7 @@ import { booking, recurringGroupLesson, coachProfile } from '@/lib/db/schema';
 import { eq, and, gte, lte, or } from 'drizzle-orm';
 import { revalidatePath } from 'next/cache';
 import { calculateCoachEarnings } from '@/lib/pricing';
+import { generateBookingsFromRecurringTemplate } from '@/lib/recurring-lessons';
 import crypto from 'crypto';
 
 interface PublicLessonInput {
@@ -178,6 +179,13 @@ export async function createRecurringGroupLesson(input: RecurringLessonInput) {
         allowPublicGroups: true,
         stripeAccountId: true,
       },
+      with: {
+        user: {
+          columns: {
+            platformFeePercentage: true,
+          },
+        },
+      },
     });
 
     if (!coach || !coach.allowPublicGroups) {
@@ -223,11 +231,26 @@ export async function createRecurringGroupLesson(input: RecurringLessonInput) {
       endDate: input.endDate || null,
     });
 
-    console.log(`Recurring group lesson created: ${recurringId}`);
+    console.log(`Recurring group lesson template created: ${recurringId}`);
+
+    const userPlatformFee = parseFloat(coach.user.platformFeePercentage || '15');
+    const generationResult = await generateBookingsFromRecurringTemplate(recurringId, userPlatformFee);
+
+    if (!generationResult.success) {
+      console.error(`Failed to generate bookings for recurring lesson ${recurringId}:`, generationResult.error);
+      // coach can manually trigger generation later if needed
+    } else {
+      console.log(`Generated ${generationResult.bookingsCreated} bookings for recurring lesson ${recurringId}`);
+    }
 
     revalidatePath('/dashboard/coach');
+    revalidatePath('/coaches/[userId]', 'page');
 
-    return { success: true, recurringId };
+    return {
+      success: true,
+      recurringId,
+      bookingsCreated: generationResult.bookingsCreated || 0,
+    };
   } catch (error) {
     console.error('Create recurring group lesson error:', error);
     return { success: false, error: 'Failed to create recurring lesson' };

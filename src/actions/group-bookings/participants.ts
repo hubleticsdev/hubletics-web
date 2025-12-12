@@ -62,6 +62,7 @@ export async function getBookingParticipants(bookingId: string) {
       success: true,
       participants: formattedParticipants,
       isOrganizer: bookingRecord.organizerId === session.user.id,
+      isCoach,
     };
   } catch (error) {
     console.error('Get booking participants error:', error);

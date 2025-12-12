@@ -21,16 +21,16 @@ export async function getPublicGroupLessons(coachId: string) {
 
     const lessonsWithCounts = await Promise.all(
       lessons.map(async (lesson) => {
-        const participants = await db.query.bookingParticipant.findMany({
-          where: and(
-            eq(bookingParticipant.bookingId, lesson.id),
-            eq(bookingParticipant.paymentStatus, 'paid')
-          ),
+        const allParticipants = await db.query.bookingParticipant.findMany({
+          where: eq(bookingParticipant.bookingId, lesson.id),
         });
+
+        const paidParticipants = allParticipants.filter(p => p.paymentStatus === 'paid');
 
         return {
           ...lesson,
-          currentParticipants: participants.length,
+          currentParticipants: allParticipants.length,
+          paidParticipants: paidParticipants.length,
         };
       })
     );

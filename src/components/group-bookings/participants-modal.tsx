@@ -2,8 +2,13 @@
 
 import { useState, useEffect } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
+import { Button } from '@/components/ui/button';
 import { getBookingParticipants } from '@/actions/group-bookings/participants';
-import { User, CheckCircle, Clock, Loader2 } from 'lucide-react';
+import { acceptParticipant } from '@/actions/group-bookings/accept-participant';
+import { declineParticipant } from '@/actions/group-bookings/decline-participant';
+import { User, CheckCircle, Clock, Loader2, Check, X } from 'lucide-react';
+import { toast } from 'sonner';
+import { useRouter } from 'next/navigation';
 
 interface ParticipantsModalProps {
   bookingId: string;
@@ -12,10 +17,13 @@ interface ParticipantsModalProps {
 }
 
 export function ParticipantsModal({ bookingId, isOpen, onClose }: ParticipantsModalProps) {
+  const router = useRouter();
   const [loading, setLoading] = useState(true);
   const [participants, setParticipants] = useState<any[]>([]);
   const [isOrganizer, setIsOrganizer] = useState(false);
+  const [isCoach, setIsCoach] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [processingParticipantId, setProcessingParticipantId] = useState<string | null>(null);
 
   useEffect(() => {
     if (isOpen && bookingId) {
@@ -32,11 +40,42 @@ export function ParticipantsModal({ bookingId, isOpen, onClose }: ParticipantsMo
     if (result.success && result.participants) {
       setParticipants(result.participants);
       setIsOrganizer(result.isOrganizer || false);
+      setIsCoach(result.isCoach || false);
     } else {
       setError(result.error || 'Failed to load participants');
     }
 
     setLoading(false);
+  };
+
+  const handleApprove = async (participantId: string) => {
+    setProcessingParticipantId(participantId);
+    const result = await acceptParticipant(bookingId, participantId);
+
+    if (result.success) {
+      toast.success('Participant approved successfully');
+      await fetchParticipants();
+      router.refresh();
+    } else {
+      toast.error(result.error || 'Failed to approve participant');
+    }
+
+    setProcessingParticipantId(null);
+  };
+
+  const handleDecline = async (participantId: string) => {
+    setProcessingParticipantId(participantId);
+    const result = await declineParticipant(bookingId, participantId);
+
+    if (result.success) {
+      toast.success('Participant declined');
+      await fetchParticipants();
+      router.refresh();
+    } else {
+      toast.error(result.error || 'Failed to decline participant');
+    }
+
+    setProcessingParticipantId(null);
   };
 
   return (
@@ -94,6 +133,34 @@ export function ParticipantsModal({ bookingId, isOpen, onClose }: ParticipantsMo
                     <div className="flex items-center gap-1 px-2 py-1 bg-green-100 text-green-700 rounded text-xs font-medium">
                       <CheckCircle className="h-3 w-3" />
                       Paid
+                    </div>
+                  ) : participant.paymentStatus === 'pending' && isCoach ? (
+                    <div className="flex items-center gap-2">
+                      <Button
+                        size="sm"
+                        onClick={() => handleApprove(participant.id)}
+                        disabled={processingParticipantId === participant.id}
+                        className="h-7 px-3 bg-gradient-to-r from-[#FF6B4A] to-[#FF8C5A] hover:opacity-90 text-white text-xs"
+                      >
+                        {processingParticipantId === participant.id ? (
+                          <Loader2 className="h-3 w-3 animate-spin" />
+                        ) : (
+                          <>
+                            <Check className="h-3 w-3 mr-1" />
+                            Approve
+                          </>
+                        )}
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => handleDecline(participant.id)}
+                        disabled={processingParticipantId === participant.id}
+                        className="h-7 px-3 border-red-300 text-red-600 hover:bg-red-50 text-xs"
+                      >
+                        <X className="h-3 w-3 mr-1" />
+                        Decline
+                      </Button>
                     </div>
                   ) : (
                     <div className="flex items-center gap-1 px-2 py-1 bg-orange-100 text-orange-700 rounded text-xs font-medium">
