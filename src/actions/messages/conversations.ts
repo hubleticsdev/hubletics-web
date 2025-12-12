@@ -1,12 +1,13 @@
 'use server';
 
 import { db } from '@/lib/db';
-import { conversation, message, type Conversation } from '@/lib/db/schema';
+import { conversation, message, flaggedMessage, type Conversation } from '@/lib/db/schema';
 import { getSession } from '@/lib/auth/session';
 import { and, eq, desc, or } from 'drizzle-orm';
 import { triggerMessageEvent, triggerConversationUpdate } from '@/lib/pusher/server';
 import { z } from 'zod';
 import { messageContentSchema, validateInput } from '@/lib/validations';
+import { checkMessageContent, getViolationTypes } from '@/lib/moderation/message-filter';
 
 export async function getUserConversations() {
   const session = await getSession();
@@ -141,6 +142,9 @@ export async function sendMessage(conversationId: string, content: string) {
   const validatedConversationId = validateInput(z.string().uuid(), conversationId);
   const validatedContent = validateInput(messageContentSchema, content);
 
+  const moderationResult = checkMessageContent(validatedContent.trim());
+  const shouldFlag = !moderationResult.isSafe;
+
   const conv = await db.query.conversation.findFirst({
     where: (conversations, { and, eq, or }) =>
       and(
@@ -162,8 +166,22 @@ export async function sendMessage(conversationId: string, content: string) {
       conversationId: validatedConversationId,
       senderId: session.user.id,
       content: validatedContent.trim(),
+      flagged: shouldFlag,
+      flaggedReason: shouldFlag ? getViolationTypes(validatedContent.trim()).join(', ') : null,
     })
     .returning();
+
+  if (shouldFlag) {
+    await db.insert(flaggedMessage).values({
+      messageId: newMessage.id,
+      conversationId: validatedConversationId,
+      senderId: session.user.id,
+      content: validatedContent.trim(),
+      violations: getViolationTypes(validatedContent.trim()),
+    });
+
+    console.log(`[MODERATION] Message ${newMessage.id} flagged for violations: ${getViolationTypes(validatedContent.trim()).join(', ')}`);
+  }
 
   await db
     .update(conversation)

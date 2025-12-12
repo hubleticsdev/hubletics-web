@@ -1,11 +1,12 @@
 'use server';
 
 import { db } from '@/lib/db';
-import { groupConversation, groupConversationParticipant, groupMessage, booking, bookingParticipant } from '@/lib/db/schema';
+import { groupConversation, groupConversationParticipant, groupMessage, booking, bookingParticipant, flaggedMessage } from '@/lib/db/schema';
 import { getSession } from '@/lib/auth/session';
 import { eq, and, desc } from 'drizzle-orm';
 import { z } from 'zod';
 import { messageContentSchema, validateInput } from '@/lib/validations';
+import { checkMessageContent, getViolationTypes } from '@/lib/moderation/message-filter';
 
 export async function getOrCreateGroupConversation(bookingId: string) {
   try {
@@ -121,6 +122,10 @@ export async function sendGroupMessage(conversationId: string, content: string) 
     const validatedConversationId = validateInput(z.string().uuid(), conversationId);
     const validatedContent = validateInput(messageContentSchema, content);
 
+    // Check for content violations
+    const moderationResult = checkMessageContent(validatedContent.trim());
+    const shouldFlag = !moderationResult.isSafe;
+
     const participant = await db.query.groupConversationParticipant.findFirst({
       where: and(
         eq(groupConversationParticipant.conversationId, validatedConversationId),
@@ -139,8 +144,24 @@ export async function sendGroupMessage(conversationId: string, content: string) 
         senderId: session.user.id,
         content: validatedContent.trim(),
         readBy: [session.user.id],
+        flagged: shouldFlag,
+        flaggedReason: shouldFlag ? getViolationTypes(validatedContent.trim()).join(', ') : null,
       })
       .returning();
+
+    // Create flagged message record for admin review
+    if (shouldFlag) {
+      await db.insert(flaggedMessage).values({
+        groupMessageId: newMessage.id,
+        messageType: 'group',
+        groupConversationId: validatedConversationId,
+        senderId: session.user.id,
+        content: validatedContent.trim(),
+        violations: getViolationTypes(validatedContent.trim()),
+      });
+
+      console.log(`[MODERATION] Group message ${newMessage.id} flagged for violations: ${getViolationTypes(validatedContent.trim()).join(', ')}`);
+    }
 
     await db
       .update(groupConversation)
