@@ -110,13 +110,18 @@ export function MessageThread({
 
     setReporting(true);
     try {
-      await reportMessage({
+      const result = await reportMessage({
         messageId: reportingMessageId,
         reason: reportReason.trim(),
       });
-      toast.success('Message reported successfully');
-      setReportingMessageId(null);
-      setReportReason('');
+
+      if (result.success) {
+        toast.success('Message reported successfully');
+        setReportingMessageId(null);
+        setReportReason('');
+      } else {
+        toast.error(result.error || 'Failed to report message');
+      }
     } catch (error) {
       toast.error(error instanceof Error ? error.message : 'Failed to report message');
     } finally {

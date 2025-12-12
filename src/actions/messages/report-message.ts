@@ -3,7 +3,7 @@
 import { db } from '@/lib/db';
 import { flaggedMessage, flaggedGroupMessage, message, groupMessage, groupConversationParticipant } from '@/lib/db/schema';
 import { getSession } from '@/lib/auth/session';
-import { eq } from 'drizzle-orm';
+import { eq, and } from 'drizzle-orm';
 import { z } from 'zod';
 import { validateInput } from '@/lib/validations';
 
@@ -44,7 +44,7 @@ export async function reportMessage(input: ReportMessageInput) {
     });
 
     if (existingReport) {
-      throw new Error('This message has already been reported');
+      return { success: false, error: 'This message has already been reported' };
     }
 
     await db.insert(flaggedMessage).values({
@@ -76,8 +76,10 @@ export async function reportMessage(input: ReportMessageInput) {
 
   if (groupMessageData) {
     const isParticipant = await db.query.groupConversationParticipant.findFirst({
-      where: eq(groupConversationParticipant.conversationId, groupMessageData.conversationId) &&
-             eq(groupConversationParticipant.userId, session.user.id),
+      where: and(
+        eq(groupConversationParticipant.conversationId, groupMessageData.conversationId),
+        eq(groupConversationParticipant.userId, session.user.id)
+      ),
     });
 
     if (!isParticipant) {
@@ -89,13 +91,17 @@ export async function reportMessage(input: ReportMessageInput) {
     });
 
     if (existingReport) {
-      throw new Error('This message has already been reported');
+      return { success: false, error: 'This message has already been reported' };
+    }
+
+    if (!groupMessageData.senderId) {
+      return { success: false, error: 'Cannot report message from deleted user' };
     }
 
     await db.insert(flaggedGroupMessage).values({
       groupMessageId: validated.messageId,
       groupConversationId: groupMessageData.conversationId,
-      senderId: groupMessageData.senderId!,
+      senderId: groupMessageData.senderId,
       content: groupMessageData.content,
       violations: ['user_report'],
       adminNotes: `User report: ${validated.reason}`,

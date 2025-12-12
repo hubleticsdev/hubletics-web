@@ -71,7 +71,7 @@ export function FlaggedMessagesClient({ initialMessages }: FlaggedMessagesClient
 
   const openReviewDialog = (message: FlaggedMessage) => {
     setSelectedMessage(message);
-    setAction(message.action || 'no_action');
+    setAction(message.action && flaggedMessageActionEnum.enumValues.includes(message.action as any) ? message.action as typeof flaggedMessageActionEnum.enumValues[number] : 'no_action');
     setAdminNotes(message.adminNotes || '');
     setDialogOpen(true);
   };

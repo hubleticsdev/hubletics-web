@@ -198,6 +198,8 @@ export async function updateFlaggedMessage(input: UpdateFlaggedMessageInput) {
           })
           .where(eq(groupMessage.id, groupFlaggedMsg.groupMessageId));
       }
+    } else {
+      throw new Error('Flagged message not found');
     }
   }
 
