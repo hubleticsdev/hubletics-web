@@ -91,20 +91,9 @@ const platformHighlights = [
   },
 ];
 
-const sportsShowcase = [
-  'Basketball',
-  'Soccer',
-  'Tennis',
-  'Volleyball',
-  'Track & Field',
-  'Swimming',
-  'Baseball',
-  'Golf',
-  'Wrestling',
-  'Cheer & Dance',
-  'Lacrosse',
-  'Softball',
-];
+import { SPORTS } from '@/lib/constants';
+
+const sportsShowcase = SPORTS.slice(0, 10);
 
 const floatingCardMotion: Pick<
   ComponentProps<typeof motion.div>,

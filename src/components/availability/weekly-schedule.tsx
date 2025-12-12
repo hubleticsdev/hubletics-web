@@ -17,7 +17,9 @@ interface WeeklyScheduleProps {
   }>;
 }
 
-const DAYS = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'];
+import { DAYS_OF_WEEK, type DayOfWeek } from '@/lib/constants';
+
+const DAYS = DAYS_OF_WEEK;
 const DAY_LABELS: Record<string, string> = {
   monday: 'Monday',
   tuesday: 'Tuesday',
@@ -53,7 +55,7 @@ export function WeeklySchedule({ availability, onChange, upcomingBookings }: Wee
     onChange(newAvailability);
   };
 
-  const hasBookingOnDay = (day: string) => {
+  const hasBookingOnDay = (day: DayOfWeek) => {
     const dayIndex = DAYS.indexOf(day);
     return upcomingBookings.some((booking) => {
       const bookingDay = new Date(booking.scheduledStartAt).getDay();

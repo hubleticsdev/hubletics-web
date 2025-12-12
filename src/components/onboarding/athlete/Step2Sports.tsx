@@ -1,33 +1,16 @@
 'use client';
 
 import type { AthleteProfileData } from '@/actions/onboarding/athlete';
+import { SPORTS, EXPERIENCE_LEVELS } from '@/lib/constants';
 
 type Step2Props = {
   formData: AthleteProfileData;
   setFormData: (data: AthleteProfileData) => void;
 };
 
-const SPORTS_OPTIONS = [
-  'Basketball',
-  'Tennis',
-  'Soccer',
-  'Baseball',
-  'Softball',
-  'Volleyball',
-  'Track & Field',
-  'Swimming',
-  'Golf',
-  'Football',
-  'Lacrosse',
-  'Other',
-];
+const SPORTS_OPTIONS = SPORTS;
 
-const EXPERIENCE_LEVELS = [
-  'Beginner',
-  'Intermediate',
-  'Advanced',
-  'Competitive',
-];
+const EXPERIENCE_LEVELS_OPTIONS = EXPERIENCE_LEVELS;
 
 export function Step2Sports({ formData, setFormData }: Step2Props) {
   const toggleSport = (sport: string) => {
@@ -98,7 +81,7 @@ export function Step2Sports({ formData, setFormData }: Step2Props) {
             <div key={sport} className="border-2 border-gray-200 rounded-lg p-5 bg-gray-50">
               <p className="text-sm font-semibold text-gray-900 mb-3">{sport}</p>
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-                {EXPERIENCE_LEVELS.map((level) => (
+                {EXPERIENCE_LEVELS_OPTIONS.map((level) => (
                   <button
                     key={level}
                     type="button"

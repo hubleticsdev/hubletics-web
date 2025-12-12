@@ -3,34 +3,14 @@
 import { useState } from 'react';
 import { toast } from 'sonner';
 import type { CoachProfileData } from '@/actions/onboarding/coach';
+import { SPORTS, SPORT_SPECIALTIES } from '@/lib/constants';
 
 type Step2Props = {
   formData: CoachProfileData;
   setFormData: (data: CoachProfileData) => void;
 };
 
-const AVAILABLE_SPORTS = [
-  'Basketball',
-  'Soccer',
-  'Tennis',
-  'Baseball',
-  'Football',
-  'Volleyball',
-  'Swimming',
-  'Track & Field',
-  'Golf',
-  'Lacrosse',
-  'Hockey',
-  'Wrestling',
-  'Gymnastics',
-  'Martial Arts',
-  'Boxing',
-  'CrossFit',
-  'Yoga',
-  'Pilates',
-  'Running',
-  'Cycling',
-];
+const AVAILABLE_SPORTS = SPORTS;
 
 export function Step2Specialties({ formData, setFormData }: Step2Props) {
   const [newTag, setNewTag] = useState<Record<string, string>>({});
