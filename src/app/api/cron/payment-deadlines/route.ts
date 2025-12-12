@@ -3,6 +3,11 @@ import { db } from '@/lib/db';
 import { booking } from '@/lib/db/schema';
 import { and, eq, lt, isNull, lte } from 'drizzle-orm';
 import { sendEmail } from '@/lib/email/resend';
+import {
+  getBookingCancelledDueToPaymentEmailTemplate,
+  getPaymentReminder12HoursEmailTemplate,
+  getPaymentReminder30MinutesEmailTemplate
+} from '@/lib/email/templates/payment-notifications';
 import { validateCronAuth } from '@/lib/cron/auth';
 
 export async function GET(request: NextRequest) {
@@ -68,18 +73,28 @@ export async function GET(request: NextRequest) {
             .where(eq(booking.id, bookingRecord.id));
 
           const startDate = new Date(bookingRecord.scheduledStartAt);
-          
+          const lessonDate = startDate.toLocaleDateString('en-US', {
+            weekday: 'long',
+            month: 'long',
+            day: 'numeric'
+          });
+          const lessonTime = startDate.toLocaleTimeString('en-US', {
+            hour: 'numeric',
+            minute: '2-digit'
+          });
+
+          const emailTemplate = getBookingCancelledDueToPaymentEmailTemplate(
+            bookingRecord.client.name,
+            bookingRecord.coach.name,
+            lessonDate,
+            lessonTime
+          );
+
           await sendEmail({
             to: bookingRecord.client.email,
-            subject: 'Booking Cancelled - Payment Not Received',
-            html: `
-              <h2>Booking Cancelled</h2>
-              <p>Hi ${bookingRecord.client.name},</p>
-              <p>Your booking for ${startDate.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })} at ${startDate.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })} with ${bookingRecord.coach.name} has been automatically cancelled because payment was not received within 24 hours.</p>
-              <p>You can book a new session anytime on the platform.</p>
-              <p><a href="${process.env.NEXT_PUBLIC_URL}/coaches">Find Coaches</a></p>
-            `,
-            text: `Your booking has been cancelled due to non-payment. Book a new session at ${process.env.NEXT_PUBLIC_URL}/coaches`,
+            subject: emailTemplate.subject,
+            html: emailTemplate.html,
+            text: emailTemplate.text,
           });
 
           console.log(`[CRON] Cancelled booking ${bookingRecord.id} - payment deadline passed`);
@@ -89,31 +104,37 @@ export async function GET(request: NextRequest) {
 
         if (hoursUntilDue <= 12 && hoursUntilDue > 11.98 && !bookingRecord.paymentReminderSentAt) {
           const startDate = new Date(bookingRecord.scheduledStartAt);
-          
+          const lessonDate = startDate.toLocaleDateString('en-US', {
+            weekday: 'long',
+            month: 'long',
+            day: 'numeric'
+          });
+          const lessonTime = startDate.toLocaleTimeString('en-US', {
+            hour: 'numeric',
+            minute: '2-digit'
+          });
+          const paymentDeadline = paymentDueAt.toLocaleString('en-US', {
+            weekday: 'long',
+            month: 'long',
+            day: 'numeric',
+            hour: 'numeric',
+            minute: '2-digit'
+          });
+
+          const emailTemplate = getPaymentReminder12HoursEmailTemplate(
+            bookingRecord.client.name,
+            bookingRecord.coach.name,
+            lessonDate,
+            lessonTime,
+            parseFloat(bookingRecord.clientPaid).toFixed(2),
+            paymentDeadline
+          );
+
           await sendEmail({
             to: bookingRecord.client.email,
-            subject: 'Reminder: Payment Due in 12 Hours',
-            html: `
-              <h2>⏰ Payment Reminder</h2>
-              <p>Hi ${bookingRecord.client.name},</p>
-              <p>This is a friendly reminder that payment for your lesson with ${bookingRecord.coach.name} is due in <strong>12 hours</strong>.</p>
-              
-              <p><strong>Lesson:</strong> ${startDate.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })} at ${startDate.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })}</p>
-              <p><strong>Amount:</strong> $${parseFloat(bookingRecord.clientPaid).toFixed(2)}</p>
-              <p><strong>Payment Deadline:</strong> ${paymentDueAt.toLocaleString('en-US', { weekday: 'long', month: 'long', day: 'numeric', hour: 'numeric', minute: '2-digit' })}</p>
-              
-              <p style="margin: 30px 0;">
-                <a href="${process.env.NEXT_PUBLIC_URL}/dashboard/bookings" 
-                   style="background: linear-gradient(to right, #FF6B4A, #FF8C5A); color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px; font-weight: 600;">
-                  Pay Now
-                </a>
-              </p>
-              
-              <p style="color: #666; font-size: 14px;">
-                If payment is not received by the deadline, this booking will be automatically cancelled.
-              </p>
-            `,
-            text: `Payment reminder: Your lesson payment is due in 12 hours. Amount: $${parseFloat(bookingRecord.clientPaid).toFixed(2)}. Deadline: ${paymentDueAt.toLocaleString()}. Pay now at ${process.env.NEXT_PUBLIC_URL}/dashboard/bookings`,
+            subject: emailTemplate.subject,
+            html: emailTemplate.html,
+            text: emailTemplate.text,
           });
 
           await db
@@ -130,31 +151,34 @@ export async function GET(request: NextRequest) {
 
         if (minutesUntilDue <= 30 && minutesUntilDue > 25 && !bookingRecord.paymentFinalReminderSentAt) {
           const startDate = new Date(bookingRecord.scheduledStartAt);
-          
+          const lessonDate = startDate.toLocaleDateString('en-US', {
+            weekday: 'long',
+            month: 'long',
+            day: 'numeric'
+          });
+          const lessonTime = startDate.toLocaleTimeString('en-US', {
+            hour: 'numeric',
+            minute: '2-digit'
+          });
+          const paymentDeadline = paymentDueAt.toLocaleString('en-US', {
+            hour: 'numeric',
+            minute: '2-digit'
+          });
+
+          const emailTemplate = getPaymentReminder30MinutesEmailTemplate(
+            bookingRecord.client.name,
+            bookingRecord.coach.name,
+            lessonDate,
+            lessonTime,
+            parseFloat(bookingRecord.clientPaid).toFixed(2),
+            paymentDeadline
+          );
+
           await sendEmail({
             to: bookingRecord.client.email,
-            subject: '🚨 URGENT: Payment Due in 30 Minutes',
-            html: `
-              <h2>🚨 Final Payment Reminder</h2>
-              <p>Hi ${bookingRecord.client.name},</p>
-              <p><strong>This is your final reminder</strong> - payment for your lesson is due in <strong>30 minutes</strong>!</p>
-              
-              <p><strong>Lesson:</strong> ${startDate.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })} at ${startDate.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })}</p>
-              <p><strong>Amount:</strong> $${parseFloat(bookingRecord.clientPaid).toFixed(2)}</p>
-              <p><strong>Payment Deadline:</strong> ${paymentDueAt.toLocaleString('en-US', { hour: 'numeric', minute: '2-digit' })}</p>
-              
-              <p style="margin: 30px 0;">
-                <a href="${process.env.NEXT_PUBLIC_URL}/dashboard/bookings" 
-                   style="background: linear-gradient(to right, #FF6B4A, #FF8C5A); color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px; font-weight: 600;">
-                  Pay Now - Don't Lose Your Spot!
-                </a>
-              </p>
-              
-              <p style="color: #dc2626; font-weight: 600;">
-                ⚠️ If payment is not received within 30 minutes, this booking will be cancelled.
-              </p>
-            `,
-            text: `URGENT: Your lesson payment is due in 30 MINUTES. Amount: $${parseFloat(bookingRecord.clientPaid).toFixed(2)}. Pay immediately at ${process.env.NEXT_PUBLIC_URL}/dashboard/bookings or booking will be cancelled.`,
+            subject: emailTemplate.subject,
+            html: emailTemplate.html,
+            text: emailTemplate.text,
           });
 
           await db

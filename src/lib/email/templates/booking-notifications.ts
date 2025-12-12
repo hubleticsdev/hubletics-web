@@ -1,4 +1,5 @@
 import { clientEnv } from '@/lib/env';
+import { sanitizeName } from '@/lib/utils';
 
 export function getBookingRequestEmailTemplate(
   coachName: string,
@@ -11,17 +12,20 @@ export function getBookingRequestEmailTemplate(
     amount: string;
   }
 ) {
+  // Sanitize user names for email safety
+  const safeCoachName = sanitizeName(coachName);
+  const safeAthleteName = sanitizeName(athleteName);
   const dashboardLink = `${clientEnv.APP_URL}/dashboard/coach`;
   return {
-    subject: `New Booking Request from ${athleteName}`,
+    subject: `New Booking Request from ${safeAthleteName}`,
     html: `
       <div style="font-family: sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: auto; border: 1px solid #eee; border-radius: 8px; overflow: hidden;">
         <div style="background: linear-gradient(to right, #FF6B4A, #FF8C5A); padding: 20px; text-align: center; color: white;">
           <h1 style="margin: 0; font-size: 28px;">New Booking Request</h1>
         </div>
         <div style="padding: 30px;">
-          <p>Hi ${coachName},</p>
-          <p>You have a new booking request from <strong>${athleteName}</strong>!</p>
+          <p>Hi ${safeCoachName},</p>
+          <p>You have a new booking request from <strong>${safeAthleteName}</strong>!</p>
           
           <div style="background-color: #f9fafb; border-left: 4px solid #FF6B4A; padding: 15px; margin: 20px 0; border-radius: 4px;">
             <h3 style="margin-top: 0; color: #FF6B4A;">Session Details</h3>
@@ -45,9 +49,9 @@ export function getBookingRequestEmailTemplate(
         </div>
       </div>
     `,
-    text: `Hi ${coachName},
+    text: `Hi ${safeCoachName},
 
-You have a new booking request from ${athleteName}!
+You have a new booking request from ${safeAthleteName}!
 
 Session Details:
 - Date: ${bookingDetails.date}
@@ -78,6 +82,9 @@ export function getBookingAcceptedEmailTemplate(
     amount: string;
   }
 ) {
+  // Sanitize user names for email safety
+  const safeAthleteName = sanitizeName(athleteName);
+  const safeCoachName = sanitizeName(coachName);
   const dashboardLink = `${clientEnv.APP_URL}/dashboard/athlete`;
   return {
     subject: `Booking Confirmed: ${coachName} Accepted Your Request`,
@@ -87,8 +94,8 @@ export function getBookingAcceptedEmailTemplate(
           <h1 style="margin: 0; font-size: 28px;">🎉 Booking Confirmed!</h1>
         </div>
         <div style="padding: 30px;">
-          <p>Hi ${athleteName},</p>
-          <p>Great news! <strong>${coachName}</strong> has accepted your booking request.</p>
+          <p>Hi ${safeAthleteName},</p>
+          <p>Great news! <strong>${safeCoachName}</strong> has accepted your booking request.</p>
           
           <div style="background-color: #f0fdf4; border-left: 4px solid #10B981; padding: 15px; margin: 20px 0; border-radius: 4px;">
             <h3 style="margin-top: 0; color: #10B981;">Confirmed Session Details</h3>
@@ -112,9 +119,9 @@ export function getBookingAcceptedEmailTemplate(
         </div>
       </div>
     `,
-    text: `Hi ${athleteName},
+    text: `Hi ${safeAthleteName},
 
-Great news! ${coachName} has accepted your booking request.
+Great news! ${safeCoachName} has accepted your booking request.
 
 Confirmed Session Details:
 - Date: ${bookingDetails.date}
@@ -143,17 +150,21 @@ export function getBookingDeclinedEmailTemplate(
     time: string;
   }
 ) {
+  // Sanitize user names for email safety
+  const safeAthleteName = sanitizeName(athleteName);
+  const safeCoachName = sanitizeName(coachName);
+
   const coachesLink = `${clientEnv.APP_URL}/coaches`;
   return {
-    subject: `Booking Update: ${coachName} Declined Your Request`,
+    subject: `Booking Update: ${safeCoachName} Declined Your Request`,
     html: `
       <div style="font-family: sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: auto; border: 1px solid #eee; border-radius: 8px; overflow: hidden;">
         <div style="background: linear-gradient(to right, #8A2BE2, #9370DB); padding: 20px; text-align: center; color: white;">
           <h1 style="margin: 0; font-size: 28px;">Booking Update</h1>
         </div>
         <div style="padding: 30px;">
-          <p>Hi ${athleteName},</p>
-          <p>Unfortunately, <strong>${coachName}</strong> was unable to accept your booking request for ${bookingDetails.date} at ${bookingDetails.time}.</p>
+          <p>Hi ${safeAthleteName},</p>
+          <p>Unfortunately, <strong>${safeCoachName}</strong> was unable to accept your booking request for ${bookingDetails.date} at ${bookingDetails.time}.</p>
           
           <div style="background-color: #fdf2f2; border-left: 4px solid #ef4444; padding: 15px; margin: 20px 0; border-radius: 4px;">
             <p style="margin: 0; font-weight: bold; color: #ef4444;">Reason:</p>
@@ -175,9 +186,9 @@ export function getBookingDeclinedEmailTemplate(
         </div>
       </div>
     `,
-    text: `Hi ${athleteName},
+    text: `Hi ${safeAthleteName},
 
-Unfortunately, ${coachName} was unable to accept your booking request for ${bookingDetails.date} at ${bookingDetails.time}.
+Unfortunately, ${safeCoachName} was unable to accept your booking request for ${bookingDetails.date} at ${bookingDetails.time}.
 
 Reason: ${reason}
 

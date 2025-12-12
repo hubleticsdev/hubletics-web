@@ -7,6 +7,7 @@ import { eq, and } from 'drizzle-orm';
 import { calculateCoachEarnings } from '@/lib/pricing';
 import { createBookingPaymentIntent } from '@/lib/stripe';
 import { sendEmail } from '@/lib/email/resend';
+import { getNewParticipantRequestEmailTemplate } from '@/lib/email/templates/group-booking-notifications';
 import { revalidatePath } from 'next/cache';
 
 export async function joinPublicLesson(lessonId: string) {
@@ -120,25 +121,28 @@ export async function joinPublicLesson(lessonId: string) {
       const startDate = new Date(lesson.scheduledStartAt);
       const endDate = new Date(lesson.scheduledEndAt);
 
+      const lessonDate = startDate.toLocaleDateString('en-US', {
+        weekday: 'long',
+        month: 'long',
+        day: 'numeric',
+        year: 'numeric'
+      });
+
+      const lessonTime = `${startDate.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })} - ${endDate.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })}`;
+
+      const emailTemplate = getNewParticipantRequestEmailTemplate(
+        coachUser.name,
+        session.user.name,
+        lessonDate,
+        lessonTime,
+        pricePerPerson.toFixed(2)
+      );
+
       await sendEmail({
         to: coachUser.email,
-        subject: `New participant request for your group lesson`,
-        html: `
-          <h2>New Participant Request</h2>
-          <p>Hi ${coachUser.name},</p>
-          <p>${session.user.name} has requested to join your group lesson and authorized payment.</p>
-
-          <div style="background-color: #f3f4f6; padding: 20px; border-radius: 8px; margin: 20px 0;">
-            <h3 style="margin-top: 0;">Lesson Details</h3>
-            <p><strong>Date:</strong> ${startDate.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' })}</p>
-            <p><strong>Time:</strong> ${startDate.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })} - ${endDate.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })}</p>
-            <p><strong>Amount:</strong> $${pricePerPerson.toFixed(2)}</p>
-          </div>
-
-          <p>Please review and approve or decline this participant from your dashboard.</p>
-          <p><a href="${process.env.NEXT_PUBLIC_URL}/dashboard/bookings" style="display: inline-block; padding: 12px 24px; background: linear-gradient(to right, #FF6B4A, #FF8C5A); color: white; text-decoration: none; border-radius: 6px; margin: 20px 0;">View Requests</a></p>
-        `,
-        text: `Hi ${coachUser.name}, ${session.user.name} has requested to join your group lesson on ${startDate.toLocaleDateString()} at ${startDate.toLocaleTimeString()}. Amount: $${pricePerPerson.toFixed(2)}. Please review and approve/decline from your dashboard.`,
+        subject: emailTemplate.subject,
+        html: emailTemplate.html,
+        text: emailTemplate.text,
       });
     }
 

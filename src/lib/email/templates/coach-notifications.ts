@@ -2,7 +2,10 @@
  * Email templates for coach approval notifications
  */
 
+import { sanitizeName } from '@/lib/utils';
+
 export function getCoachApprovedEmailTemplate(coachName: string) {
+  const safeCoachName = sanitizeName(coachName);
   return {
     subject: '🎉 Your Coach Profile Has Been Approved!',
     html: `
@@ -88,7 +91,7 @@ export function getCoachApprovedEmailTemplate(coachName: string) {
         <body>
           <div class="header">
             <div class="emoji">🎉</div>
-            <h1>Congratulations, ${coachName}!</h1>
+            <h1>Congratulations, ${safeCoachName}!</h1>
           </div>
           
           <div class="content">
@@ -125,7 +128,7 @@ export function getCoachApprovedEmailTemplate(coachName: string) {
       </html>
     `,
     text: `
-Congratulations, ${coachName}!
+Congratulations, ${safeCoachName}!
 
 We're excited to inform you that your coach profile has been approved! You're now part of the Hubletics coaching community.
 
@@ -145,6 +148,7 @@ Train with the best. Become the best.
 }
 
 export function getCoachRejectedEmailTemplate(coachName: string, reason?: string) {
+  const safeCoachName = sanitizeName(coachName);
   return {
     subject: 'Update on Your Coach Application',
     html: `
@@ -220,7 +224,7 @@ export function getCoachRejectedEmailTemplate(coachName: string, reason?: string
           
           <div class="content">
             <p class="message">
-              Hi ${coachName},
+              Hi ${safeCoachName},
             </p>
             
             <p class="message">
@@ -254,7 +258,7 @@ export function getCoachRejectedEmailTemplate(coachName: string, reason?: string
       </html>
     `,
     text: `
-Hi ${coachName},
+Hi ${safeCoachName},
 
 Thank you for your interest in becoming a coach on Hubletics. After careful review, we're unable to approve your application at this time.
 

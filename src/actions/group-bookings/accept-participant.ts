@@ -6,6 +6,7 @@ import { booking, bookingParticipant, coachProfile } from '@/lib/db/schema';
 import { eq, and, sql } from 'drizzle-orm';
 import { stripe } from '@/lib/stripe';
 import { sendEmail } from '@/lib/email/resend';
+import { getGroupLessonAcceptedEmailTemplate } from '@/lib/email/templates/group-booking-notifications';
 import { revalidatePath } from 'next/cache';
 
 export async function acceptParticipant(bookingId: string, participantId: string) {
@@ -134,30 +135,33 @@ export async function acceptParticipant(bookingId: string, participantId: string
     const endDate = new Date(bookingRecord.scheduledEndAt);
     const participantUser = participant.user as { id: string; name: string; email: string };
 
+    const lessonDate = startDate.toLocaleDateString('en-US', {
+      weekday: 'long',
+      month: 'long',
+      day: 'numeric',
+      year: 'numeric'
+    });
+
+    const lessonTime = `${startDate.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })} - ${endDate.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })}`;
+
+    const location = bookingRecord.location
+      ? `${(bookingRecord.location as any).name}, ${(bookingRecord.location as any).address}`
+      : undefined;
+
+    const emailTemplate = getGroupLessonAcceptedEmailTemplate(
+      participantUser.name,
+      bookingRecord.clientMessage || 'Group Lesson',
+      lessonDate,
+      lessonTime,
+      bookingRecord.coach?.name || 'Coach',
+      location
+    );
+
     await sendEmail({
       to: participantUser.email,
-      subject: `✅ You're confirmed for ${bookingRecord.clientMessage || 'Group Lesson'}`,
-      html: `
-        <h2>You're In!</h2>
-        <p>Hi ${participantUser.name},</p>
-        <p>Great news! Your spot in the group lesson has been confirmed.</p>
-
-        <div style="background-color: #f3f4f6; padding: 20px; border-radius: 8px; margin: 20px 0;">
-          <h3 style="margin-top: 0;">Lesson Details</h3>
-          <p><strong>Date:</strong> ${startDate.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' })}</p>
-          <p><strong>Time:</strong> ${startDate.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })} - ${endDate.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })}</p>
-          <p><strong>Coach:</strong> ${bookingRecord.coach?.name}</p>
-          ${bookingRecord.location ? `<p><strong>Location:</strong> ${(bookingRecord.location as any).name}, ${(bookingRecord.location as any).address}</p>` : ''}
-        </div>
-
-        <p>Your payment has been processed. See you there!</p>
-        <p><a href="${process.env.NEXT_PUBLIC_URL}/dashboard/bookings" style="display: inline-block; padding: 12px 24px; background: linear-gradient(to right, #FF6B4A, #FF8C5A); color: white; text-decoration: none; border-radius: 6px; margin: 20px 0;">View Booking</a></p>
-
-        <p style="color: #6b7280; font-size: 14px; margin-top: 30px;">
-          Need to cancel? Please contact your coach as soon as possible.
-        </p>
-      `,
-      text: `Hi ${participantUser.name}, You're confirmed for the group lesson on ${startDate.toLocaleDateString()} at ${startDate.toLocaleTimeString()}. Coach: ${bookingRecord.coach?.name}. Your payment has been processed.`,
+      subject: emailTemplate.subject,
+      html: emailTemplate.html,
+      text: emailTemplate.text,
     });
 
     console.log(`[ACCEPT_PARTICIPANT] Participant ${participantId} accepted for booking ${bookingId}`);

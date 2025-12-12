@@ -6,6 +6,7 @@ import { booking, bookingParticipant } from '@/lib/db/schema';
 import { eq, and } from 'drizzle-orm';
 import { stripe } from '@/lib/stripe';
 import { sendEmail } from '@/lib/email/resend';
+import { getGroupLessonDeclinedEmailTemplate } from '@/lib/email/templates/group-booking-notifications';
 import { revalidatePath } from 'next/cache';
 
 export async function declineParticipant(bookingId: string, participantId: string, reason?: string) {
@@ -104,25 +105,24 @@ export async function declineParticipant(bookingId: string, participantId: strin
     const startDate = new Date(bookingRecord.scheduledStartAt);
     const participantUser = participant.user as { id: string; name: string; email: string };
 
+    const lessonDate = startDate.toLocaleDateString('en-US', {
+      weekday: 'long',
+      month: 'long',
+      day: 'numeric'
+    });
+
+    const emailTemplate = getGroupLessonDeclinedEmailTemplate(
+      participantUser.name,
+      bookingRecord.coach.name,
+      lessonDate,
+      reason
+    );
+
     await sendEmail({
       to: participantUser.email,
-      subject: `Update on your group lesson request`,
-      html: `
-        <h2>Group Lesson Update</h2>
-        <p>Hi ${participantUser.name},</p>
-        <p>Unfortunately, the coach has declined your request to join the group lesson on ${startDate.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })}.</p>
-
-        ${reason ? `<div style="background-color: #fef2f2; padding: 15px; border-left: 4px solid #ef4444; margin: 20px 0;">
-          <p style="margin: 0;"><strong>Reason:</strong> ${reason}</p>
-        </div>` : ''}
-
-        <p><strong>Good news:</strong> Your payment authorization has been cancelled. You will NOT be charged.</p>
-
-        <p>Feel free to browse other available group lessons from this coach or explore other coaches on the platform.</p>
-
-        <p><a href="${process.env.NEXT_PUBLIC_URL}/coaches" style="display: inline-block; padding: 12px 24px; background: linear-gradient(to right, #FF6B4A, #FF8C5A); color: white; text-decoration: none; border-radius: 6px; margin: 20px 0;">Browse Coaches</a></p>
-      `,
-      text: `Hi ${participantUser.name}, The coach has declined your request to join the group lesson. Your payment authorization has been cancelled - you will NOT be charged.${reason ? ` Reason: ${reason}` : ''}`,
+      subject: emailTemplate.subject,
+      html: emailTemplate.html,
+      text: emailTemplate.text,
     });
 
     console.log(`[DECLINE_PARTICIPANT] Participant ${participantId} declined for booking ${bookingId}`);

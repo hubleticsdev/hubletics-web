@@ -12,11 +12,7 @@ import {
 } from '@/lib/stripe';
 import { stripe } from '@/lib/stripe';
 import { sendEmail } from '@/lib/email/resend';
-import {
-  getBookingAcceptedEmailTemplate,
-  getBookingDeclinedEmailTemplate,
-  getBookingCancelledEmailTemplate,
-} from '@/lib/email/templates/booking-notifications';
+import { getBookingAcceptedEmailTemplate } from '@/lib/email/templates/booking-management-notifications';
 import { z } from 'zod';
 import { uuidSchema, validateInput } from '@/lib/validations';
 
@@ -109,6 +105,12 @@ export async function acceptBooking(bookingId: string) {
             email: true,
           },
         },
+        coach: {
+          columns: {
+            name: true,
+            email: true,
+          },
+        },
       },
     });
 
@@ -133,39 +135,40 @@ export async function acceptBooking(bookingId: string) {
 
     const startDate = new Date(bookingRecord.scheduledStartAt);
     
+    const lessonDate = startDate.toLocaleDateString('en-US', {
+      weekday: 'long',
+      month: 'long',
+      day: 'numeric',
+      year: 'numeric'
+    });
+    const lessonTime = startDate.toLocaleTimeString('en-US', {
+      hour: 'numeric',
+      minute: '2-digit'
+    });
+    const paymentDeadline = paymentDueAt.toLocaleString('en-US', {
+      weekday: 'long',
+      month: 'long',
+      day: 'numeric',
+      year: 'numeric',
+      hour: 'numeric',
+      minute: '2-digit'
+    });
+
+    const emailTemplate = getBookingAcceptedEmailTemplate(
+      bookingRecord.client.name,
+      bookingRecord.coach.name,
+      lessonDate,
+      lessonTime,
+      bookingRecord.location ? `${(bookingRecord.location as any).name}, ${(bookingRecord.location as any).address}` : 'Location to be confirmed',
+      parseFloat(bookingRecord.clientPaid).toFixed(2),
+      paymentDeadline
+    );
+
     await sendEmail({
       to: bookingRecord.client.email,
-      subject: `Lesson Accepted - Payment Required`,
-      html: `
-        <h2>Great news! Your lesson has been accepted</h2>
-        <p>Hi ${bookingRecord.client.name},</p>
-        <p>Your coach has accepted your lesson request for ${startDate.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' })} at ${startDate.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })}!</p>
-        
-        <h3>⏰ Payment Required</h3>
-        <p><strong>You have 24 hours to complete payment</strong> or this booking will be automatically cancelled.</p>
-        <p><strong>Payment Deadline:</strong> ${paymentDueAt.toLocaleString('en-US', { 
-          weekday: 'long', 
-          month: 'long', 
-          day: 'numeric', 
-          year: 'numeric',
-          hour: 'numeric',
-          minute: '2-digit'
-        })}</p>
-        
-        <p><strong>Amount:</strong> $${parseFloat(bookingRecord.clientPaid).toFixed(2)}</p>
-        
-        <p style="margin: 30px 0;">
-          <a href="${process.env.NEXT_PUBLIC_URL}/dashboard/bookings" 
-             style="background: linear-gradient(to right, #FF6B4A, #FF8C5A); color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px; font-weight: 600;">
-            Pay Now
-          </a>
-        </p>
-        
-        <p style="color: #666; font-size: 14px;">
-          You'll receive reminder emails at 12 hours and 30 minutes before the deadline.
-        </p>
-      `,
-      text: `Hi ${bookingRecord.client.name}, Your lesson has been accepted! Please complete payment within 24 hours. Payment deadline: ${paymentDueAt.toLocaleString()}. Amount: $${parseFloat(bookingRecord.clientPaid).toFixed(2)}. Visit ${process.env.NEXT_PUBLIC_URL}/dashboard/bookings to pay now.`,
+      subject: emailTemplate.subject,
+      html: emailTemplate.html,
+      text: emailTemplate.text,
     });
 
     console.log(`Payment request email sent to: ${bookingRecord.client.email}`);
