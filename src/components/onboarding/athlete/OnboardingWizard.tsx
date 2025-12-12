@@ -97,7 +97,7 @@ export function OnboardingWizard({ initialName, googleAvatar, savedPhotoUrl }: O
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-gray-50 via-white to-orange-50/30 py-24 px-4 sm:px-6 lg:px-8">
+    <div className="min-h-screen bg-linear-to-br from-gray-50 via-white to-orange-50/30 py-24 px-4 sm:px-6 lg:px-8">
       <div className="mx-auto max-w-3xl">
         <div className="mb-8">
           <div className="flex items-center justify-between mb-3">
@@ -113,7 +113,7 @@ export function OnboardingWizard({ initialName, googleAvatar, savedPhotoUrl }: O
           </div>
           <div className="h-3 bg-gray-200 rounded-full overflow-hidden shadow-inner">
             <div
-              className="h-full bg-gradient-to-r from-[#FF6B4A] to-[#FF8C5A] transition-all duration-500 ease-out rounded-full shadow-sm"
+              className="h-full bg-linear-to-r from-[#FF6B4A] to-[#FF8C5A] transition-all duration-500 ease-out rounded-full shadow-sm"
               style={{ width: `${(currentStep / 4) * 100}%` }}
             />
           </div>
@@ -153,7 +153,7 @@ export function OnboardingWizard({ initialName, googleAvatar, savedPhotoUrl }: O
               {currentStep < 4 ? (
                 <button 
                   onClick={handleNext} 
-                  className="px-6 py-2 bg-gradient-to-r from-[#FF6B4A] to-[#FF8C5A] text-white font-semibold rounded-lg hover:shadow-lg hover:scale-[1.02] transition-all duration-200"
+                  className="px-6 py-2 bg-linear-to-r from-[#FF6B4A] to-[#FF8C5A] text-white font-semibold rounded-lg hover:shadow-lg hover:scale-[1.02] transition-all duration-200"
                 >
                   Continue →
                 </button>
@@ -161,7 +161,7 @@ export function OnboardingWizard({ initialName, googleAvatar, savedPhotoUrl }: O
                 <button
                   onClick={handleSubmit}
                   disabled={loading}
-                  className="px-8 py-3 bg-gradient-to-r from-[#FF6B4A] to-[#FF8C5A] text-white font-semibold rounded-lg hover:shadow-xl hover:scale-[1.02] transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100"
+                  className="px-8 py-3 bg-linear-to-r from-[#FF6B4A] to-[#FF8C5A] text-white font-semibold rounded-lg hover:shadow-xl hover:scale-[1.02] transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100"
                 >
                   {loading ? 'Creating Profile...' : 'Complete Profile ✓'}
                 </button>

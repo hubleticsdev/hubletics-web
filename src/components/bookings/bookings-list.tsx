@@ -706,7 +706,7 @@ export function BookingsList({ bookings, userRole, userId }: BookingsListProps) 
                                 setPaymentModalOpen(true);
                               }
                             }}
-                            className="bg-gradient-to-r from-[#FF6B4A] to-[#FF8C5A] hover:opacity-90 text-white"
+                            className="bg-linear-to-r from-[#FF6B4A] to-[#FF8C5A] hover:opacity-90 text-white"
                             size="sm"
                           >
                             <DollarSign className="h-4 w-4 mr-2" />
@@ -729,7 +729,7 @@ export function BookingsList({ bookings, userRole, userId }: BookingsListProps) 
                             });
                             setReviewModalOpen(true);
                           }}
-                          className="bg-gradient-to-r from-[#FF6B4A] to-[#FF8C5A] hover:opacity-90 text-white"
+                          className="bg-linear-to-r from-[#FF6B4A] to-[#FF8C5A] hover:opacity-90 text-white"
                           size="sm"
                         >
                           <Star className="h-4 w-4 mr-2" />
