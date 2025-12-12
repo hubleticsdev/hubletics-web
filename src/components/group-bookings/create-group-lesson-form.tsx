@@ -9,10 +9,9 @@ import { Calendar, Clock, MapPin, Users } from 'lucide-react';
 
 interface CreateGroupLessonFormProps {
   preferredLocations: Array<{ name: string; address: string; notes?: string }>;
-  availability: Record<string, Array<{ start: string; end: string }>>;
 }
 
-export function CreateGroupLessonForm({ preferredLocations, availability }: CreateGroupLessonFormProps) {
+export function CreateGroupLessonForm({ preferredLocations }: CreateGroupLessonFormProps) {
   const router = useRouter();
   const [lessonType, setLessonType] = useState<'single' | 'recurring'>('single');
   const [submitting, setSubmitting] = useState(false);

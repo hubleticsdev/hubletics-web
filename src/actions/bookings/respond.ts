@@ -33,9 +33,10 @@ export async function acceptBooking(bookingId: string) {
     if (existingBooking.stripePaymentIntentId) {
       try {
         await stripe.paymentIntents.capture(existingBooking.stripePaymentIntentId);
-      } catch (stripeError: any) {
+      } catch (stripeError: unknown) {
         console.error('Stripe capture error:', stripeError);
-        return { success: false, error: `Payment capture failed: ${stripeError.message}` };
+        const errorMessage = stripeError instanceof Error ? stripeError.message : 'Unknown error';
+        return { success: false, error: `Payment capture failed: ${errorMessage}` };
       }
     }
 
@@ -79,9 +80,10 @@ export async function declineBooking(bookingId: string, reason?: string) {
     if (existingBooking.stripePaymentIntentId) {
       try {
         await stripe.paymentIntents.cancel(existingBooking.stripePaymentIntentId);
-      } catch (stripeError: any) {
+      } catch (stripeError: unknown) {
         console.error('Stripe cancel error:', stripeError);
-        return { success: false, error: `Payment cancellation failed: ${stripeError.message}` };
+        const errorMessage = stripeError instanceof Error ? stripeError.message : 'Unknown error';
+        return { success: false, error: `Payment cancellation failed: ${errorMessage}` };
       }
     }
 
@@ -149,9 +151,10 @@ export async function cancelBooking(bookingId: string, reason: string) {
           payment_intent: existingBooking.stripePaymentIntentId,
           amount: Math.round(refundAmount * 100),
         });
-      } catch (stripeError: any) {
+      } catch (stripeError: unknown) {
         console.error('Stripe refund error:', stripeError);
-        return { success: false, error: `Refund failed: ${stripeError.message}` };
+        const errorMessage = stripeError instanceof Error ? stripeError.message : 'Unknown error';
+        return { success: false, error: `Refund failed: ${errorMessage}` };
       }
     }
 

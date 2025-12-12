@@ -6,8 +6,8 @@ import { flaggedMessageActionEnum } from '@/lib/db/schema';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
-import { Flag, MessageCircle, User, Clock, CheckCircle, AlertTriangle } from 'lucide-react';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Flag, User, CheckCircle, AlertTriangle } from 'lucide-react';
 import { toast } from 'sonner';
 
 type FlaggedMessage = Awaited<ReturnType<typeof import('@/actions/admin/flagged-messages').getFlaggedMessages>>[number];
@@ -39,7 +39,7 @@ export function FlaggedMessagesClient({ initialMessages }: FlaggedMessagesClient
     try {
       await updateFlaggedMessage({
         flaggedMessageId: selectedMessage.id,
-        action: action as any,
+        action: action as typeof flaggedMessageActionEnum.enumValues[number],
         adminNotes: adminNotes.trim() || undefined,
       });
 
@@ -62,7 +62,7 @@ export function FlaggedMessagesClient({ initialMessages }: FlaggedMessagesClient
       setSelectedMessage(null);
       setAction('');
       setAdminNotes('');
-    } catch (error) {
+    } catch {
       toast.error('Failed to update message');
     } finally {
       setProcessing(false);
@@ -71,7 +71,10 @@ export function FlaggedMessagesClient({ initialMessages }: FlaggedMessagesClient
 
   const openReviewDialog = (message: FlaggedMessage) => {
     setSelectedMessage(message);
-    setAction(message.action && flaggedMessageActionEnum.enumValues.includes(message.action as any) ? message.action as typeof flaggedMessageActionEnum.enumValues[number] : 'no_action');
+    const validAction = message.action && flaggedMessageActionEnum.enumValues.includes(message.action as typeof flaggedMessageActionEnum.enumValues[number])
+      ? message.action as typeof flaggedMessageActionEnum.enumValues[number]
+      : 'no_action';
+    setAction(validAction);
     setAdminNotes(message.adminNotes || '');
     setDialogOpen(true);
   };

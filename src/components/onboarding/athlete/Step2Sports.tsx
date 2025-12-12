@@ -46,7 +46,7 @@ export function Step2Sports({ formData, setFormData }: Step2Props) {
       <div>
         <h2 className="text-3xl font-bold text-gray-900">What sports are you interested in?</h2>
         <p className="mt-2 text-gray-600">
-          Select all the sports you'd like coaching in and your experience level for each.
+          Select all the sports you&apos;d like coaching in and your experience level for each.
         </p>
       </div>
 

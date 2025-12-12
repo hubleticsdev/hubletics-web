@@ -5,8 +5,7 @@ import { db } from '@/lib/db';
 import { booking, coachProfile, bookingParticipant } from '@/lib/db/schema';
 import { eq, and } from 'drizzle-orm';
 import { createBookingPaymentIntent, captureBookingPayment } from '@/lib/stripe';
-import { z } from 'zod';
-import { uuidSchema, validateInput } from '@/lib/validations';
+import { validateInput, uuidSchema } from '@/lib/validations';
 
 export async function createPaymentForBooking(bookingId: string) {
   try {

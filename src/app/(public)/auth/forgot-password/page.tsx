@@ -56,13 +56,13 @@ export default function ForgotPasswordPage() {
               Check your email
             </h2>
             <p className="mt-2 text-sm text-gray-600">
-              We've sent a password reset link to <strong>{email}</strong>
+              We&apos;ve sent a password reset link to <strong>{email}</strong>
             </p>
           </div>
 
           <div className="mt-8 rounded-md bg-blue-50 p-4">
             <div className="flex">
-              <div className="flex-shrink-0">
+              <div className="shrink-0">
                 <svg
                   className="h-5 w-5 text-blue-400"
                   viewBox="0 0 20 20"
@@ -77,7 +77,7 @@ export default function ForgotPasswordPage() {
               </div>
               <div className="ml-3 flex-1">
                 <p className="text-sm text-blue-700">
-                  The link will expire in 1 hour. If you don't see the email, check your spam folder.
+                  The link will expire in 1 hour. If you don&apos;t see the email, check your spam folder.
                 </p>
               </div>
             </div>
@@ -113,7 +113,7 @@ export default function ForgotPasswordPage() {
             Reset your password
           </h2>
           <p className="mt-2 text-center text-sm text-gray-600">
-            Enter your email address and we'll send you a link to reset your password.
+            Enter your email address and we&apos;ll send you a link to reset your password.
           </p>
         </div>
 

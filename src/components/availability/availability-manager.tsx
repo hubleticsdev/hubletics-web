@@ -67,7 +67,7 @@ export function AvailabilityManager({
       } else {
         toast.error(result.error || 'Failed to update availability');
       }
-    } catch (error) {
+    } catch {
       toast.error('An unexpected error occurred');
     } finally {
       setSaving(false);
@@ -96,7 +96,7 @@ export function AvailabilityManager({
               <Button
                 onClick={handleSave}
                 disabled={saving}
-                className="bg-gradient-to-r from-[#FF6B4A] to-[#FF8C5A]"
+                className="bg-linear-to-r from-[#FF6B4A] to-[#FF8C5A]"
               >
                 {saving ? 'Saving...' : 'Save Changes'}
               </Button>
@@ -144,7 +144,7 @@ export function AvailabilityManager({
           <div className="bg-white rounded-lg shadow p-6">
             <h2 className="text-xl font-semibold text-gray-900 mb-4">Block Specific Dates</h2>
             <p className="text-sm text-gray-600 mb-6">
-              Mark dates when you're unavailable (vacations, holidays, etc.)
+              Mark dates when you&apos;re unavailable (vacations, holidays, etc.)
             </p>
             <BlockedDatesCalendar
               blockedDates={blockedDates}

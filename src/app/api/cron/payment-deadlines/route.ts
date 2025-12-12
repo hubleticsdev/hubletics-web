@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
 import { booking } from '@/lib/db/schema';
-import { and, eq, lt, isNull, lte } from 'drizzle-orm';
+import { and, eq, isNull } from 'drizzle-orm';
 import { sendEmail } from '@/lib/email/resend';
 import {
   getBookingCancelledDueToPaymentEmailTemplate,
@@ -17,8 +17,6 @@ export async function GET(request: NextRequest) {
   try {
 
     const now = new Date();
-    const twelveHoursFromNow = new Date(now.getTime() + 12 * 60 * 60 * 1000);
-    const thirtyMinutesFromNow = new Date(now.getTime() + 30 * 60 * 1000);
 
     console.log(`[CRON] Payment deadlines job started at ${now.toISOString()}`);
 

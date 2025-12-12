@@ -36,7 +36,7 @@ export function Step3Budget({ formData, setFormData }: Step3Props) {
       <div>
         <h2 className="text-3xl font-bold text-gray-900">Budget & Availability</h2>
         <p className="mt-2 text-gray-600">
-          Help coaches understand your budget and when you're typically available for training.
+          Help coaches understand your budget and when you&apos;re typically available for training.
         </p>
       </div>
 

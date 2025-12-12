@@ -19,16 +19,6 @@ const DAYS_OF_WEEK = [
   'sunday',
 ] as const;
 
-const DAYS_OF_WEEK_DISPLAY = [
-  'Monday',
-  'Tuesday',
-  'Wednesday',
-  'Thursday',
-  'Friday',
-  'Saturday',
-  'Sunday',
-] as const;
-
 type DayOfWeek = typeof DAYS_OF_WEEK[number];
 
 export function Step5Rates({ formData, setFormData }: Step5Props) {
@@ -109,7 +99,7 @@ export function Step5Rates({ formData, setFormData }: Step5Props) {
       <div>
         <h2 className="text-3xl font-bold text-gray-900">Rates & Availability</h2>
         <p className="mt-2 text-gray-600">
-          Set your pricing and let athletes know when you're available.
+          Set your pricing and let athletes know when you&apos;re available.
         </p>
       </div>
 
@@ -179,7 +169,7 @@ export function Step5Rates({ formData, setFormData }: Step5Props) {
                 key={day}
                 type="button"
                 onClick={() => setSelectedDay(day)}
-                className={`flex-shrink-0 px-4 py-2 rounded-lg border-2 font-medium transition-all ${
+                className={`shrink-0 px-4 py-2 rounded-lg border-2 font-medium transition-all ${
                   selectedDay === day
                     ? 'bg-orange-50 border-[#FF6B4A] text-[#FF6B4A]'
                     : hasSlots
@@ -225,7 +215,7 @@ export function Step5Rates({ formData, setFormData }: Step5Props) {
               <button
                 type="button"
                 onClick={addTimeSlot}
-                className="self-end px-4 py-2 bg-gradient-to-r from-[#FF6B4A] to-[#FF8C5A] text-white font-semibold rounded-lg hover:shadow-lg transition-all"
+                className="self-end px-4 py-2 bg-linear-to-r from-[#FF6B4A] to-[#FF8C5A] text-white font-semibold rounded-lg hover:shadow-lg transition-all"
               >
                 Add
               </button>
@@ -352,7 +342,7 @@ export function Step5Rates({ formData, setFormData }: Step5Props) {
               <button
                 type="button"
                 onClick={saveLocation}
-                className="flex-1 px-4 py-2 bg-gradient-to-r from-[#FF6B4A] to-[#FF8C5A] text-white font-semibold rounded-lg hover:shadow-lg transition-all"
+                className="flex-1 px-4 py-2 bg-linear-to-r from-[#FF6B4A] to-[#FF8C5A] text-white font-semibold rounded-lg hover:shadow-lg transition-all"
               >
                 Save Location
               </button>

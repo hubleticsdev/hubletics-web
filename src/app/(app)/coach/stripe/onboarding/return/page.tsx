@@ -87,7 +87,7 @@ export default async function StripeOnboardingReturnPage() {
               Setup Incomplete
             </h1>
             <p className="text-gray-600 mb-6">
-              It looks like you haven't finished setting up your payment account.
+              It looks like you haven&apos;t finished setting up your payment account.
               Please complete the setup to start accepting bookings.
             </p>
             <a

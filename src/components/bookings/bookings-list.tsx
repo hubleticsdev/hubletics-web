@@ -30,6 +30,7 @@ import { PaymentModal } from '@/components/bookings/payment-modal';
 import { ParticipantsModal } from '@/components/group-bookings/participants-modal';
 import { useRouter } from 'next/navigation';
 import { toast } from 'sonner';
+import Image from 'next/image';
 
 type BookingStatus = 'pending' | 'awaiting_payment' | 'accepted' | 'declined' | 'cancelled' | 'completed' | 'disputed' | 'open';
 
@@ -490,7 +491,7 @@ export function BookingsList({ bookings, userRole, userId }: BookingsListProps) 
                       <div className="flex items-center gap-3 mb-4">
                         <div className="w-12 h-12 rounded-full bg-gray-200 flex items-center justify-center overflow-hidden">
                           {otherUser?.image ? (
-                            <img src={otherUser.image} alt={otherUser.name} className="w-full h-full object-cover" />
+                            <Image src={otherUser.image} alt={otherUser.name} width={48} height={48} className="object-cover" />
                           ) : (
                             <User className="h-6 w-6 text-gray-400" />
                           )}

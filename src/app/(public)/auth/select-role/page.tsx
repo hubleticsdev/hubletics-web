@@ -1,13 +1,11 @@
 'use client';
 
 import { useState } from 'react';
-import { useRouter } from 'next/navigation';
 import { toast } from 'sonner';
 import { setUserRole } from '@/actions/auth/set-role';
 import { motion } from 'framer-motion';
 
 export default function SelectRolePage() {
-  const router = useRouter();
   const [selectedRole, setSelectedRole] = useState<'client' | 'coach' | null>(null);
   const [loading, setLoading] = useState(false);
 
@@ -41,7 +39,7 @@ export default function SelectRolePage() {
   };
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-gradient-to-br from-gray-50 via-white to-orange-50/30 px-4 py-24">
+    <div className="flex min-h-screen items-center justify-center bg-linear-to-br from-gray-50 via-white to-orange-50/30 px-4 py-24">
       <motion.div
         className="w-full max-w-2xl"
         initial={{ opacity: 0, y: 20 }}
@@ -50,7 +48,7 @@ export default function SelectRolePage() {
       >
         <div className="text-center mb-8">
           <div className="flex justify-center mb-6">
-            <div className="w-20 h-20 bg-gradient-to-br from-[#FF6B4A] to-[#FF8C5A] rounded-2xl flex items-center justify-center shadow-lg">
+            <div className="w-20 h-20 bg-linear-to-br from-[#FF6B4A] to-[#FF8C5A] rounded-2xl flex items-center justify-center shadow-lg">
               <svg className="w-12 h-12 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z" />
               </svg>
@@ -60,7 +58,7 @@ export default function SelectRolePage() {
             Welcome to Hubletics! 👋
           </h1>
           <p className="text-xl text-gray-600">
-            Let's get started. How do you want to use Hubletics?
+            Let&apos;s get started. How do you want to use Hubletics?
           </p>
         </div>
 
@@ -90,7 +88,7 @@ export default function SelectRolePage() {
                 />
               </svg>
               <span className={`text-xl font-bold mb-2 ${selectedRole === 'client' ? 'text-[#FF6B4A]' : 'text-gray-900'}`}>
-                I'm an Athlete/Client
+                I&apos;m an Athlete/Client
               </span>
               <span className="text-sm text-gray-600 text-center">
                 I want to find and book coaching sessions
@@ -128,7 +126,7 @@ export default function SelectRolePage() {
                 />
               </svg>
               <span className={`text-xl font-bold mb-2 ${selectedRole === 'coach' ? 'text-[#FF6B4A]' : 'text-gray-900'}`}>
-                I'm a Coach
+                I&apos;m a Coach
               </span>
               <span className="text-sm text-gray-600 text-center">
                 I want to offer coaching services to athletes
@@ -147,7 +145,7 @@ export default function SelectRolePage() {
             <button
               onClick={handleSubmit}
               disabled={!selectedRole || loading}
-              className="px-8 py-4 bg-gradient-to-r from-[#FF6B4A] to-[#FF8C5A] text-white text-lg font-semibold rounded-lg hover:shadow-xl hover:scale-[1.02] transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100"
+              className="px-8 py-4 bg-linear-to-r from-[#FF6B4A] to-[#FF8C5A] text-white text-lg font-semibold rounded-lg hover:shadow-xl hover:scale-[1.02] transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100"
             >
               {loading ? 'Setting up your account...' : 'Continue →'}
             </button>
@@ -155,7 +153,7 @@ export default function SelectRolePage() {
         </div>
 
         <p className="text-center text-sm text-gray-500 mt-6">
-          You can't change this later, so choose carefully!
+          You can&apos;t change this later, so choose carefully!
         </p>
       </motion.div>
     </div>

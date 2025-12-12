@@ -41,9 +41,9 @@ export function Step4Bio({ formData, setFormData }: Step4Props) {
         </div>
       </div>
 
-      <div className="rounded-xl bg-gradient-to-br from-green-50 to-emerald-50 border-2 border-green-200 p-6">
+      <div className="rounded-xl bg-linear-to-br from-green-50 to-emerald-50 border-2 border-green-200 p-6">
         <div className="flex gap-4">
-          <div className="flex-shrink-0">
+          <div className="shrink-0">
             <div className="w-12 h-12 rounded-full bg-green-500 flex items-center justify-center">
               <svg className="w-7 h-7 text-white" viewBox="0 0 20 20" fill="currentColor">
                 <path
@@ -55,9 +55,9 @@ export function Step4Bio({ formData, setFormData }: Step4Props) {
             </div>
           </div>
           <div className="flex-1">
-            <h3 className="text-lg font-bold text-green-900">You're almost done!</h3>
+            <h3 className="text-lg font-bold text-green-900">You&apos;re almost done!</h3>
             <p className="mt-1 text-sm text-green-800">
-              Click "Complete Profile" to finish setting up your account. You'll be able to browse coaches and start booking sessions right away.
+              Click &quot;Complete Profile&quot; to finish setting up your account. You&apos;ll be able to browse coaches and start booking sessions right away.
             </p>
           </div>
         </div>

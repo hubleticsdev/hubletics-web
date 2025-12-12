@@ -17,7 +17,6 @@ import {
   CalendarClock,
   MessageCircle,
   DollarSign,
-  User,
   Settings,
   LogOut,
   Users,
@@ -59,7 +58,7 @@ export function UserButton({ user }: UserButtonProps) {
             {user.image ? (
               <AvatarImage src={user.image} alt={user.name || ''} />
             ) : (
-              <AvatarFallback className="bg-gradient-to-br from-[#FF6B4A] to-[#FF8C5A] text-white font-semibold">
+              <AvatarFallback className="bg-linear-to-br from-[#FF6B4A] to-[#FF8C5A] text-white font-semibold">
                 {user.name?.charAt(0).toUpperCase() || 'U'}
               </AvatarFallback>
             )}
@@ -67,7 +66,7 @@ export function UserButton({ user }: UserButtonProps) {
         </button>
       </DropdownMenuTrigger>
       <DropdownMenuContent className="w-64 p-6" align="end">
-        <div className="mb-4 p-4 flex flex-col items-center gap-1 rounded-lg bg-gradient-to-br from-[#FF6B4A]/10 to-[#FF8C5A]/10 transition-all duration-300 hover:from-[#FF6B4A]/20 hover:to-[#FF8C5A]/20">
+        <div className="mb-4 p-4 flex flex-col items-center gap-1 rounded-lg bg-linear-to-br from-[#FF6B4A]/10 to-[#FF8C5A]/10 transition-all duration-300 hover:from-[#FF6B4A]/20 hover:to-[#FF8C5A]/20">
           {user.image && (
             <Image
               src={user.image}

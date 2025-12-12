@@ -2,7 +2,7 @@
 
 import { getSession } from '@/lib/auth/session';
 import { db } from '@/lib/db';
-import { booking, bookingParticipant, coachProfile } from '@/lib/db/schema';
+import { booking, bookingParticipant } from '@/lib/db/schema';
 import { eq, and, sql } from 'drizzle-orm';
 import { stripe } from '@/lib/stripe';
 import { sendEmail } from '@/lib/email/resend';
@@ -79,17 +79,19 @@ export async function acceptParticipant(bookingId: string, participantId: string
           error: `Cannot capture payment - status is '${paymentIntent.status}'. Client may not have completed payment.`
         };
       }
-    } catch (stripeError: any) {
+    } catch (stripeError: unknown) {
       console.error('[ACCEPT_PARTICIPANT] Failed to retrieve PaymentIntent:', stripeError);
-      return { success: false, error: `Failed to verify payment status: ${stripeError.message}` };
+      const errorMessage = stripeError instanceof Error ? stripeError.message : 'Unknown error';
+      return { success: false, error: `Failed to verify payment status: ${errorMessage}` };
     }
 
     try {
       await stripe.paymentIntents.capture(participant.stripePaymentIntentId);
       console.log(`[ACCEPT_PARTICIPANT] Captured payment ${participant.stripePaymentIntentId} for participant ${participantId}`);
-    } catch (stripeError: any) {
+    } catch (stripeError: unknown) {
       console.error('[ACCEPT_PARTICIPANT] Stripe capture error:', stripeError);
-      return { success: false, error: `Payment capture failed: ${stripeError.message}` };
+      const errorMessage = stripeError instanceof Error ? stripeError.message : 'Unknown error';
+      return { success: false, error: `Payment capture failed: ${errorMessage}` };
     }
 
     await db
@@ -145,7 +147,7 @@ export async function acceptParticipant(bookingId: string, participantId: string
     const lessonTime = `${startDate.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })} - ${endDate.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })}`;
 
     const location = bookingRecord.location
-      ? `${(bookingRecord.location as any).name}, ${(bookingRecord.location as any).address}`
+      ? `${bookingRecord.location.name}, ${bookingRecord.location.address}`
       : undefined;
 
     const emailTemplate = getGroupLessonAcceptedEmailTemplate(

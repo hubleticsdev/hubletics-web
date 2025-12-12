@@ -91,7 +91,7 @@ function PaymentForm({
         <Button
           type="submit"
           disabled={!stripe || processing}
-          className="bg-gradient-to-r from-[#FF6B4A] to-[#FF8C5A] hover:opacity-90"
+          className="bg-linear-to-r from-[#FF6B4A] to-[#FF8C5A] hover:opacity-90"
         >
           {processing ? (
             <>
@@ -125,7 +125,6 @@ export function PaymentModal({
 
   useEffect(() => {
     if (isOpen && !clientSecret) {
-      setLoading(true);
       createPaymentForBooking(bookingId).then((result) => {
         if (result.success && result.clientSecret) {
           setClientSecret(result.clientSecret);

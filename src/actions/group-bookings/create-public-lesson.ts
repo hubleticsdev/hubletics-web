@@ -68,7 +68,6 @@ export async function createPublicGroupLesson(input: PublicLessonInput) {
       return { success: false, error: 'Price must be greater than 0' };
     }
 
-    const now = new Date();
     const conflicts = await db.query.booking.findMany({
       where: and(
         eq(booking.coachId, session.user.id),

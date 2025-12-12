@@ -243,7 +243,7 @@ export function DisputesList({ bookings }: DisputesListProps) {
                       type="radio"
                       value="full"
                       checked={refundType === 'full'}
-                      onChange={(e) => setRefundType('full')}
+                      onChange={() => setRefundType('full')}
                       className="mr-2"
                     />
                     <span className="text-sm">Full Refund</span>
@@ -253,7 +253,7 @@ export function DisputesList({ bookings }: DisputesListProps) {
                       type="radio"
                       value="partial"
                       checked={refundType === 'partial'}
-                      onChange={(e) => setRefundType('partial')}
+                      onChange={() => setRefundType('partial')}
                       className="mr-2"
                     />
                     <span className="text-sm">Partial Refund</span>

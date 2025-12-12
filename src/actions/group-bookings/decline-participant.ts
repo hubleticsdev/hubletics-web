@@ -68,7 +68,7 @@ export async function declineParticipant(bookingId: string, participantId: strin
       try {
         await stripe.paymentIntents.cancel(participant.stripePaymentIntentId);
         console.log(`[DECLINE_PARTICIPANT] Cancelled PaymentIntent ${participant.stripePaymentIntentId} for participant ${participantId}`);
-      } catch (stripeError: any) {
+      } catch (stripeError: unknown) {
         console.error('[DECLINE_PARTICIPANT] Stripe cancel error:', stripeError);
         
         try {

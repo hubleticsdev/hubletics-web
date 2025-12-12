@@ -75,7 +75,7 @@ export async function POST(request: NextRequest) {
         if (isOnboarded) {
           console.log(`Account ${account.id} is now fully onboarded`);
 
-          const result = await db
+          await db
             .update(coachProfile)
             .set({
               stripeOnboardingComplete: true,

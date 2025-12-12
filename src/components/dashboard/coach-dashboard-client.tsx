@@ -2,6 +2,7 @@
 
 import Link from 'next/link';
 import type { LucideIcon } from 'lucide-react';
+import type { CoachProfile } from '@/lib/db/schema';
 import {
   AlertTriangle,
   ArrowUpRight,
@@ -56,15 +57,38 @@ type RecurringLesson = Awaited<
 >['lessons'][number];
 
 interface CoachDashboardClientProps {
-  coach: any;
-  pendingRequests: any[];
+  coach: CoachProfile & {
+    name: string;
+    image: string | null;
+  };
+  pendingRequests: Array<{
+    id: string;
+    clientId: string;
+    client: { name: string };
+    scheduledStartAt: Date;
+    location?: { name: string; address: string };
+  }>;
   upcomingSessions: UpcomingBooking[];
-  earningsSummary: any;
+  earningsSummary: {
+    totalEarnings: number;
+    availableBalance: number;
+    pendingBalance: number;
+    completedBookings: number;
+    upcomingBookings: number;
+    stripeAccountId: string | null;
+    stripeOnboardingComplete: boolean;
+  };
   recurringLessons: RecurringLesson[];
   needsApproval: boolean;
   needsStripeOnboarding: boolean;
   isFullyOnboarded: boolean;
-  session: any;
+  session: {
+    user: {
+      id: string;
+      name: string;
+      role: string;
+    };
+  };
 }
 
 export function CoachDashboardClient({
@@ -367,7 +391,7 @@ function HeroBanner({
   nextSession?: UpcomingBooking;
 }) {
   return (
-    <section className="relative overflow-hidden rounded-[36px] border border-white/70 bg-gradient-to-br from-[#FF6B4A]/12 via-white to-[#FFB84D]/12 shadow-[0_45px_120px_-80px_rgba(15,23,42,0.7)]">
+    <section className="relative overflow-hidden rounded-[36px] border border-white/70 bg-linear-to-br from-[#FF6B4A]/12 via-white to-[#FFB84D]/12 shadow-[0_45px_120px_-80px_rgba(15,23,42,0.7)]">
       <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_top_left,rgba(255,107,74,0.18),transparent_62%)]" />
       <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_bottom_right,rgba(255,184,77,0.18),transparent_60%)]" />
 
@@ -422,7 +446,7 @@ function HeroBanner({
               </p>
               <Link
                 href="/dashboard/availability"
-                className="mt-5 inline-flex items-center justify-center rounded-full bg-gradient-to-r from-[#FF6B4A] via-[#FF8C5A] to-[#FFB84D] px-6 py-2 text-sm font-semibold text-white shadow-[0_12px_30px_-18px_rgba(255,107,74,0.8)] transition hover:scale-[1.02]"
+                className="mt-5 inline-flex items-center justify-center rounded-full bg-linear-to-r from-[#FF6B4A] via-[#FF8C5A] to-[#FFB84D] px-6 py-2 text-sm font-semibold text-white shadow-[0_12px_30px_-18px_rgba(255,107,74,0.8)] transition hover:scale-[1.02]"
               >
                 Add availability
               </Link>
@@ -572,7 +596,7 @@ function BookingSection<T>({
           {action && (
             <Link
               href={action.href}
-              className="mt-2 inline-flex items-center justify-center rounded-full bg-gradient-to-r from-[#FF6B4A] via-[#FF8C5A] to-[#FFB84D] px-5 py-2 text-xs font-semibold uppercase tracking-[0.32em] text-white shadow-[0_12px_30px_-18px_rgba(255,107,74,0.8)] transition hover:scale-[1.02]"
+              className="mt-2 inline-flex items-center justify-center rounded-full bg-linear-to-r from-[#FF6B4A] via-[#FF8C5A] to-[#FFB84D] px-5 py-2 text-xs font-semibold uppercase tracking-[0.32em] text-white shadow-[0_12px_30px_-18px_rgba(255,107,74,0.8)] transition hover:scale-[1.02]"
             >
               {action.label}
             </Link>
@@ -608,7 +632,7 @@ function StatusCard({ tone, title, description, cta, icon: Icon }: StatusBanner)
             <div className="pt-2">
               <Link
                 href={cta.href}
-                className="inline-flex items-center justify-center rounded-full bg-gradient-to-r from-[#FF6B4A] via-[#FF8C5A] to-[#FFB84D] px-6 py-3 text-sm font-semibold text-white shadow-[0_12px_30px_-18px_rgba(255,107,74,0.8)] transition hover:scale-[1.02] hover:shadow-[0_16px_40px_-20px_rgba(255,107,74,0.9)]"
+                className="inline-flex items-center justify-center rounded-full bg-linear-to-r from-[#FF6B4A] via-[#FF8C5A] to-[#FFB84D] px-6 py-3 text-sm font-semibold text-white shadow-[0_12px_30px_-18px_rgba(255,107,74,0.8)] transition hover:scale-[1.02] hover:shadow-[0_16px_40px_-20px_rgba(255,107,74,0.9)]"
               >
                 {cta.label}
                 <svg className="ml-2 h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">

@@ -5,11 +5,12 @@ import { sendGroupMessage } from '@/actions/messages/group-conversations';
 import { reportMessage } from '@/actions/messages/report-message';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Label } from '@/components/ui/label';
 import { toast } from 'sonner';
 import { User, Flag, MoreHorizontal } from 'lucide-react';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
+import Image from 'next/image';
 
 type Message = {
   id: string;
@@ -25,26 +26,16 @@ type Message = {
   flaggedReason?: string | null;
 };
 
-type Participant = {
-  id: string;
-  name: string;
-  email: string;
-  image: string | null;
-  role: 'client' | 'coach' | 'admin' | 'pending';
-};
-
 interface GroupMessageThreadProps {
   conversationId: string;
   initialMessages: Message[];
   currentUserId: string;
-  participants: Participant[];
 }
 
 export function GroupMessageThread({
   conversationId,
   initialMessages,
   currentUserId,
-  participants,
 }: GroupMessageThreadProps) {
   const [messages, setMessages] = useState(initialMessages);
   const [newMessage, setNewMessage] = useState('');
@@ -197,12 +188,14 @@ export function GroupMessageThread({
                     key={message.id}
                     className={`flex gap-3 ${isCurrentUser ? 'flex-row-reverse' : 'flex-row'}`}
                   >
-                    <div className="w-8 h-8 rounded-full bg-gray-200 flex items-center justify-center overflow-hidden flex-shrink-0">
+                    <div className="w-8 h-8 rounded-full bg-gray-200 flex items-center justify-center overflow-hidden shrink-0">
                       {message.sender?.image ? (
-                        <img
+                        <Image
                           src={message.sender.image}
                           alt={message.sender.name}
-                          className="w-full h-full object-cover"
+                          width={32}
+                          height={32}
+                          className="object-cover"
                         />
                       ) : (
                         <User className="h-4 w-4 text-gray-400" />
@@ -221,13 +214,13 @@ export function GroupMessageThread({
                         <div
                           className={`rounded-2xl px-4 py-2 ${
                             isCurrentUser
-                              ? 'bg-gradient-to-r from-[#FF6B4A] to-[#FF8C5A] text-white'
+                              ? 'bg-linear-to-r from-[#FF6B4A] to-[#FF8C5A] text-white'
                               : message.flagged
                               ? 'bg-red-50 border border-red-200 text-gray-900'
                               : 'bg-gray-100 text-gray-900'
                           }`}
                         >
-                          <p className="text-sm whitespace-pre-wrap break-words">{message.content}</p>
+                          <p className="text-sm whitespace-pre-wrap wrap-break-word">{message.content}</p>
                           {message.flagged && (
                             <div className="flex items-center gap-1 mt-1">
                               <Flag className="w-3 h-3 text-red-500" />
@@ -288,7 +281,7 @@ export function GroupMessageThread({
           <Button
             onClick={handleSend}
             disabled={!newMessage.trim() || sending}
-            className="bg-gradient-to-r from-[#FF6B4A] to-[#FF8C5A] hover:opacity-90 self-end"
+            className="bg-linear-to-r from-[#FF6B4A] to-[#FF8C5A] hover:opacity-90 self-end"
           >
             {sending ? 'Sending...' : 'Send'}
           </Button>
@@ -311,7 +304,7 @@ export function GroupMessageThread({
                 id="report-reason"
                 value={reportReason}
                 onChange={(e) => setReportReason(e.target.value)}
-                placeholder="Please describe why you're reporting this message..."
+                placeholder="Please describe why you&apos;re reporting this message..."
                 rows={4}
                 className="resize-none"
               />

@@ -49,7 +49,7 @@ export default async function AvailabilityPage() {
         <div className="mb-8">
           <h1 className="text-3xl font-bold text-gray-900">Manage Availability</h1>
           <p className="mt-2 text-gray-600">
-            Set your weekly schedule and block off specific dates when you're unavailable
+            Set your weekly schedule and block off specific dates when you&apos;re unavailable
           </p>
         </div>
 

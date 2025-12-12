@@ -91,7 +91,7 @@ export function Step1BasicInfo({ formData, setFormData, googleAvatar }: Step1Pro
   return (
     <div className="space-y-8">
       <div>
-        <h2 className="text-3xl font-bold text-gray-900">Welcome! Let's get started</h2>
+        <h2 className="text-3xl font-bold text-gray-900">Welcome! Let&apos;s get started</h2>
         <p className="mt-2 text-gray-600">
           Tell us about yourself so athletes can learn who you are.
         </p>
@@ -102,8 +102,8 @@ export function Step1BasicInfo({ formData, setFormData, googleAvatar }: Step1Pro
           Profile Photo
         </label>
         <div className="flex items-start gap-6">
-          <div className="flex-shrink-0 relative group">
-            <div className="w-24 h-24 rounded-full overflow-hidden bg-gradient-to-br from-orange-100 to-red-100 border-2 border-orange-200 flex items-center justify-center">
+          <div className="shrink-0 relative group">
+            <div className="w-24 h-24 rounded-full overflow-hidden bg-linear-to-br from-orange-100 to-red-100 border-2 border-orange-200 flex items-center justify-center">
               {displayPhoto ? (
                 <Image
                   src={displayPhoto}
@@ -358,7 +358,7 @@ export function Step1BasicInfo({ formData, setFormData, googleAvatar }: Step1Pro
             <button
               type="button"
               onClick={addCity}
-              className="px-6 py-3 bg-gradient-to-r from-[#FF6B4A] to-[#FF8C5A] text-white font-semibold rounded-lg hover:shadow-lg transition-all"
+              className="px-6 py-3 bg-linear-to-r from-[#FF6B4A] to-[#FF8C5A] text-white font-semibold rounded-lg hover:shadow-lg transition-all"
             >
               Add
             </button>

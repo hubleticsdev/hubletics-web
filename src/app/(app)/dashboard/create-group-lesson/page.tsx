@@ -36,7 +36,6 @@ export default async function CreateGroupLessonPage() {
 
       <CreateGroupLessonForm
         preferredLocations={coach.preferredLocations || []}
-        availability={coach.weeklyAvailability}
       />
     </div>
   );

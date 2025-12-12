@@ -9,6 +9,7 @@ import { declineParticipant } from '@/actions/group-bookings/decline-participant
 import { User, CheckCircle, Clock, Loader2, Check, X } from 'lucide-react';
 import { toast } from 'sonner';
 import { useRouter } from 'next/navigation';
+import Image from 'next/image';
 
 interface ParticipantsModalProps {
   bookingId: string;
@@ -19,17 +20,20 @@ interface ParticipantsModalProps {
 export function ParticipantsModal({ bookingId, isOpen, onClose }: ParticipantsModalProps) {
   const router = useRouter();
   const [loading, setLoading] = useState(true);
-  const [participants, setParticipants] = useState<any[]>([]);
-  const [isOrganizer, setIsOrganizer] = useState(false);
+  const [participants, setParticipants] = useState<Array<{
+    id: string;
+    userId: string;
+    name: string;
+    email: string;
+    image: string | null;
+    username: string | null;
+    paymentStatus: string;
+    amountPaid: string | null;
+    joinedAt: Date;
+  }>>([]);
   const [isCoach, setIsCoach] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [processingParticipantId, setProcessingParticipantId] = useState<string | null>(null);
-
-  useEffect(() => {
-    if (isOpen && bookingId) {
-      fetchParticipants();
-    }
-  }, [isOpen, bookingId]);
 
   const fetchParticipants = async () => {
     setLoading(true);
@@ -39,7 +43,6 @@ export function ParticipantsModal({ bookingId, isOpen, onClose }: ParticipantsMo
 
     if (result.success && result.participants) {
       setParticipants(result.participants);
-      setIsOrganizer(result.isOrganizer || false);
       setIsCoach(result.isCoach || false);
     } else {
       setError(result.error || 'Failed to load participants');
@@ -47,6 +50,12 @@ export function ParticipantsModal({ bookingId, isOpen, onClose }: ParticipantsMo
 
     setLoading(false);
   };
+
+  useEffect(() => {
+    if (isOpen && bookingId) {
+      fetchParticipants();
+    }
+  }, [isOpen, bookingId]);
 
   const handleApprove = async (participantId: string) => {
     setProcessingParticipantId(participantId);
@@ -106,10 +115,12 @@ export function ParticipantsModal({ bookingId, isOpen, onClose }: ParticipantsMo
                 <div className="flex items-center gap-3">
                   <div className="w-10 h-10 rounded-full bg-gray-200 flex items-center justify-center overflow-hidden">
                     {participant.image ? (
-                      <img
+                      <Image
                         src={participant.image}
                         alt={participant.name}
-                        className="w-full h-full object-cover"
+                        width={40}
+                        height={40}
+                        className="object-cover"
                       />
                     ) : (
                       <User className="h-5 w-5 text-gray-400" />
@@ -140,7 +151,7 @@ export function ParticipantsModal({ bookingId, isOpen, onClose }: ParticipantsMo
                         size="sm"
                         onClick={() => handleApprove(participant.id)}
                         disabled={processingParticipantId === participant.id}
-                        className="h-7 px-3 bg-gradient-to-r from-[#FF6B4A] to-[#FF8C5A] hover:opacity-90 text-white text-xs"
+                        className="h-7 px-3 bg-linear-to-r from-[#FF6B4A] to-[#FF8C5A] hover:opacity-90 text-white text-xs"
                       >
                         {processingParticipantId === participant.id ? (
                           <Loader2 className="h-3 w-3 animate-spin" />

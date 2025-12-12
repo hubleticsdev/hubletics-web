@@ -3,7 +3,6 @@
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { signUp, signIn } from '@/lib/auth/client';
-import { Button } from '@/components/ui/button';
 import Link from 'next/link';
 import { authPaths, publicPaths } from '@/lib/paths';
 import { toast } from 'sonner';
@@ -77,7 +76,7 @@ export default function SignUpPage() {
   };
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-gradient-to-br from-gray-50 via-white to-orange-50/30 px-4 py-24 sm:px-6 lg:px-8">
+    <div className="flex min-h-screen items-center justify-center bg-linear-to-br from-gray-50 via-white to-orange-50/30 px-4 py-24 sm:px-6 lg:px-8">
       <motion.div 
         className="w-full max-w-md space-y-8"
         initial={{ opacity: 0, y: 20 }}
@@ -86,7 +85,7 @@ export default function SignUpPage() {
       >
         <div>
           <div className="flex justify-center mb-6">
-            <div className="w-16 h-16 bg-gradient-to-br from-[#FF6B4A] to-[#FF8C5A] rounded-2xl flex items-center justify-center shadow-lg">
+            <div className="w-16 h-16 bg-linear-to-br from-[#FF6B4A] to-[#FF8C5A] rounded-2xl flex items-center justify-center shadow-lg">
               <svg className="w-10 h-10 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
               </svg>
@@ -188,7 +187,7 @@ export default function SignUpPage() {
             <button
               type="submit"
               disabled={loading}
-              className="w-full px-8 py-3 bg-gradient-to-r from-[#FF6B4A] to-[#FF8C5A] text-white font-semibold rounded-lg hover:shadow-xl hover:scale-[1.02] transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100"
+              className="w-full px-8 py-3 bg-linear-to-r from-[#FF6B4A] to-[#FF8C5A] text-white font-semibold rounded-lg hover:shadow-xl hover:scale-[1.02] transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100"
             >
               {loading ? 'Creating account...' : 'Create account'}
             </button>

@@ -2,8 +2,8 @@
 
 import { getSession } from '@/lib/auth/session';
 import { db } from '@/lib/db';
-import { groupPricingTier, coachProfile } from '@/lib/db/schema';
-import { eq, and, asc } from 'drizzle-orm';
+import { groupPricingTier } from '@/lib/db/schema';
+import { eq, asc } from 'drizzle-orm';
 import { revalidatePath } from 'next/cache';
 
 export async function getCoachPricingTiers() {

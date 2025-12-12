@@ -1,7 +1,6 @@
 'use client';
 
 import { useState, useMemo } from 'react';
-import { Button } from '@/components/ui/button';
 
 interface BookingCalendarProps {
   coachAvailability: Record<string, { start: string; end: string }[]>;

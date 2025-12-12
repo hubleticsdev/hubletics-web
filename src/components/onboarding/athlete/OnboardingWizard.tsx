@@ -1,8 +1,6 @@
 'use client';
 
 import { useState } from 'react';
-import { useRouter } from 'next/navigation';
-import { Button } from '@/components/ui/button';
 import { toast } from 'sonner';
 import { createAthleteProfile, type AthleteProfileData } from '@/actions/onboarding/athlete';
 import { Step1BasicInfo } from './Step1BasicInfo';
@@ -17,7 +15,6 @@ type OnboardingWizardProps = {
 };
 
 export function OnboardingWizard({ initialName, googleAvatar, savedPhotoUrl }: OnboardingWizardProps) {
-  const router = useRouter();
   const [currentStep, setCurrentStep] = useState(1);
   const [loading, setLoading] = useState(false);
 

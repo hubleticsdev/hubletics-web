@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect } from 'react';
 import { UploadButton } from '@/lib/uploadthing';
 import { toast } from 'sonner';
 import type { AthleteProfileData } from '@/actions/onboarding/athlete';
@@ -57,7 +57,7 @@ export function Step1BasicInfo({ formData, setFormData, googleAvatar }: Step1Pro
   return (
     <div className="space-y-8">
       <div>
-        <h2 className="text-3xl font-bold text-gray-900">Welcome! Let's get started</h2>
+        <h2 className="text-3xl font-bold text-gray-900">Welcome! Let&apos;s get started</h2>
         <p className="mt-2 text-gray-600">
           Tell us about yourself so coaches can learn who you are.
         </p>
@@ -68,8 +68,8 @@ export function Step1BasicInfo({ formData, setFormData, googleAvatar }: Step1Pro
           Profile Photo
         </label>
         <div className="flex items-start gap-6">
-          <div className="flex-shrink-0 relative group">
-            <div className="w-24 h-24 rounded-full overflow-hidden bg-gradient-to-br from-blue-100 to-indigo-100 border-2 border-blue-200 flex items-center justify-center">
+          <div className="shrink-0 relative group">
+            <div className="w-24 h-24 rounded-full overflow-hidden bg-linear-to-br from-blue-100 to-indigo-100 border-2 border-blue-200 flex items-center justify-center">
               {displayPhoto ? (
                 <Image
                   src={displayPhoto}

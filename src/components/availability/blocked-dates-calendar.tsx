@@ -78,7 +78,7 @@ export function BlockedDatesCalendar({
 
       {blockedDates.length === 0 ? (
         <p className="text-sm text-gray-500 italic text-center py-8">
-          No blocked dates. Add dates when you're unavailable.
+          No blocked dates. Add dates when you&apos;re unavailable.
         </p>
       ) : (
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">

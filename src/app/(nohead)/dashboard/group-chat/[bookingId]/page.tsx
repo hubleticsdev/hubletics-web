@@ -72,7 +72,6 @@ export default async function GroupChatPage({
         conversationId={conversation.id}
         initialMessages={messages}
         currentUserId={session.user.id}
-        participants={participants}
       />
     </div>
   );

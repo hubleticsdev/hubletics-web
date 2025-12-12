@@ -86,7 +86,7 @@ export function PricingTiersForm({ initialTiers }: PricingTiersFormProps) {
     setTiers(tiers.filter((_, i) => i !== index));
   };
 
-  const updateTier = (index: number, field: keyof PricingTier, value: any) => {
+  const updateTier = (index: number, field: keyof PricingTier, value: PricingTier[keyof PricingTier]) => {
     const newTiers = [...tiers];
     newTiers[index] = { ...newTiers[index], [field]: value };
     setTiers(newTiers);

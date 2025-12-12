@@ -3,7 +3,7 @@
 import { getSession } from '@/lib/auth/session';
 import { db } from '@/lib/db';
 import { withTransaction } from '@/lib/db/transactions';
-import { coachProfile, adminAction, user as userTable } from '@/lib/db/schema';
+import { coachProfile, adminAction } from '@/lib/db/schema';
 import { eq } from 'drizzle-orm';
 import { createConnectAccount } from '@/lib/stripe';
 import { sendEmail } from '@/lib/email/resend';

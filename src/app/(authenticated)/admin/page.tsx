@@ -2,9 +2,8 @@ import { getPendingCoaches } from '@/actions/admin/coach-approval';
 import { getAdminDashboardMetrics } from '@/actions/admin/dashboard';
 import { getDisputedBookings } from '@/actions/admin/disputes';
 import { db } from '@/lib/db';
-import { booking } from '@/lib/db/schema';
-import { eq } from 'drizzle-orm';
 import Link from 'next/link';
+import Image from 'next/image';
 
 export const dynamic = 'force-dynamic';
 
@@ -237,10 +236,12 @@ export default async function AdminDashboard() {
                 >
                   <div className="flex items-center space-x-4">
                     {coach.profilePhoto ? (
-                      <img
+                      <Image
                         src={coach.profilePhoto}
                         alt={coach.fullName}
-                        className="w-12 h-12 rounded-full"
+                        width={48}
+                        height={48}
+                        className="rounded-full"
                       />
                     ) : (
                       <div className="w-12 h-12 rounded-full bg-orange-100 flex items-center justify-center">

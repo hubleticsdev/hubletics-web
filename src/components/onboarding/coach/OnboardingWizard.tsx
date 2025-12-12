@@ -1,7 +1,6 @@
 'use client';
 
 import { useState } from 'react';
-import { useRouter } from 'next/navigation';
 import { toast } from 'sonner';
 import { createCoachProfile, type CoachProfileData } from '@/actions/onboarding/coach';
 import { Step1BasicInfo } from './Step1BasicInfo';
@@ -18,7 +17,6 @@ type OnboardingWizardProps = {
 };
 
 export function OnboardingWizard({ initialName, googleAvatar, savedPhotoUrl, savedVideoUrl }: OnboardingWizardProps) {
-  const router = useRouter();
   const [currentStep, setCurrentStep] = useState(1);
   const [loading, setLoading] = useState(false);
 

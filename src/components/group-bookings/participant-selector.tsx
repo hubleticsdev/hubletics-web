@@ -1,9 +1,9 @@
 'use client';
 
-import { useState, useEffect } from 'react';
-import { Button } from '@/components/ui/button';
+import { useState, useEffect, useRef } from 'react';
 import { searchUsersByUsername } from '@/actions/group-bookings/search-users';
 import { X, Search, Loader2 } from 'lucide-react';
+import Image from 'next/image';
 
 interface ParticipantSelectorProps {
   selectedUsernames: string[];
@@ -20,30 +20,43 @@ export function ParticipantSelector({
 }: ParticipantSelectorProps) {
   const [searchQuery, setSearchQuery] = useState('');
   const [searchResults, setSearchResults] = useState<Array<{ username: string; name: string; image: string | null }>>([]);
-  const [searching, setSearching] = useState(false);
+  const isSearchingRef = useRef(false);
+
+  // Derive if we should show search results
+  const shouldSearch = searchQuery && searchQuery.length >= 2;
 
   useEffect(() => {
-    if (!searchQuery || searchQuery.length < 2) {
+    if (shouldSearch) {
+      isSearchingRef.current = true;
+
+      const timeoutId = setTimeout(async () => {
+        try {
+          const result = await searchUsersByUsername(searchQuery);
+          if (result.success && result.users) {
+            setSearchResults(
+              result.users.filter(u => !selectedUsernames.includes(u.username))
+            );
+          } else {
+            setSearchResults([]);
+          }
+        } catch {
+          setSearchResults([]);
+        } finally {
+          isSearchingRef.current = false;
+        }
+      }, 300);
+
+      return () => {
+        clearTimeout(timeoutId);
+        isSearchingRef.current = false;
+      };
+    } else {
       setSearchResults([]);
-      return;
+      isSearchingRef.current = false;
     }
+  }, [shouldSearch, searchQuery, selectedUsernames]);
 
-    const timeoutId = setTimeout(async () => {
-      setSearching(true);
-      const result = await searchUsersByUsername(searchQuery);
-      setSearching(false);
-
-      if (result.success && result.users) {
-        setSearchResults(
-          result.users.filter(u => !selectedUsernames.includes(u.username))
-        );
-      } else {
-        setSearchResults([]);
-      }
-    }, 300);
-
-    return () => clearTimeout(timeoutId);
-  }, [searchQuery, selectedUsernames]);
+  const searching = isSearchingRef.current && shouldSearch;
 
   const canAddMore = selectedUsernames.length < maxParticipants - 1; // -1 for organizer
 
@@ -80,7 +93,7 @@ export function ParticipantSelector({
             >
               <div className="w-10 h-10 rounded-full bg-gray-200 flex items-center justify-center overflow-hidden">
                 {user.image ? (
-                  <img src={user.image} alt={user.name} className="w-full h-full object-cover" />
+                  <Image src={user.image} alt={user.name} width={40} height={40} className="object-cover" />
                 ) : (
                   <span className="text-sm font-medium text-gray-600">
                     {user.name.charAt(0).toUpperCase()}

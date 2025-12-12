@@ -100,7 +100,7 @@ export function AthleteBookingCard({ booking, onUpdate }: AthleteBookingCardProp
       {/* Header with Coach & Status */}
       <div className="flex items-start justify-between mb-4 pb-4 border-b border-gray-200">
         <div className="flex items-center gap-4">
-          <div className="relative w-12 h-12 rounded-full overflow-hidden bg-gray-200 flex-shrink-0">
+          <div className="relative w-12 h-12 rounded-full overflow-hidden bg-gray-200 shrink-0">
             {booking.coach.image ? (
               <Image src={booking.coach.image} alt={booking.coach.name} fill className="object-cover" />
             ) : (
@@ -120,7 +120,7 @@ export function AthleteBookingCard({ booking, onUpdate }: AthleteBookingCardProp
       {/* Booking Details */}
       <div className="space-y-3 mb-4">
         <div className="flex items-start gap-3">
-          <svg className="w-5 h-5 text-[#FF6B4A] mt-0.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <svg className="w-5 h-5 text-[#FF6B4A] mt-0.5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path
               strokeLinecap="round"
               strokeLinejoin="round"
@@ -140,7 +140,7 @@ export function AthleteBookingCard({ booking, onUpdate }: AthleteBookingCardProp
         </div>
 
         <div className="flex items-start gap-3">
-          <svg className="w-5 h-5 text-[#FF6B4A] mt-0.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <svg className="w-5 h-5 text-[#FF6B4A] mt-0.5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path
               strokeLinecap="round"
               strokeLinejoin="round"
@@ -164,7 +164,7 @@ export function AthleteBookingCard({ booking, onUpdate }: AthleteBookingCardProp
         </div>
 
         <div className="flex items-center gap-3 pt-2">
-          <svg className="w-5 h-5 text-[#FF6B4A] flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <svg className="w-5 h-5 text-[#FF6B4A] shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path
               strokeLinecap="round"
               strokeLinejoin="round"
@@ -187,7 +187,7 @@ export function AthleteBookingCard({ booking, onUpdate }: AthleteBookingCardProp
           <button
             onClick={handleConfirmComplete}
             disabled={isProcessing}
-            className="w-full px-4 py-2 bg-gradient-to-r from-[#FF6B4A] to-[#FF8C5A] text-white font-medium rounded-lg hover:shadow-lg transition-all disabled:opacity-50"
+            className="w-full px-4 py-2 bg-linear-to-r from-[#FF6B4A] to-[#FF8C5A] text-white font-medium rounded-lg hover:shadow-lg transition-all disabled:opacity-50"
           >
             {isProcessing ? 'Processing...' : 'Confirm Session Complete'}
           </button>

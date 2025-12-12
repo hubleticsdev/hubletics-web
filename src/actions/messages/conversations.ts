@@ -3,7 +3,7 @@
 import { db } from '@/lib/db';
 import { conversation, message, flaggedMessage, type Conversation } from '@/lib/db/schema';
 import { getSession } from '@/lib/auth/session';
-import { and, eq, desc, or } from 'drizzle-orm';
+import { and, eq, desc } from 'drizzle-orm';
 import { triggerMessageEvent, triggerConversationUpdate } from '@/lib/pusher/server';
 import { z } from 'zod';
 import { messageContentSchema, validateInput } from '@/lib/validations';

@@ -1,6 +1,7 @@
 import { requireRole } from '@/lib/auth/session';
 import { getPendingCoaches } from '@/actions/admin/coach-approval';
 import Link from 'next/link';
+import Image from 'next/image';
 
 export const dynamic = 'force-dynamic';
 
@@ -68,7 +69,7 @@ export default async function PendingCoachesPage() {
                   {pendingCoaches.length} Application{pendingCoaches.length !== 1 ? 's' : ''} Awaiting Review
                 </h2>
                 <p className="text-sm text-gray-600 mt-1">
-                  Click "Review" to view full details and approve/reject
+                  Click &quot;Review&quot; to view full details and approve/reject
                 </p>
               </div>
               <span className="px-3 py-1 bg-orange-100 text-orange-800 text-sm font-semibold rounded-full">
@@ -85,13 +86,15 @@ export default async function PendingCoachesPage() {
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-4 flex-1">
                     {coach.profilePhoto ? (
-                      <img
+                      <Image
                         src={coach.profilePhoto}
                         alt={coach.fullName}
+                        width={64}
+                        height={64}
                         className="w-16 h-16 rounded-full object-cover border-2 border-gray-200"
                       />
                     ) : (
-                      <div className="w-16 h-16 rounded-full bg-gradient-to-br from-orange-100 to-red-100 flex items-center justify-center border-2 border-orange-200">
+                      <div className="w-16 h-16 rounded-full bg-linear-to-br from-orange-100 to-red-100 flex items-center justify-center border-2 border-orange-200">
                         <span className="text-orange-600 font-bold text-xl">
                           {coach.fullName.charAt(0)}
                         </span>
@@ -120,7 +123,7 @@ export default async function PendingCoachesPage() {
                   </div>
                   <Link
                     href={`/admin/coaches/${coach.userId}`}
-                    className="px-6 py-2.5 bg-gradient-to-r from-[#FF6B4A] to-[#FF8C5A] text-white font-semibold rounded-lg hover:shadow-lg hover:scale-105 transition-all duration-200"
+                    className="px-6 py-2.5 bg-linear-to-r from-[#FF6B4A] to-[#FF8C5A] text-white font-semibold rounded-lg hover:shadow-lg hover:scale-105 transition-all duration-200"
                   >
                     Review Application
                   </Link>

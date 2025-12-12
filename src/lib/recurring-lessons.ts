@@ -51,7 +51,7 @@ export async function generateBookingsFromRecurringTemplate(
     const finalEndDate = endDate || new Date(startDate.getTime() + 8 * 7 * 24 * 60 * 60 * 1000);
 
     const bookingsToCreate = [];
-    let currentDate = new Date(startDate);
+    const currentDate = new Date(startDate);
 
     while (currentDate.getDay() !== typedTemplate.dayOfWeek) {
       currentDate.setDate(currentDate.getDate() + 1);

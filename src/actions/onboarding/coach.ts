@@ -4,7 +4,7 @@ import { requireRole } from '@/lib/auth/session';
 import { db } from '@/lib/db';
 import { withTransaction } from '@/lib/db/transactions';
 import { coachProfile, user as userTable } from '@/lib/db/schema';
-import { isValidUploadThingUrl, sanitizeText } from '@/lib/utils';
+import { sanitizeText } from '@/lib/utils';
 import { z } from 'zod';
 import { coachProfileSchema, validateInput } from '@/lib/validations';
 

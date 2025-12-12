@@ -31,7 +31,7 @@ export function Pagination({ pagination, baseUrl, className }: PaginationProps) 
   const halfShow = Math.floor(showPages / 2);
 
   let startPage = Math.max(1, page - halfShow);
-  let endPage = Math.min(pages, startPage + showPages - 1);
+  const endPage = Math.min(pages, startPage + showPages - 1);
 
   if (endPage - startPage + 1 < showPages) {
     startPage = Math.max(1, endPage - showPages + 1);

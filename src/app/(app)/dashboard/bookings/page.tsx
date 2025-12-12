@@ -11,7 +11,6 @@ export default async function BookingsPage() {
     redirect('/login');
   }
 
-  const now = new Date();
   let bookings;
 
   if (session.user.role === 'coach') {

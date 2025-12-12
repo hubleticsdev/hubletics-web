@@ -1,7 +1,7 @@
 'use server';
 
 import { db } from '@/lib/db';
-import { coachProfile, user } from '@/lib/db/schema';
+import { coachProfile } from '@/lib/db/schema';
 import { and, eq, gte, lte, sql, ilike, or } from 'drizzle-orm';
 import { coachSearchFiltersSchema, validateInput } from '@/lib/validations';
 

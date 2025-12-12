@@ -6,7 +6,7 @@ import { sendMessage } from '@/actions/messages/conversations';
 import { reportMessage } from '@/actions/messages/report-message';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Label } from '@/components/ui/label';
 import Image from 'next/image';
 import { toast } from 'sonner';
@@ -223,7 +223,7 @@ export function MessageThread({
                   >
                     <div className={`flex gap-2 max-w-[70%] ${isOwn ? 'flex-row-reverse' : ''}`}>
                       {!isOwn && (
-                        <div className="w-8 h-8 rounded-full overflow-hidden bg-gray-200 flex-shrink-0">
+                        <div className="w-8 h-8 rounded-full overflow-hidden bg-gray-200 shrink-0">
                           <Image
                             src={message.sender?.image || '/placeholder-avatar.png'}
                             alt={message.sender?.name || 'User'}
@@ -237,13 +237,13 @@ export function MessageThread({
                         <div
                           className={`rounded-2xl px-4 py-2 ${
                             isOwn
-                              ? 'bg-gradient-to-r from-[#FF6B4A] to-[#FF8C5A] text-white'
+                              ? 'bg-linear-to-r from-[#FF6B4A] to-[#FF8C5A] text-white'
                               : message.flagged
                               ? 'bg-red-50 border border-red-200 text-gray-900'
                               : 'bg-gray-100 text-gray-900'
                           }`}
                         >
-                          <p className="text-sm whitespace-pre-wrap break-words">
+                          <p className="text-sm whitespace-pre-wrap wrap-break-word">
                             {message.content}
                           </p>
                           {message.flagged && (
@@ -308,7 +308,7 @@ export function MessageThread({
           <Button
             onClick={handleSend}
             disabled={!newMessage.trim() || sending}
-            className="bg-gradient-to-r from-[#FF6B4A] to-[#FF8C5A] hover:shadow-lg px-6"
+            className="bg-linear-to-r from-[#FF6B4A] to-[#FF8C5A] hover:shadow-lg px-6"
           >
             {sending ? 'Sending...' : 'Send'}
           </Button>

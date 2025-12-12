@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import { toast } from 'sonner';
 import type { CoachProfileData } from '@/actions/onboarding/coach';
-import { SPORTS, SPORT_SPECIALTIES } from '@/lib/constants';
+import { SPORTS } from '@/lib/constants';
 
 type Step2Props = {
   formData: CoachProfileData;
@@ -130,7 +130,7 @@ export function Step2Specialties({ formData, setFormData }: Step2Props) {
                 <button
                   type="button"
                   onClick={() => addTag(specialty.sport)}
-                  className="px-4 py-2 bg-gradient-to-r from-[#FF6B4A] to-[#FF8C5A] text-white font-semibold rounded-lg hover:shadow-lg transition-all"
+                  className="px-4 py-2 bg-linear-to-r from-[#FF6B4A] to-[#FF8C5A] text-white font-semibold rounded-lg hover:shadow-lg transition-all"
                 >
                   Add
                 </button>

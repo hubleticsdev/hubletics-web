@@ -32,7 +32,7 @@ function VerifyEmailContent() {
             Check your email
           </h2>
           <p className="mt-2 text-sm text-gray-600">
-            We've sent a verification link to
+            We&apos;ve sent a verification link to
           </p>
           {email && (
             <p className="mt-1 text-sm font-medium text-gray-900">{email}</p>
@@ -45,7 +45,7 @@ function VerifyEmailContent() {
 
         <div className="mt-8 rounded-md bg-blue-50 p-4">
           <div className="flex">
-            <div className="flex-shrink-0">
+            <div className="shrink-0">
               <svg
                 className="h-5 w-5 text-blue-400"
                 viewBox="0 0 20 20"
@@ -60,7 +60,7 @@ function VerifyEmailContent() {
             </div>
             <div className="ml-3 flex-1">
               <h3 className="text-sm font-medium text-blue-800">
-                Didn't receive the email?
+                Didn&apos;t receive the email?
               </h3>
               <div className="mt-2 text-sm text-blue-700">
                 <ul className="list-disc space-y-1 pl-5">

@@ -4,7 +4,6 @@ import { getSession } from '@/lib/auth/session';
 import { db } from '@/lib/db';
 import { booking, bookingParticipant, coachProfile } from '@/lib/db/schema';
 import { eq, and } from 'drizzle-orm';
-import { calculateCoachEarnings } from '@/lib/pricing';
 import { createBookingPaymentIntent } from '@/lib/stripe';
 import { sendEmail } from '@/lib/email/resend';
 import { getNewParticipantRequestEmailTemplate } from '@/lib/email/templates/group-booking-notifications';
@@ -79,9 +78,6 @@ export async function joinPublicLesson(lessonId: string) {
     }
 
     const pricePerPerson = parseFloat(lesson.pricePerPerson);
-
-    const userPlatformFee = parseFloat(coach.user.platformFeePercentage || '15');
-    const { platformFee, stripeFee, coachPayout } = calculateCoachEarnings(pricePerPerson, userPlatformFee);
 
     const paymentIntent = await createBookingPaymentIntent(
       pricePerPerson,

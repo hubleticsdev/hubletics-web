@@ -4,7 +4,6 @@ import { coachProfile } from '@/lib/db/schema';
 import { eq } from 'drizzle-orm';
 import { redirect } from 'next/navigation';
 import { createAccountLink } from '@/lib/stripe';
-import { headers } from 'next/headers';
 
 export default async function StripeOnboardingPage() {
   const session = await getSession();
@@ -45,7 +44,7 @@ export default async function StripeOnboardingPage() {
           </h1>
           <p className="text-gray-600 mb-6">
             Your coach profile is currently under review by our admin team.
-            We'll email you within 24-48 hours once your profile has been reviewed.
+            We&apos;ll email you within 24-48 hours once your profile has been reviewed.
           </p>
           <a
             href="/dashboard/coach"
@@ -70,7 +69,7 @@ export default async function StripeOnboardingPage() {
             Something went wrong
           </h1>
           <p className="text-gray-600 mb-6">
-            We couldn't find your Stripe account. Please contact support.
+            We couldn&apos;t find your Stripe account. Please contact support.
           </p>
         </div>
       </div>

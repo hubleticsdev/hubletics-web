@@ -10,7 +10,6 @@ export function getBookingAcceptedEmailTemplate(
   paymentDueDate: string
 ) {
   const safeClientName = sanitizeName(clientName);
-  const safeCoachName = sanitizeName(coachName);
 
   return {
     subject: 'Lesson Accepted - Payment Required',

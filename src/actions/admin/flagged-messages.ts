@@ -18,6 +18,10 @@ type UpdateFlaggedMessageInput = z.infer<typeof updateFlaggedMessageSchema>;
 export async function getFlaggedMessages() {
   const session = await requireRole('admin');
 
+  if (!session) {
+    throw new Error('Unauthorized');
+  }
+
   // Get regular flagged messages
   const regularFlaggedMessages = await db.query.flaggedMessage.findMany({
     with: {

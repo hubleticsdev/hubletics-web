@@ -158,7 +158,7 @@ export function BookingModal({
         <DialogHeader>
           <DialogTitle>Request Session with {coachName}</DialogTitle>
           <DialogDescription>
-            Send a booking request to the coach. If accepted, you'll have 24 hours to complete payment.
+            Send a booking request to the coach. If accepted, you&apos;ll have 24 hours to complete payment.
           </DialogDescription>
 
           {allowPrivateGroups && (
@@ -266,7 +266,7 @@ export function BookingModal({
                   type="button"
                   onClick={() => setStep('details')}
                   disabled={!canProceedToDetails}
-                  className="flex-1 bg-gradient-to-r from-[#FF6B4A] to-[#FF8C5A] hover:opacity-90"
+                  className="flex-1 bg-linear-to-r from-[#FF6B4A] to-[#FF8C5A] hover:opacity-90"
                 >
                   Continue to Details
                 </Button>
@@ -396,7 +396,7 @@ export function BookingModal({
                   type="button"
                   onClick={() => setStep('review')}
                   disabled={!canProceedToReview}
-                  className="flex-1 bg-gradient-to-r from-[#FF6B4A] to-[#FF8C5A] hover:opacity-90"
+                  className="flex-1 bg-linear-to-r from-[#FF6B4A] to-[#FF8C5A] hover:opacity-90"
                 >
                   Review Request
                 </Button>
@@ -451,7 +451,7 @@ export function BookingModal({
                   <Clock className="w-5 h-5 text-orange-600 mt-0.5 shrink-0" />
                   <div className="text-sm text-orange-900">
                     <strong>No payment required yet.</strong> Your request will be sent to {coachName}.
-                    If they accept, you'll have <strong>24 hours</strong> to complete payment.
+                    If they accept, you&apos;ll have <strong>24 hours</strong> to complete payment.
                     If declined, no charges will be made.
                   </div>
                 </div>
@@ -471,7 +471,7 @@ export function BookingModal({
                   type="button"
                   onClick={handleSubmit}
                   disabled={isProcessing}
-                  className="flex-1 bg-gradient-to-r from-[#FF6B4A] to-[#FF8C5A] hover:opacity-90"
+                  className="flex-1 bg-linear-to-r from-[#FF6B4A] to-[#FF8C5A] hover:opacity-90"
                 >
                   {isProcessing ? (
                     <>

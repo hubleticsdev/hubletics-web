@@ -3,7 +3,7 @@
 import { getSession } from '@/lib/auth/session';
 import { db } from '@/lib/db';
 import { booking, bookingParticipant } from '@/lib/db/schema';
-import { eq, and } from 'drizzle-orm';
+import { eq } from 'drizzle-orm';
 
 export async function getBookingParticipants(bookingId: string) {
   try {

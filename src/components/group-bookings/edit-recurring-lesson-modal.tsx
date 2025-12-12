@@ -165,7 +165,7 @@ export function EditRecurringLessonModal({
       } else {
         toast.error(result.error || 'Failed to update lesson');
       }
-    } catch (error) {
+    } catch {
       toast.error('An error occurred while updating the lesson');
     } finally {
       setSubmitting(false);

@@ -2,6 +2,7 @@ import { db } from '@/lib/db';
 import { coachProfile } from '@/lib/db/schema';
 import { eq } from 'drizzle-orm';
 import { notFound } from 'next/navigation';
+import Image from 'next/image';
 import { CoachReviewActions } from '@/components/admin/coach-review-actions';
 
 export default async function CoachReviewPage({
@@ -52,9 +53,11 @@ export default async function CoachReviewPage({
         <div className="p-6 border-b border-gray-200">
           <div className="flex items-center space-x-4">
             {coach.profilePhoto ? (
-              <img
+              <Image
                 src={coach.profilePhoto}
                 alt={coach.fullName}
+                width={80}
+                height={80}
                 className="w-20 h-20 rounded-full"
               />
             ) : (

@@ -5,15 +5,12 @@ import { db } from '@/lib/db';
 import { booking, coachProfile } from '@/lib/db/schema';
 import { eq, and, or, sql } from 'drizzle-orm';
 import {
-  captureBookingPayment,
   cancelBookingPayment,
   refundBookingPayment,
   transferToCoach,
 } from '@/lib/stripe';
-import { stripe } from '@/lib/stripe';
 import { sendEmail } from '@/lib/email/resend';
 import { getBookingAcceptedEmailTemplate } from '@/lib/email/templates/booking-management-notifications';
-import { z } from 'zod';
 import { uuidSchema, validateInput } from '@/lib/validations';
 
 async function processCoachPayoutSafely(bookingId: string): Promise<{ success: boolean; error?: string }> {
@@ -62,7 +59,7 @@ async function processCoachPayoutSafely(bookingId: string): Promise<{ success: b
 
     console.log(`[TRANSFER] Transfer successful: ${transfer.id}`);
 
-    const updateResult = await db
+    await db
       .update(booking)
       .set({
         stripeTransferId: transfer.id,
@@ -159,7 +156,7 @@ export async function acceptBooking(bookingId: string) {
       bookingRecord.coach.name,
       lessonDate,
       lessonTime,
-      bookingRecord.location ? `${(bookingRecord.location as any).name}, ${(bookingRecord.location as any).address}` : 'Location to be confirmed',
+      bookingRecord.location ? `${bookingRecord.location.name}, ${bookingRecord.location.address}` : 'Location to be confirmed',
       parseFloat(bookingRecord.clientPaid).toFixed(2),
       paymentDeadline
     );

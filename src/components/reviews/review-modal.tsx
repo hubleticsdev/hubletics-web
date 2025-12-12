@@ -134,7 +134,7 @@ export function ReviewModal({ isOpen, onClose, bookingId, coachName, onSuccess }
               type="button"
               onClick={handleSubmit}
               disabled={submitting || rating === 0 || reviewText.trim().length < 10}
-              className="bg-gradient-to-r from-[#FF6B4A] to-[#FF8C5A] hover:opacity-90"
+              className="bg-linear-to-r from-[#FF6B4A] to-[#FF8C5A] hover:opacity-90"
             >
               {submitting ? 'Submitting...' : 'Submit Review'}
             </Button>

@@ -49,7 +49,7 @@ export default async function ProfilePage() {
             image: session.user.image ?? null,
             role: session.user.role as 'client' | 'coach' | 'admin' | 'pending',
           }}
-          profile={profile}
+          profile={profile!}
         />
       </div>
     </div>

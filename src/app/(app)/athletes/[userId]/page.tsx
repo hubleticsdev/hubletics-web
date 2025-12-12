@@ -41,6 +41,8 @@ export default async function AthleteProfilePage({
   const displayImage = athlete.profilePhoto || athlete.user.image || '/placeholder-avatar.png';
   const isOwner = !!session && session.user.id === userId;
   const isCoach = !!session && session.user.role === 'coach';
+  const isAdmin = !!session && session.user.role === 'admin';
+  const canMessageAthlete = (isCoach || isAdmin) && !isOwner;
 
   // Format budget display
   const budgetDisplay = (() => {
@@ -125,7 +127,7 @@ export default async function AthleteProfilePage({
                 </p>
               </div>
 
-              {isCoach && !isOwner && (
+              {canMessageAthlete && (
                 <div className="pt-2">
                   <Link
                     href={`/dashboard/messages?new=${userId}`}

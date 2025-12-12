@@ -81,7 +81,6 @@ export async function createPrivateGroupBooking(input: PrivateGroupBookingInput)
     const userPlatformFee = parseFloat(coach.user.platformFeePercentage || '15');
     const { platformFee, stripeFee, coachPayout } = calculateCoachEarnings(totalAmount, userPlatformFee);
 
-    const now = new Date();
     const conflicts = await db.query.booking.findMany({
       where: and(
         eq(booking.coachId, input.coachId),

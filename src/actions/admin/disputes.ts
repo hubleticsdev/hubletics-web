@@ -2,7 +2,7 @@
 
 import { db } from '@/lib/db';
 import { booking } from '@/lib/db/schema';
-import { eq, or, inArray } from 'drizzle-orm';
+import { eq } from 'drizzle-orm';
 import Stripe from 'stripe';
 import { Resend } from 'resend';
 

@@ -1,7 +1,7 @@
 'use client';
 
 import { usePusherEvent } from '@/lib/pusher/client';
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import Image from 'next/image';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
@@ -113,7 +113,7 @@ export function ConversationList({ initialConversations, currentUserId }: Conver
               isActive ? 'bg-orange-50 border-l-4 border-[#FF6B4A]' : ''
             }`}
           >
-            <div className="relative flex-shrink-0">
+            <div className="relative shrink-0">
               <div className="w-12 h-12 rounded-full overflow-hidden bg-gray-200">
                 <Image
                   src={displayImage}
@@ -130,7 +130,7 @@ export function ConversationList({ initialConversations, currentUserId }: Conver
                   {conv.otherParticipant.name}
                 </h3>
                 {conv.lastMessageAt && (
-                  <span className="text-xs text-gray-500 flex-shrink-0 ml-2">
+                  <span className="text-xs text-gray-500 shrink-0 ml-2">
                     {formatTime(conv.lastMessageAt)}
                   </span>
                 )}

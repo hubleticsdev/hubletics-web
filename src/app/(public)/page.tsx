@@ -8,8 +8,6 @@ import { useMemo, useRef } from 'react';
 import type { ComponentProps } from 'react';
 import { cn } from '@/lib/utils';
 
-const brandGradient = 'from-[#FF6B4A] via-[#FF8C5A] to-[#FFB84D]';
-
 const heroBullets = [
   {
     title: 'Background-checked & certified',

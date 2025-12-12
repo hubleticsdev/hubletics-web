@@ -5,13 +5,11 @@ import { getSession } from '@/lib/auth/session';
 import { db } from '@/lib/db';
 import { booking, coachProfile } from '@/lib/db/schema';
 import { eq, and, or, gte, lte, sql } from 'drizzle-orm';
-import { createBookingPaymentIntent } from '@/lib/stripe';
 import { calculateBookingPricing } from '@/lib/pricing';
 import { sendEmail } from '@/lib/email/resend';
 import { getBookingRequestEmailTemplate } from '@/lib/email/templates/booking-notifications';
 import { z } from 'zod';
 import { createBookingSchema, validateInput } from '@/lib/validations';
-import { withTransaction } from '@/lib/db/transactions';
 import { sanitizeText } from '@/lib/utils';
 
 export type CreateBookingInput = z.infer<typeof createBookingSchema>;

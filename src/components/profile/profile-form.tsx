@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
+import type { AthleteProfile, CoachProfile } from '@/lib/db/schema';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import {
@@ -23,9 +24,42 @@ interface User {
   role: 'client' | 'coach' | 'admin' | 'pending';
 }
 
+interface AthleteFormData {
+  fullName: string;
+  profilePhoto: string;
+  location: { city: string; state: string };
+  sportsInterested: string[];
+  experienceLevel: Record<string, { level: string; notes?: string }>;
+  budgetRange: { min: number; max: number } | { single: number };
+  availability: Record<string, Array<{ start: string; end: string }>>;
+  bio: string;
+}
+
+interface CoachFormData {
+  fullName: string;
+  profilePhoto: string;
+  introVideo: string;
+  location: { cities: string[]; state: string };
+  specialties: Array<{ sport: string; tags: string[] }>;
+  bio: string;
+  certifications: Array<{
+    name: string;
+    org: string;
+    issueDate: string;
+    expDate?: string;
+    fileUrl: string;
+  }>;
+  accomplishments: string;
+  hourlyRate: string;
+  preferredLocations: Array<{ name: string; address: string; notes?: string }>;
+  groupBookingsEnabled: boolean;
+  allowPrivateGroups: boolean;
+  allowPublicGroups: boolean;
+}
+
 interface ProfileFormProps {
   user: User;
-  profile: any;
+  profile: AthleteProfile | CoachProfile;
 }
 
 export function ProfileForm({ user, profile }: ProfileFormProps) {
@@ -69,43 +103,47 @@ export function ProfileForm({ user, profile }: ProfileFormProps) {
     return () => clearTimeout(timeoutId);
   }, [username, user.username]);
 
-  const [athleteData, setAthleteData] = useState(
+  const [athleteData, setAthleteData] = useState<AthleteFormData | null>(
     user.role === 'client' && profile
       ? {
-          fullName: profile.fullName || '',
-          profilePhoto: profile.profilePhoto || '',
-          location: profile.location || { city: '', state: '' },
-          sportsInterested: profile.sportsInterested || [],
-          experienceLevel: profile.experienceLevel || {},
-          budgetRange: profile.budgetRange || { min: 0, max: 0 },
-          availability: profile.availability || {},
-          bio: profile.bio || '',
+          fullName: (profile as AthleteProfile).fullName || '',
+          profilePhoto: (profile as AthleteProfile).profilePhoto || '',
+          location: (profile as AthleteProfile).location || { city: '', state: '' },
+          sportsInterested: (profile as AthleteProfile).sportsInterested || [],
+          experienceLevel: (profile as AthleteProfile).experienceLevel || {},
+          budgetRange: (profile as AthleteProfile).budgetRange || { min: 0, max: 0 },
+          availability: (profile as AthleteProfile).availability || {},
+          bio: (profile as AthleteProfile).bio || '',
         }
       : null
   );
 
-  const [coachData, setCoachData] = useState(
+  const [coachData, setCoachData] = useState<CoachFormData | null>(
     user.role === 'coach' && profile
       ? {
-          fullName: profile.fullName || '',
-          profilePhoto: profile.profilePhoto || '',
-          introVideo: profile.introVideo || '',
-          location: profile.location || { cities: [], state: '' },
-          specialties: profile.specialties || [],
-          bio: profile.bio || '',
-          certifications: profile.certifications || [],
-          accomplishments: profile.accomplishments || '',
-          hourlyRate: profile.hourlyRate || '',
-          preferredLocations: profile.preferredLocations || [],
-          groupBookingsEnabled: profile.groupBookingsEnabled || false,
-          allowPrivateGroups: profile.allowPrivateGroups || false,
-          allowPublicGroups: profile.allowPublicGroups || false,
+          fullName: (profile as CoachProfile).fullName || '',
+          profilePhoto: (profile as CoachProfile).profilePhoto || '',
+          introVideo: (profile as CoachProfile).introVideo || '',
+          location: (profile as CoachProfile).location || { cities: [], state: '' },
+          specialties: (profile as CoachProfile).specialties || [],
+          bio: (profile as CoachProfile).bio || '',
+          certifications: (profile as CoachProfile).certifications || [],
+          accomplishments: (profile as CoachProfile).accomplishments || '',
+          hourlyRate: (profile as CoachProfile).hourlyRate?.toString() || '',
+          preferredLocations: (profile as CoachProfile).preferredLocations || [],
+          groupBookingsEnabled: (profile as CoachProfile).groupBookingsEnabled || false,
+          allowPrivateGroups: (profile as CoachProfile).allowPrivateGroups || false,
+          allowPublicGroups: (profile as CoachProfile).allowPublicGroups || false,
         }
       : null
   );
 
   const [locationDialogOpen, setLocationDialogOpen] = useState(false);
-  const [locationForm, setLocationForm] = useState({
+  const [locationForm, setLocationForm] = useState<{
+    name: string;
+    address: string;
+    notes: string;
+  }>({
     name: '',
     address: '',
     notes: '',
@@ -195,7 +233,7 @@ export function ProfileForm({ user, profile }: ProfileFormProps) {
 
       setSuccess(true);
       setTimeout(() => setSuccess(false), 3000);
-    } catch (err) {
+    } catch {
       setError('An unexpected error occurred');
     } finally {
       setSaving(false);
@@ -594,7 +632,7 @@ export function ProfileForm({ user, profile }: ProfileFormProps) {
                           onClick={() => {
                             setCoachData({
                               ...coachData,
-                              preferredLocations: coachData.preferredLocations.filter((_: any, i: number) => i !== index),
+                              preferredLocations: coachData.preferredLocations.filter((_: unknown, i: number) => i !== index),
                             });
                           }}
                           className="text-red-500 hover:text-red-700 transition-colors p-1"

@@ -32,7 +32,11 @@ export default async function CoachDashboard() {
 
   return (
     <CoachDashboardClient
-      coach={coach}
+      coach={{
+        ...coach,
+        name: coach.fullName,
+        image: coach.profilePhoto,
+      }}
       pendingRequests={pendingRequests}
       upcomingSessions={upcomingSessions}
       earningsSummary={earningsSummary}
