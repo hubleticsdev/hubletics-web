@@ -2,6 +2,15 @@
 
 import { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Textarea } from '@/components/ui/textarea';
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+} from '@/components/ui/dialog';
 import { updateUserAccount, updateAthleteProfile, updateCoachProfile } from '@/actions/profile/update';
 import { checkUsernameAvailability } from '@/actions/auth/validate-username';
 
@@ -94,6 +103,59 @@ export function ProfileForm({ user, profile }: ProfileFormProps) {
         }
       : null
   );
+
+  const [locationDialogOpen, setLocationDialogOpen] = useState(false);
+  const [locationForm, setLocationForm] = useState({
+    name: '',
+    address: '',
+    notes: '',
+  });
+  const [editingLocationIndex, setEditingLocationIndex] = useState<number | null>(null);
+
+  const openLocationDialog = (index?: number) => {
+    if (index !== undefined && coachData) {
+      const location = coachData.preferredLocations[index];
+      setLocationForm({
+        name: location.name,
+        address: location.address,
+        notes: location.notes || '',
+      });
+      setEditingLocationIndex(index);
+    } else {
+      setLocationForm({ name: '', address: '', notes: '' });
+      setEditingLocationIndex(null);
+    }
+    setLocationDialogOpen(true);
+  };
+
+  const saveLocation = () => {
+    if (!locationForm.name.trim() || !locationForm.address.trim()) {
+      return;
+    }
+
+    if (!coachData) return;
+
+    const newLocation = {
+      name: locationForm.name.trim(),
+      address: locationForm.address.trim(),
+      notes: locationForm.notes.trim(),
+    };
+
+    if (editingLocationIndex !== null) {
+      const updatedLocations = [...coachData.preferredLocations];
+      updatedLocations[editingLocationIndex] = newLocation;
+      setCoachData({ ...coachData, preferredLocations: updatedLocations });
+    } else {
+      setCoachData({
+        ...coachData,
+        preferredLocations: [...coachData.preferredLocations, newLocation],
+      });
+    }
+
+    setLocationDialogOpen(false);
+    setLocationForm({ name: '', address: '', notes: '' });
+    setEditingLocationIndex(null);
+  };
 
   const handleSave = async () => {
     if (username !== user.username && (usernameError || !usernameAvailable)) {
@@ -511,24 +573,42 @@ export function ProfileForm({ user, profile }: ProfileFormProps) {
                           <p className="text-sm text-gray-500 mt-1 italic">{location.notes}</p>
                         )}
                       </div>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setCoachData({
-                            ...coachData,
-                            preferredLocations: coachData.preferredLocations.filter((_: any, i: number) => i !== index),
-                          });
-                        }}
-                        className="text-red-500 hover:text-red-700 transition-colors"
-                      >
-                        <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
-                          <path
-                            fillRule="evenodd"
-                            d="M9 2a1 1 0 00-.894.553L7.382 4H4a1 1 0 000 2v10a2 2 0 002 2h8a2 2 0 002-2V6a1 1 0 100-2h-3.382l-.724-1.447A1 1 0 0011 2H9zM7 8a1 1 0 012 0v6a1 1 0 11-2 0V8zm5-1a1 1 0 00-1 1v6a1 1 0 102 0V8a1 1 0 00-1-1z"
-                            clipRule="evenodd"
-                          />
-                        </svg>
-                      </button>
+                      <div className="flex items-start gap-2">
+                        <button
+                          type="button"
+                          onClick={() => openLocationDialog(index)}
+                          className="text-gray-500 hover:text-[#FF6B4A] transition-colors p-1"
+                          title="Edit location"
+                        >
+                          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                              strokeWidth={2}
+                              d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"
+                            />
+                          </svg>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setCoachData({
+                              ...coachData,
+                              preferredLocations: coachData.preferredLocations.filter((_: any, i: number) => i !== index),
+                            });
+                          }}
+                          className="text-red-500 hover:text-red-700 transition-colors p-1"
+                          title="Delete location"
+                        >
+                          <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
+                            <path
+                              fillRule="evenodd"
+                              d="M9 2a1 1 0 00-.894.553L7.382 4H4a1 1 0 000 2v10a2 2 0 002 2h8a2 2 0 002-2V6a1 1 0 100-2h-3.382l-.724-1.447A1 1 0 0011 2H9zM7 8a1 1 0 012 0v6a1 1 0 11-2 0V8zm5-1a1 1 0 00-1 1v6a1 1 0 102 0V8a1 1 0 00-1-1z"
+                              clipRule="evenodd"
+                            />
+                          </svg>
+                        </button>
+                      </div>
                     </div>
                   ))}
                 </div>
@@ -536,23 +616,7 @@ export function ProfileForm({ user, profile }: ProfileFormProps) {
 
               <button
                 type="button"
-                onClick={() => {
-                  const name = prompt('Location Name (e.g., Central Park Tennis Courts):');
-                  if (!name) return;
-                  
-                  const address = prompt('Address:');
-                  if (!address) return;
-                  
-                  const notes = prompt('Notes (optional, press Cancel to skip):') || '';
-                  
-                  setCoachData({
-                    ...coachData,
-                    preferredLocations: [
-                      ...coachData.preferredLocations,
-                      { name, address, notes },
-                    ],
-                  });
-                }}
+                onClick={() => openLocationDialog()}
                 className="w-full px-6 py-3 border-2 border-dashed border-gray-300 rounded-lg text-gray-600 hover:border-[#FF6B4A] hover:text-[#FF6B4A] transition-all flex items-center justify-center gap-2 font-medium"
               >
                 <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -661,6 +725,79 @@ export function ProfileForm({ user, profile }: ProfileFormProps) {
           {saving ? 'Saving...' : 'Save Changes'}
         </Button>
       </div>
+
+      <Dialog open={locationDialogOpen} onOpenChange={setLocationDialogOpen}>
+        <DialogContent className="sm:max-w-[500px]">
+          <DialogHeader>
+            <DialogTitle>
+              {editingLocationIndex !== null ? 'Edit Location' : 'Add Location'}
+            </DialogTitle>
+            <DialogDescription>
+              Add a location where you train clients. Athletes will choose from these when booking.
+            </DialogDescription>
+          </DialogHeader>
+          
+          <div className="space-y-4 py-4">
+            <div className="space-y-2">
+              <label htmlFor="location-name" className="text-sm font-medium text-gray-900">
+                Location Name <span className="text-red-500">*</span>
+              </label>
+              <Input
+                id="location-name"
+                placeholder="e.g., Central Park Tennis Courts"
+                value={locationForm.name}
+                onChange={(e) => setLocationForm({ ...locationForm, name: e.target.value })}
+              />
+            </div>
+
+            <div className="space-y-2">
+              <label htmlFor="location-address" className="text-sm font-medium text-gray-900">
+                Address <span className="text-red-500">*</span>
+              </label>
+              <Input
+                id="location-address"
+                placeholder="e.g., Central Park, New York, NY 10019"
+                value={locationForm.address}
+                onChange={(e) => setLocationForm({ ...locationForm, address: e.target.value })}
+              />
+            </div>
+
+            <div className="space-y-2">
+              <label htmlFor="location-notes" className="text-sm font-medium text-gray-900">
+                Notes (Optional)
+              </label>
+              <Textarea
+                id="location-notes"
+                placeholder="e.g., Meet at the south entrance near the fountain"
+                value={locationForm.notes}
+                onChange={(e) => setLocationForm({ ...locationForm, notes: e.target.value })}
+                rows={3}
+              />
+            </div>
+          </div>
+
+          <div className="flex justify-end gap-3">
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => {
+                setLocationDialogOpen(false);
+                setLocationForm({ name: '', address: '', notes: '' });
+                setEditingLocationIndex(null);
+              }}
+            >
+              Cancel
+            </Button>
+            <Button
+              type="button"
+              onClick={saveLocation}
+              disabled={!locationForm.name.trim() || !locationForm.address.trim()}
+            >
+              {editingLocationIndex !== null ? 'Update' : 'Add'} Location
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
