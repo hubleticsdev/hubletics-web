@@ -288,6 +288,9 @@ export const updateCoachProfileSchema = z.object({
     address: z.string().min(1, 'Address cannot be empty').max(200, 'Address too long'),
     notes: z.string().max(200, 'Notes too long').optional(),
   })).optional(),
+  groupBookingsEnabled: z.boolean().optional(),
+  allowPrivateGroups: z.boolean().optional(),
+  allowPublicGroups: z.boolean().optional(),
 });
 
 export const coachSearchFiltersSchema = z.object({

@@ -105,6 +105,9 @@ export async function updateCoachProfile(data: {
   accomplishments?: string;
   hourlyRate: string;
   preferredLocations?: Array<{ name: string; address: string; notes?: string }>;
+  groupBookingsEnabled?: boolean;
+  allowPrivateGroups?: boolean;
+  allowPublicGroups?: boolean;
 }) {
   try {
     const session = await getSession();
