@@ -1,7 +1,7 @@
 'use server';
 
 import { db } from '@/lib/db';
-import { groupConversation, groupConversationParticipant, groupMessage, booking, bookingParticipant, flaggedMessage } from '@/lib/db/schema';
+import { groupConversation, groupConversationParticipant, groupMessage, booking, bookingParticipant, flaggedGroupMessage } from '@/lib/db/schema';
 import { getSession } from '@/lib/auth/session';
 import { eq, and, desc } from 'drizzle-orm';
 import { z } from 'zod';
@@ -151,9 +151,8 @@ export async function sendGroupMessage(conversationId: string, content: string) 
 
     // Create flagged message record for admin review
     if (shouldFlag) {
-      await db.insert(flaggedMessage).values({
+      await db.insert(flaggedGroupMessage).values({
         groupMessageId: newMessage.id,
-        messageType: 'group',
         groupConversationId: validatedConversationId,
         senderId: session.user.id,
         content: validatedContent.trim(),

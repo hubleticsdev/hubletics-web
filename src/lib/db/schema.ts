@@ -311,24 +311,16 @@ export const message = pgTable(
   ]
 );
 
-export const flaggedMessageTypeEnum = pgEnum('flagged_message_type', [
-  'regular',
-  'group',
-]);
-
 export const flaggedMessage = pgTable('flagged_message', {
   id: text('id')
     .primaryKey()
     .$defaultFn(() => crypto.randomUUID()),
   messageId: text('messageId')
+    .notNull()
     .references(() => message.id, { onDelete: 'cascade' }),
-  groupMessageId: text('groupMessageId')
-    .references(() => groupMessage.id, { onDelete: 'cascade' }),
-  messageType: flaggedMessageTypeEnum('messageType').notNull().default('regular'),
   conversationId: text('conversationId')
+    .notNull()
     .references(() => conversation.id, { onDelete: 'cascade' }),
-  groupConversationId: text('groupConversationId')
-    .references(() => groupConversation.id, { onDelete: 'cascade' }),
   senderId: text('senderId')
     .notNull()
     .references(() => user.id),
@@ -340,12 +332,7 @@ export const flaggedMessage = pgTable('flagged_message', {
   adminNotes: text('adminNotes'),
   createdAt: timestamp('createdAt').notNull().defaultNow(),
   updatedAt: timestamp('updatedAt').notNull().defaultNow(),
-}, (table) => [
-  // Ensure only one of messageId or groupMessageId is set
-  uniqueIndex('flagged_message_message_check_idx').on(
-    sql`${table.messageId} IS NOT NULL OR ${table.groupMessageId} IS NOT NULL`
-  ),
-]);
+});
 
 export const booking = pgTable(
   'booking',
@@ -692,22 +679,37 @@ export const messageRelations = relations(message, ({ one }) => ({
   }),
 }));
 
+export const flaggedGroupMessage = pgTable('flagged_group_message', {
+  id: text('id')
+    .primaryKey()
+    .$defaultFn(() => crypto.randomUUID()),
+  groupMessageId: text('groupMessageId')
+    .notNull()
+    .references(() => groupMessage.id, { onDelete: 'cascade' }),
+  groupConversationId: text('groupConversationId')
+    .notNull()
+    .references(() => groupConversation.id, { onDelete: 'cascade' }),
+  senderId: text('senderId')
+    .notNull()
+    .references(() => user.id),
+  content: text('content').notNull(),
+  violations: text('violations').array().notNull(),
+  reviewedAt: timestamp('reviewedAt'),
+  reviewedBy: text('reviewedBy').references(() => user.id),
+  action: flaggedMessageActionEnum('action'),
+  adminNotes: text('adminNotes'),
+  createdAt: timestamp('createdAt').notNull().defaultNow(),
+  updatedAt: timestamp('updatedAt').notNull().defaultNow(),
+});
+
 export const flaggedMessageRelations = relations(flaggedMessage, ({ one }) => ({
   message: one(message, {
     fields: [flaggedMessage.messageId],
     references: [message.id],
   }),
-  groupMessage: one(groupMessage, {
-    fields: [flaggedMessage.groupMessageId],
-    references: [groupMessage.id],
-  }),
   conversation: one(conversation, {
     fields: [flaggedMessage.conversationId],
     references: [conversation.id],
-  }),
-  groupConversation: one(groupConversation, {
-    fields: [flaggedMessage.groupConversationId],
-    references: [groupConversation.id],
   }),
   sender: one(user, {
     fields: [flaggedMessage.senderId],
@@ -715,6 +717,25 @@ export const flaggedMessageRelations = relations(flaggedMessage, ({ one }) => ({
   }),
   reviewer: one(user, {
     fields: [flaggedMessage.reviewedBy],
+    references: [user.id],
+  }),
+}));
+
+export const flaggedGroupMessageRelations = relations(flaggedGroupMessage, ({ one }) => ({
+  groupMessage: one(groupMessage, {
+    fields: [flaggedGroupMessage.groupMessageId],
+    references: [groupMessage.id],
+  }),
+  groupConversation: one(groupConversation, {
+    fields: [flaggedGroupMessage.groupConversationId],
+    references: [groupConversation.id],
+  }),
+  sender: one(user, {
+    fields: [flaggedGroupMessage.senderId],
+    references: [user.id],
+  }),
+  reviewer: one(user, {
+    fields: [flaggedGroupMessage.reviewedBy],
     references: [user.id],
   }),
 }));
@@ -901,6 +922,9 @@ export type NewMessage = typeof message.$inferInsert;
 
 export type FlaggedMessage = typeof flaggedMessage.$inferSelect;
 export type NewFlaggedMessage = typeof flaggedMessage.$inferInsert;
+
+export type FlaggedGroupMessage = typeof flaggedGroupMessage.$inferSelect;
+export type NewFlaggedGroupMessage = typeof flaggedGroupMessage.$inferInsert;
 
 export type Booking = typeof booking.$inferSelect;
 export type NewBooking = typeof booking.$inferInsert;

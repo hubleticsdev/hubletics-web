@@ -137,7 +137,7 @@ export function FlaggedMessagesClient({ initialMessages }: FlaggedMessagesClient
                       <Flag className="h-5 w-5 text-red-500 mt-0.5" />
                       <div>
                         <h3 className="text-lg font-semibold text-gray-900">
-                          {msg.messageType === 'group' ? 'Group ' : ''}Message from {(msg.message?.sender?.name || msg.groupMessage?.sender?.name) || 'Unknown User'}
+                          {msg.messageType === 'group' ? 'Group ' : ''}Message from {(msg.messageType === 'regular' ? msg.message?.sender?.name : msg.groupMessage?.sender?.name) || 'Unknown User'}
                         </h3>
                         <p className="text-sm text-gray-600 mt-1">
                           Reported {new Date(msg.createdAt).toLocaleDateString()}
@@ -207,7 +207,7 @@ export function FlaggedMessagesClient({ initialMessages }: FlaggedMessagesClient
                       <CheckCircle className="h-5 w-5 text-green-500 mt-0.5" />
                       <div>
                         <h3 className="text-lg font-semibold text-gray-900">
-                          {msg.messageType === 'group' ? 'Group ' : ''}Message from {(msg.message?.sender?.name || msg.groupMessage?.sender?.name) || 'Unknown User'}
+                          {msg.messageType === 'group' ? 'Group ' : ''}Message from {(msg.messageType === 'regular' ? msg.message?.sender?.name : msg.groupMessage?.sender?.name) || 'Unknown User'}
                         </h3>
                         <p className="text-sm text-gray-600 mt-1">
                           Reviewed {msg.reviewedAt ? new Date(msg.reviewedAt).toLocaleDateString() : 'Unknown'}
