@@ -107,6 +107,10 @@ export function OnboardingWizard({ initialName, googleAvatar, savedPhotoUrl, sav
         toast.error('Please set at least one availability slot');
         return;
       }
+      if (formData.preferredLocations.length === 0) {
+        toast.error('Please add at least one preferred training location');
+        return;
+      }
     }
 
     setCurrentStep(currentStep + 1);

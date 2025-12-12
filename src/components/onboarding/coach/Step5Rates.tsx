@@ -269,11 +269,14 @@ export function Step5Rates({ formData, setFormData }: Step5Props) {
         )}
       </div>
 
-      {/* Preferred Locations (Optional) */}
+      {/* Preferred Locations */}
       <div>
         <label className="block text-sm font-semibold text-gray-900 mb-3">
-          Preferred Training Locations (Optional)
+          Preferred Training Locations <span className="text-red-500">*</span>
         </label>
+        <p className="text-sm text-gray-600 mb-3">
+          Add at least one location where you train clients. Athletes will choose from these when booking.
+        </p>
 
         {formData.preferredLocations.length > 0 && (
           <div className="space-y-3 mb-4">

@@ -30,6 +30,7 @@ export const getSession = cache(async (): Promise<SessionResponse> => {
         role: headersList.get('x-user-role') as UserRole,
         email: headersList.get('x-user-email') || '',
         name: headersList.get('x-user-name') || '',
+        username: headersList.get('x-user-username') || '',
         image: headersList.get('x-user-image') || null,
         profileComplete: headersList.get('x-user-profile-complete') === 'true',
         status: headersList.get('x-user-status') as 'active' | 'suspended' | 'banned' | 'deactivated',

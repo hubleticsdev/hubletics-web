@@ -492,6 +492,82 @@ export function ProfileForm({ user, profile }: ProfileFormProps) {
             </div>
 
             <div className="pt-6 border-t border-gray-200">
+              <h3 className="text-lg font-semibold text-gray-900 mb-4">Preferred Training Locations</h3>
+              <p className="text-sm text-gray-600 mb-4">
+                Add the locations where you typically train clients. Athletes will see these as options when booking.
+              </p>
+
+              {coachData.preferredLocations.length > 0 && (
+                <div className="space-y-3 mb-4">
+                  {coachData.preferredLocations.map((location: { name: string; address: string; notes?: string }, index: number) => (
+                    <div
+                      key={index}
+                      className="border-2 border-gray-200 rounded-lg p-4 flex items-start justify-between gap-4"
+                    >
+                      <div className="flex-1">
+                        <h4 className="font-semibold text-gray-900">{location.name}</h4>
+                        <p className="text-sm text-gray-600 mt-1">{location.address}</p>
+                        {location.notes && (
+                          <p className="text-sm text-gray-500 mt-1 italic">{location.notes}</p>
+                        )}
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setCoachData({
+                            ...coachData,
+                            preferredLocations: coachData.preferredLocations.filter((_: any, i: number) => i !== index),
+                          });
+                        }}
+                        className="text-red-500 hover:text-red-700 transition-colors"
+                      >
+                        <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
+                          <path
+                            fillRule="evenodd"
+                            d="M9 2a1 1 0 00-.894.553L7.382 4H4a1 1 0 000 2v10a2 2 0 002 2h8a2 2 0 002-2V6a1 1 0 100-2h-3.382l-.724-1.447A1 1 0 0011 2H9zM7 8a1 1 0 012 0v6a1 1 0 11-2 0V8zm5-1a1 1 0 00-1 1v6a1 1 0 102 0V8a1 1 0 00-1-1z"
+                            clipRule="evenodd"
+                          />
+                        </svg>
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              <button
+                type="button"
+                onClick={() => {
+                  const name = prompt('Location Name (e.g., Central Park Tennis Courts):');
+                  if (!name) return;
+                  
+                  const address = prompt('Address:');
+                  if (!address) return;
+                  
+                  const notes = prompt('Notes (optional, press Cancel to skip):') || '';
+                  
+                  setCoachData({
+                    ...coachData,
+                    preferredLocations: [
+                      ...coachData.preferredLocations,
+                      { name, address, notes },
+                    ],
+                  });
+                }}
+                className="w-full px-6 py-3 border-2 border-dashed border-gray-300 rounded-lg text-gray-600 hover:border-[#FF6B4A] hover:text-[#FF6B4A] transition-all flex items-center justify-center gap-2 font-medium"
+              >
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M12 6v6m0 0v6m0-6h6m-6 0H6"
+                  />
+                </svg>
+                Add Location
+              </button>
+            </div>
+
+            <div className="pt-6 border-t border-gray-200">
               <h3 className="text-lg font-semibold text-gray-900 mb-4">Group Booking Settings</h3>
               
               <div className="space-y-4">

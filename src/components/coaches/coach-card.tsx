@@ -29,9 +29,14 @@ export function CoachCard({ coach }: { coach: CoachSearchResult }) {
       </div>
 
       <div className="p-5">
-        <h3 className="text-xl font-bold text-gray-900 mb-2 group-hover:text-[#FF6B4A] transition-colors">
-          {coach.fullName}
-        </h3>
+        <div className="mb-3">
+          <h3 className="text-xl font-bold text-gray-900 group-hover:text-[#FF6B4A] transition-colors inline">
+            {coach.fullName}
+          </h3>
+          <span className="text-sm text-gray-500 ml-2">
+            @{coach.user.username}
+          </span>
+        </div>
 
         <div className="flex items-center gap-2 text-gray-600 mb-3">
           <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">

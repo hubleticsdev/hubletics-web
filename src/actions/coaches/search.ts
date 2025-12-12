@@ -30,6 +30,7 @@ export interface CoachSearchResult {
   totalReviews: number;
   totalLessonsCompleted: number;
   user: {
+    username: string;
     image: string | null;
     email: string;
     platformFeePercentage?: string | null;
@@ -75,9 +76,9 @@ export async function searchCoaches(
         or(
           ilike(coachProfile.fullName, `%${validatedFilters.searchQuery}%`),
           sql`EXISTS (
-            SELECT 1 FROM ${user}
-            WHERE ${user.id} = ${coachProfile.userId}
-            AND LOWER(${user.username}) LIKE LOWER(${'%' + validatedFilters.searchQuery + '%'})
+            SELECT 1 FROM "user"
+            WHERE "user"."id" = ${coachProfile.userId}
+            AND LOWER("user"."username") LIKE LOWER(${`%${validatedFilters.searchQuery}%`})
           )`
         )!
       );
