@@ -35,3 +35,11 @@ export function sanitizeText(dirty: string): string {
     ALLOWED_ATTR: [],
   });
 }
+
+export function sanitizeName(dirty: string): string {
+  return DOMPurify.sanitize(dirty, {
+    ALLOWED_TAGS: [],
+    ALLOWED_ATTR: [],
+    ALLOW_DATA_ATTR: false,
+  });
+}

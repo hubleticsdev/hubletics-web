@@ -12,7 +12,7 @@ import { sanitizeText } from '@/lib/utils';
 const createReviewSchema = z.object({
   bookingId: z.string().uuid('Invalid booking ID'),
   rating: z.number().int().min(1, 'Rating must be at least 1').max(5, 'Rating must be at most 5'),
-  reviewText: z.string().min(10, 'Review must be at least 10 characters').max(1000, 'Review must be at most 1000 characters').optional(),
+  reviewText: z.string().min(10, 'Review must be at least 10 characters').max(1000, 'Review must be at most 1000 characters').optional().transform(val => val ? sanitizeText(val) : val),
 });
 
 export type CreateReviewInput = z.infer<typeof createReviewSchema>;
@@ -52,7 +52,7 @@ export async function createReview(input: CreateReviewInput) {
       reviewerId: session.user.id,
       coachId: bookingRecord.coachId,
       rating: validatedInput.rating,
-      reviewText: validatedInput.reviewText ? sanitizeText(validatedInput.reviewText) : null,
+      reviewText: validatedInput.reviewText || null,
     });
 
     const coachReviews = await db

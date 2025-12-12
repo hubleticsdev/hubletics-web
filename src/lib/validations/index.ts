@@ -1,4 +1,6 @@
 import { z } from 'zod';
+import { sanitizeName, sanitizeText } from '@/lib/utils';
+import { MAX_PLATFORM_FEE_PERCENTAGE } from '@/lib/constants';
 
 export const uuidSchema = z.string().regex(/^[a-zA-Z0-9]{32}$|^[a-fA-F0-9]{8}-[a-fA-F0-9]{4}-[a-fA-F0-9]{4}-[a-fA-F0-9]{4}-[a-fA-F0-9]{12}$/, 'Invalid ID format');
 export const stripePaymentIntentIdSchema = z.string().regex(/^pi_[a-zA-Z0-9_]+$/, 'Invalid payment intent ID format');
@@ -27,14 +29,14 @@ export const userRoleSchema = z.enum(['client', 'coach', 'admin']);
 export const userStatusSchema = z.enum(['active', 'inactive', 'suspended']);
 
 export const locationSchema = z.object({
-  name: z.string().min(1, 'Location name required').max(100, 'Location name too long'),
-  address: z.string().min(1, 'Address required').max(500, 'Address too long'),
-  notes: z.string().max(1000, 'Notes too long').optional(),
+  name: z.string().min(1, 'Location name required').max(100, 'Location name too long').transform(sanitizeName),
+  address: z.string().min(1, 'Address required').max(500, 'Address too long').transform(sanitizeName),
+  notes: z.string().max(1000, 'Notes too long').optional().transform(val => val ? sanitizeText(val) : val),
 });
 
 export const athleteLocationSchema = z.object({
-  city: z.string().min(1, 'City required').max(100, 'City name too long'),
-  state: z.string().min(1, 'State required').max(50, 'State name too long'),
+  city: z.string().min(1, 'City required').max(100, 'City name too long').transform(sanitizeName),
+  state: z.string().min(1, 'State required').max(50, 'State name too long').transform(sanitizeName),
 });
 
 export const messageContentSchema = z
@@ -51,9 +53,9 @@ export const bookingDurationSchema = z
   .multipleOf(15, 'Duration must be in 15-minute increments');
 
 export const bookingLocationSchema = z.object({
-  name: z.string().min(1, 'Location name required').max(100, 'Location name too long'),
-  address: z.string().min(1, 'Address required').max(500, 'Address too long'),
-  notes: z.string().max(1000, 'Notes too long').optional(),
+  name: z.string().min(1, 'Location name required').max(100, 'Location name too long').transform(sanitizeName),
+  address: z.string().min(1, 'Address required').max(500, 'Address too long').transform(sanitizeName),
+  notes: z.string().max(1000, 'Notes too long').optional().transform(val => val ? sanitizeText(val) : val),
 });
 
 export const createBookingSchema = z.object({
@@ -72,7 +74,7 @@ export const createBookingSchema = z.object({
       'End time must be in 15-minute increments'
     ),
   location: bookingLocationSchema,
-  clientMessage: z.string().max(2000, 'Message too long').optional(),
+  clientMessage: z.string().max(2000, 'Message too long').optional().transform(val => val ? sanitizeText(val) : val),
   paymentIntentId: stripePaymentIntentIdSchema.optional(),
 }).refine(
   (data) => data.scheduledEndAt > data.scheduledStartAt,
@@ -97,8 +99,8 @@ export const specialtySchema = z.object({
 });
 
 export const certificationSchema = z.object({
-  name: z.string().min(1, 'Certification name required').max(200, 'Name too long'),
-  org: z.string().min(1, 'Organization required').max(200, 'Organization too long'),
+  name: z.string().min(1, 'Certification name required').max(200, 'Name too long').transform(sanitizeName),
+  org: z.string().min(1, 'Organization required').max(200, 'Organization too long').transform(sanitizeName),
   issueDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Invalid date format (YYYY-MM-DD)'),
   expDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Invalid date format (YYYY-MM-DD)').optional(),
   fileUrl: urlSchema,
@@ -143,14 +145,14 @@ export function generateUsernameFromName(name: string): string {
 
 export const coachProfileSchema = z.object({
   username: usernameSchema,
-  fullName: z.string().min(1, 'Full name required').max(100, 'Name too long'),
+  fullName: z.string().min(1, 'Full name required').max(100, 'Name too long').transform(sanitizeName),
   profilePhotoUrl: urlSchema.nullable().optional(),
   introVideoUrl: urlSchema,
-  cities: z.array(z.string().min(1).max(100)).min(1, 'At least one city required').max(10, 'Too many cities'),
-  state: z.string().min(1, 'State required').max(50, 'State too long'),
+  cities: z.array(z.string().min(1).max(100).transform(sanitizeName)).min(1, 'At least one city required').max(10, 'Too many cities'),
+  state: z.string().min(1, 'State required').max(50, 'State too long').transform(sanitizeName),
   specialties: z.array(specialtySchema).min(1, 'At least one specialty required').max(20, 'Too many specialties'),
-  bio: z.string().min(10, 'Bio too short').max(2000, 'Bio too long'),
-  accomplishments: z.string().max(2000, 'Accomplishments too long').optional(),
+  bio: z.string().min(10, 'Bio too short').max(2000, 'Bio too long').transform(sanitizeText),
+  accomplishments: z.string().max(2000, 'Accomplishments too long').optional().transform(val => val ? sanitizeText(val) : val),
   certifications: z.array(certificationSchema).max(20, 'Too many certifications'),
   hourlyRate: z.number().min(10, 'Minimum $10/hour').max(1000, 'Maximum $1000/hour'),
   sessionDuration: bookingDurationSchema,
@@ -165,17 +167,17 @@ export const experienceLevelSchema = z.enum(['beginner', 'intermediate', 'advanc
 
 export const athleteProfileSchema = z.object({
   username: usernameSchema,
-  fullName: z.string().min(1, 'Full name required').max(100, 'Name too long'),
-  city: z.string().min(1, 'City required').max(100, 'City name too long'),
-  state: z.string().min(1, 'State required').max(50, 'State name too long'),
+  fullName: z.string().min(1, 'Full name required').max(100, 'Name too long').transform(sanitizeName),
+  city: z.string().min(1, 'City required').max(100, 'City name too long').transform(sanitizeName),
+  state: z.string().min(1, 'State required').max(50, 'State name too long').transform(sanitizeName),
   profilePhotoUrl: urlSchema.nullable().optional(),
-  sports: z.array(z.string().min(1).max(50)).min(1, 'At least one sport required').max(10, 'Too many sports'),
+  sports: z.array(z.string().min(1).max(50).transform(sanitizeName)).min(1, 'At least one sport required').max(10, 'Too many sports'),
   experienceLevels: z.record(z.string(), z.string()),
-  notes: z.string().max(500, 'Notes too long'),
+  notes: z.string().max(500, 'Notes too long').transform(sanitizeText),
   budgetMin: z.number().min(10, 'Minimum $10').max(1000, 'Maximum $1000'),
   budgetMax: z.number().min(10, 'Minimum $10').max(1000, 'Maximum $1000'),
-  preferredTimes: z.array(z.string().max(50, 'Time slot name too long')).max(20, 'Too many time preferences'),
-  bio: z.string().max(2000, 'Bio too long'),
+  preferredTimes: z.array(z.string().max(50, 'Time slot name too long').transform(sanitizeName)).max(20, 'Too many time preferences'),
+  bio: z.string().max(2000, 'Bio too long').transform(val => val ? sanitizeText(val) : val),
 }).refine(
   (data) => data.budgetMax >= data.budgetMin,
   {
@@ -197,7 +199,7 @@ export const adminActionSchema = z.enum([
 export const platformFeeSchema = z
   .number()
   .min(0, 'Cannot be negative')
-  .max(50, 'Maximum 50% platform fee')
+  .max(MAX_PLATFORM_FEE_PERCENTAGE, `Maximum ${MAX_PLATFORM_FEE_PERCENTAGE}% platform fee`)
   .multipleOf(0.01, 'Must be in cents (0.01 precision)');
 
 export const uploadThingUrlSchema = z
@@ -230,20 +232,20 @@ export const stripeWebhookSchema = z.object({
 });
 
 export const updateUserAccountSchema = z.object({
-  name: z.string().min(1, 'Name cannot be empty').max(100, 'Name too long').trim(),
+  name: z.string().min(1, 'Name cannot be empty').max(100, 'Name too long').trim().transform(sanitizeName),
 });
 
 export const updateAthleteProfileSchema = z.object({
-  fullName: z.string().min(1, 'Full name cannot be empty').max(100, 'Full name too long').trim(),
+  fullName: z.string().min(1, 'Full name cannot be empty').max(100, 'Full name too long').trim().transform(sanitizeName),
   profilePhoto: z.string().url('Invalid profile photo URL').optional().nullable(),
   location: z.object({
-    city: z.string().min(1, 'City cannot be empty').max(100, 'City too long').trim(),
-    state: z.string().min(1, 'State cannot be empty').max(100, 'State too long').trim(),
+    city: z.string().min(1, 'City cannot be empty').max(100, 'City too long').trim().transform(sanitizeName),
+    state: z.string().min(1, 'State cannot be empty').max(100, 'State too long').trim().transform(sanitizeName),
   }),
-  sportsInterested: z.array(z.string().min(1, 'Sport name cannot be empty').max(50, 'Sport name too long')).min(1, 'At least one sport required'),
+  sportsInterested: z.array(z.string().min(1, 'Sport name cannot be empty').max(50, 'Sport name too long').transform(sanitizeName)).min(1, 'At least one sport required'),
   experienceLevel: z.record(z.string(), z.object({
     level: z.string().min(1, 'Experience level cannot be empty').max(50, 'Experience level too long'),
-    notes: z.string().max(500, 'Notes too long').optional(),
+    notes: z.string().max(500, 'Notes too long').optional().transform(val => val ? sanitizeText(val) : val),
   })),
   budgetRange: z.union([
     z.object({
@@ -258,35 +260,35 @@ export const updateAthleteProfileSchema = z.object({
     start: z.string().regex(/^([01]?[0-9]|2[0-3]):[0-5][0-9]$/, 'Invalid time format (HH:MM)'),
     end: z.string().regex(/^([01]?[0-9]|2[0-3]):[0-5][0-9]$/, 'Invalid time format (HH:MM)'),
   }))),
-  bio: z.string().max(1000, 'Bio too long').optional(),
+  bio: z.string().max(1000, 'Bio too long').optional().transform(val => val ? sanitizeText(val) : val),
 });
 
 export const updateCoachProfileSchema = z.object({
-  fullName: z.string().min(1, 'Full name cannot be empty').max(100, 'Full name too long').trim(),
+  fullName: z.string().min(1, 'Full name cannot be empty').max(100, 'Full name too long').trim().transform(sanitizeName),
   profilePhoto: z.string().url('Invalid profile photo URL').optional().nullable(),
   introVideo: z.string().url('Invalid intro video URL'),
   location: z.object({
-    cities: z.array(z.string().min(1, 'City cannot be empty').max(100, 'City too long')).min(1, 'At least one city required'),
-    state: z.string().min(1, 'State cannot be empty').max(100, 'State too long').trim(),
+    cities: z.array(z.string().min(1, 'City cannot be empty').max(100, 'City too long').transform(sanitizeName)).min(1, 'At least one city required'),
+    state: z.string().min(1, 'State cannot be empty').max(100, 'State too long').trim().transform(sanitizeName),
   }),
   specialties: z.array(z.object({
-    sport: z.string().min(1, 'Sport cannot be empty').max(50, 'Sport too long'),
-    tags: z.array(z.string().min(1, 'Tag cannot be empty').max(30, 'Tag too long')),
+    sport: z.string().min(1, 'Sport cannot be empty').max(50, 'Sport too long').transform(sanitizeName),
+    tags: z.array(z.string().min(1, 'Tag cannot be empty').max(30, 'Tag too long').transform(sanitizeName)),
   })).min(1, 'At least one specialty required'),
-  bio: z.string().min(10, 'Bio must be at least 10 characters').max(2000, 'Bio too long'),
+  bio: z.string().min(10, 'Bio must be at least 10 characters').max(2000, 'Bio too long').transform(sanitizeText),
   certifications: z.array(z.object({
-    name: z.string().min(1, 'Certification name cannot be empty').max(200, 'Certification name too long'),
-    org: z.string().min(1, 'Organization cannot be empty').max(200, 'Organization too long'),
+    name: z.string().min(1, 'Certification name cannot be empty').max(200, 'Certification name too long').transform(sanitizeName),
+    org: z.string().min(1, 'Organization cannot be empty').max(200, 'Organization too long').transform(sanitizeName),
     issueDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Invalid date format (YYYY-MM-DD)'),
     expDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Invalid date format (YYYY-MM-DD)').optional(),
     fileUrl: z.string().url('Invalid file URL'),
   })).optional(),
-  accomplishments: z.string().max(1000, 'Accomplishments too long').optional(),
+  accomplishments: z.string().max(1000, 'Accomplishments too long').optional().transform(val => val ? sanitizeText(val) : val),
   hourlyRate: z.string().regex(/^\d+(\.\d{1,2})?$/, 'Invalid hourly rate format'),
   preferredLocations: z.array(z.object({
-    name: z.string().min(1, 'Location name cannot be empty').max(100, 'Location name too long'),
-    address: z.string().min(1, 'Address cannot be empty').max(200, 'Address too long'),
-    notes: z.string().max(200, 'Notes too long').optional(),
+    name: z.string().min(1, 'Location name cannot be empty').max(100, 'Location name too long').transform(sanitizeName),
+    address: z.string().min(1, 'Address cannot be empty').max(200, 'Address too long').transform(sanitizeName),
+    notes: z.string().max(200, 'Notes too long').optional().transform(val => val ? sanitizeText(val) : val),
   })).optional(),
   groupBookingsEnabled: z.boolean().optional(),
   allowPrivateGroups: z.boolean().optional(),
