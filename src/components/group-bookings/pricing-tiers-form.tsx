@@ -2,9 +2,19 @@
 
 import { useState } from 'react';
 import { Button } from '@/components/ui/button';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
 import { updatePricingTiers } from '@/actions/group-bookings/pricing-tiers';
 import { toast } from 'sonner';
-import { Plus, Trash2 } from 'lucide-react';
+import { Plus, Trash2, AlertTriangle } from 'lucide-react';
 
 interface PricingTier {
   minParticipants: number;
@@ -33,20 +43,37 @@ export function PricingTiersForm({ initialTiers }: PricingTiersFormProps) {
         ]
   );
   const [saving, setSaving] = useState(false);
+  const [switchDialogOpen, setSwitchDialogOpen] = useState(false);
+  const [pendingMode, setPendingMode] = useState<'quick' | 'custom' | null>(null);
 
-  const handleQuickSetup = () => {
-    setTiers([
-      { minParticipants: 2, maxParticipants: 2, pricePerPerson: '' },
-      { minParticipants: 3, maxParticipants: 3, pricePerPerson: '' },
-      { minParticipants: 4, maxParticipants: 4, pricePerPerson: '' },
-      { minParticipants: 5, maxParticipants: null, pricePerPerson: '' },
-    ]);
-    setMode('quick');
+  const hasFilledPrices = tiers.some(t => t.pricePerPerson !== '');
+
+  const requestModeSwitch = (newMode: 'quick' | 'custom') => {
+    if (newMode === mode) return;
+    
+    if (!hasFilledPrices) {
+      confirmModeSwitch(newMode);
+      return;
+    }
+    
+    setPendingMode(newMode);
+    setSwitchDialogOpen(true);
   };
 
-  const handleCustomSetup = () => {
-    setTiers([{ minParticipants: 2, maxParticipants: 4, pricePerPerson: '' }]);
-    setMode('custom');
+  const confirmModeSwitch = (newMode: 'quick' | 'custom') => {
+    if (newMode === 'quick') {
+      setTiers([
+        { minParticipants: 2, maxParticipants: 2, pricePerPerson: '' },
+        { minParticipants: 3, maxParticipants: 3, pricePerPerson: '' },
+        { minParticipants: 4, maxParticipants: 4, pricePerPerson: '' },
+        { minParticipants: 5, maxParticipants: null, pricePerPerson: '' },
+      ]);
+    } else {
+      setTiers([{ minParticipants: 2, maxParticipants: 4, pricePerPerson: '' }]);
+    }
+    setMode(newMode);
+    setSwitchDialogOpen(false);
+    setPendingMode(null);
   };
 
   const addTier = () => {
@@ -99,14 +126,14 @@ export function PricingTiersForm({ initialTiers }: PricingTiersFormProps) {
           <Button
             type="button"
             variant={mode === 'quick' ? 'default' : 'outline'}
-            onClick={handleQuickSetup}
+            onClick={() => requestModeSwitch('quick')}
           >
             Quick Setup (2, 3, 4, 5+)
           </Button>
           <Button
             type="button"
             variant={mode === 'custom' ? 'default' : 'outline'}
-            onClick={handleCustomSetup}
+            onClick={() => requestModeSwitch('custom')}
           >
             Custom Ranges
           </Button>
@@ -116,6 +143,12 @@ export function PricingTiersForm({ initialTiers }: PricingTiersFormProps) {
             ? 'Set a fixed price for 2, 3, 4, and 5+ participants'
             : 'Create custom participant ranges with different pricing'}
         </p>
+        <div className="mt-3 flex items-start gap-2 p-3 bg-blue-50 border border-blue-200 rounded-lg">
+          <AlertTriangle className="h-4 w-4 text-blue-600 mt-0.5 flex-shrink-0" />
+          <p className="text-xs text-blue-800">
+            <strong>Important:</strong> Pricing tiers must not overlap. Each participant count should belong to only one tier.
+          </p>
+        </div>
       </div>
 
       <div className="space-y-4">
@@ -222,6 +255,37 @@ export function PricingTiersForm({ initialTiers }: PricingTiersFormProps) {
           </Button>
         </div>
       </div>
+
+      <AlertDialog open={switchDialogOpen} onOpenChange={setSwitchDialogOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle className="flex items-center gap-2">
+              <AlertTriangle className="h-5 w-5 text-orange-600" />
+              Switch Pricing Mode?
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              You have unsaved prices in your current tiers. Switching to {pendingMode === 'quick' ? 'Quick Setup' : 'Custom Ranges'} will{' '}
+              <strong>reset all your current tiers and prices</strong>.
+              <br /><br />
+              Are you sure you want to continue?
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel onClick={() => {
+              setSwitchDialogOpen(false);
+              setPendingMode(null);
+            }}>
+              Cancel
+            </AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => pendingMode && confirmModeSwitch(pendingMode)}
+              className="bg-orange-600 hover:bg-orange-700"
+            >
+              Yes, Switch Mode
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

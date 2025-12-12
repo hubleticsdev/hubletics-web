@@ -52,6 +52,27 @@ export async function updatePricingTiers(tiers: PricingTierInput[]) {
       }
     }
 
+    // Check for overlapping ranges
+    const sortedTiers = [...tiers].sort((a, b) => a.minParticipants - b.minParticipants);
+    for (let i = 0; i < sortedTiers.length - 1; i++) {
+      const current = sortedTiers[i];
+      const next = sortedTiers[i + 1];
+      
+      if (current.maxParticipants === null) {
+        return {
+          success: false,
+          error: `Tier ${i + 1} (${current.minParticipants}+) overlaps with tier ${i + 2}. Only the last tier can have unlimited participants.`
+        };
+      }
+      
+      if (current.maxParticipants >= next.minParticipants) {
+        return {
+          success: false,
+          error: `Tiers ${i + 1} and ${i + 2} overlap. Tier ${i + 1} ends at ${current.maxParticipants}, but tier ${i + 2} starts at ${next.minParticipants}. Tiers must not overlap.`
+        };
+      }
+    }
+
     await db.delete(groupPricingTier).where(eq(groupPricingTier.coachId, session.user.id));
 
     if (tiers.length > 0) {
