@@ -229,7 +229,7 @@ export function CoachBookingCard({ booking, onUpdate }: BookingCardProps) {
               <summary className="cursor-pointer hover:text-gray-700">View breakdown</summary>
               <div className="mt-2 space-y-1 bg-gray-50 p-2 rounded">
                 <div className="flex justify-between">
-                  <span>Client paid:</span>
+                  <span>Client pays:</span>
                   <span className="font-medium">${clientPaid}</span>
                 </div>
                 <div className="flex justify-between text-red-600">
