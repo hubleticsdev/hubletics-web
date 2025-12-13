@@ -15,6 +15,13 @@
       "when": 1765581613217,
       "tag": "0001_young_silver_sable",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1765592416118,
+      "tag": "0002_spotty_sphinx",
+      "breakpoints": true
     }
   ]
 }

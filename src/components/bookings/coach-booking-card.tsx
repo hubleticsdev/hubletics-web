@@ -5,6 +5,7 @@ import { acceptBooking, declineBooking } from '@/actions/bookings/manage';
 import Image from 'next/image';
 import { formatUiBookingStatus } from '@/lib/booking-status';
 import type { UiBookingStatus } from '@/lib/booking-status';
+import { formatDateOnly, formatTimeOnly } from '@/lib/utils/date';
 
 interface BookingCardProps {
   booking: {
@@ -30,10 +31,11 @@ interface BookingCardProps {
       image?: string | null;
     };
   };
+  timezone?: string;
   onUpdate?: () => void;
 }
 
-export function CoachBookingCard({ booking, onUpdate }: BookingCardProps) {
+export function CoachBookingCard({ booking, timezone = 'America/Chicago', onUpdate }: BookingCardProps) {
   const [isProcessing, setIsProcessing] = useState(false);
   const [showDeclineForm, setShowDeclineForm] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -157,12 +159,12 @@ export function CoachBookingCard({ booking, onUpdate }: BookingCardProps) {
           </svg>
           <div>
             <div className="font-medium text-gray-900">
-              {startDate.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' })}
+              {formatDateOnly(startDate, timezone)}
             </div>
             <div className="text-sm text-gray-600">
-              {startDate.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })}
+              {formatTimeOnly(startDate, timezone)}
               {endDate && booking.duration && (
-                <> - {endDate.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })} ({booking.duration} min)</>
+                <> - {formatTimeOnly(endDate, timezone)} ({booking.duration} min)</>
               )}
             </div>
           </div>

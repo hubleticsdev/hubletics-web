@@ -64,6 +64,7 @@ interface CoachDashboardClientProps {
     name: string;
     image: string | null;
   };
+  timezone: string;
   pendingRequests: Array<{
     id: string;
     clientId?: string;
@@ -124,6 +125,7 @@ export function CoachDashboardClient({
   needsStripeOnboarding,
   isFullyOnboarded,
   session,
+  timezone,
 }: CoachDashboardClientProps) {
   const [editLessonModalOpen, setEditLessonModalOpen] = useState(false);
   const [selectedLesson, setSelectedLesson] = useState<RecurringLesson | null>(null);
@@ -291,10 +293,10 @@ export function CoachDashboardClient({
         }}
         renderItem={(booking) => {
           if (booking.hasPendingParticipants) {
-            return <GroupBookingCard key={booking.id} booking={booking} />;
+            return <GroupBookingCard key={booking.id} booking={booking} timezone={timezone} />;
           }
           const normalizedStatus = (booking.status ?? 'awaiting_coach') as UiBookingStatus;
-          return <CoachBookingCard key={booking.id} booking={{ ...booking, status: normalizedStatus }} />;
+          return <CoachBookingCard key={booking.id} booking={{ ...booking, status: normalizedStatus }} timezone={timezone} />;
         }}
       />
 
@@ -315,7 +317,7 @@ export function CoachDashboardClient({
         }}
         renderItem={(booking) => {
           const normalizedStatus = (booking.status ?? 'awaiting_coach') as UiBookingStatus;
-          return <CoachBookingCard key={booking.id} booking={{ ...booking, status: normalizedStatus }} />;
+          return <CoachBookingCard key={booking.id} booking={{ ...booking, status: normalizedStatus }} timezone={timezone} />;
         }}
       />
 

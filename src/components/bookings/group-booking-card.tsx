@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { acceptParticipant } from '@/actions/group-bookings/accept-participant';
 import { declineParticipant } from '@/actions/group-bookings/decline-participant';
 import Image from 'next/image';
+import { formatDateOnly, formatTimeOnly } from '@/lib/utils/date';
 
 interface GroupBookingCardProps {
   booking: {
@@ -11,6 +12,7 @@ interface GroupBookingCardProps {
     scheduledStartAt: Date;
     scheduledEndAt?: Date;
     duration?: number;
+    timezone?: string;
     location?: {
       name: string;
       address: string;
@@ -32,10 +34,11 @@ interface GroupBookingCardProps {
       };
     }>;
   };
+  timezone?: string;
   onUpdate?: () => void;
 }
 
-export function GroupBookingCard({ booking, onUpdate }: GroupBookingCardProps) {
+export function GroupBookingCard({ booking, timezone = 'America/Chicago', onUpdate }: GroupBookingCardProps) {
   const [processingParticipants, setProcessingParticipants] = useState<Set<string>>(new Set());
   const [showDeclineForm, setShowDeclineForm] = useState<string | null>(null);
   const [errors, setErrors] = useState<Record<string, string>>({});
@@ -106,12 +109,12 @@ export function GroupBookingCard({ booking, onUpdate }: GroupBookingCardProps) {
           </svg>
           <div>
             <div className="font-medium text-gray-900">
-              {startDate.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' })}
+              {formatDateOnly(startDate, timezone)}
             </div>
             <div className="text-sm text-gray-600">
-              {startDate.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })}
+              {formatTimeOnly(startDate, timezone)}
               {endDate && booking.duration && (
-                <> - {endDate.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })} ({booking.duration} min)</>
+                <> - {formatTimeOnly(endDate, timezone)} ({booking.duration} min)</>
               )}
             </div>
           </div>

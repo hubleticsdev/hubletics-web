@@ -6,6 +6,7 @@ import Image from 'next/image';
 import { Pagination } from '@/components/ui/pagination';
 import { getPaginationOptions, createPaginationResult, getOffset } from '@/lib/pagination';
 import { deriveUiBookingStatus, formatUiBookingStatus } from '@/lib/booking-status';
+import { formatDateWithTimezone } from '@/lib/utils/date';
 
 export const dynamic = 'force-dynamic';
 
@@ -154,7 +155,7 @@ export default async function AdminBookingsPage({ searchParams }: AdminBookingsP
                     <div className="ml-13 space-y-1">
                       <p className="text-sm text-gray-900">
                         <span className="font-medium">Date:</span>{' '}
-                        {new Date(booking.scheduledStartAt).toLocaleString()}
+                        {formatDateWithTimezone(new Date(booking.scheduledStartAt), 'America/Chicago')}
                       </p>
                       <p className="text-sm text-gray-900">
                         <span className="font-medium">Duration:</span> {booking.duration} minutes

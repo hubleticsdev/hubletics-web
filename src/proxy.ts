@@ -48,6 +48,7 @@ export default async function proxy(request: NextRequest) {
     requestHeaders.set('x-user-image', user.image || '');
     requestHeaders.set('x-user-profile-complete', user.profileComplete ? 'true' : 'false');
     requestHeaders.set('x-user-status', status);
+    requestHeaders.set('x-user-timezone', user.timezone || 'America/Chicago');
 
     if (status !== 'active') {
       await auth.api.signOut({

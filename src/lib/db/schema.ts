@@ -121,6 +121,8 @@ export const user = pgTable(
       .notNull()
       .default('15.00'),
 
+    timezone: text('timezone').notNull().default('America/Chicago'),
+
     onboardingPhotoUrl: text('onboardingPhotoUrl'),
     onboardingVideoUrl: text('onboardingVideoUrl'),
 

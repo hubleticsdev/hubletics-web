@@ -36,6 +36,11 @@ export default async function AthleteDashboard() {
 
   const athlete = await db.query.athleteProfile.findFirst({
     where: eq(athleteProfile.userId, session.user.id),
+    with: {
+      user: {
+        columns: { timezone: true },
+      },
+    },
   });
 
   if (!athlete) {
@@ -130,7 +135,7 @@ export default async function AthleteDashboard() {
             'Every request has been answered. Browse coaches to plan your next training block.',
           action: { href: '/coaches', label: 'Find coaches' },
         }}
-        renderItem={(booking) => <AthleteBookingCard key={booking.id} booking={booking} />}
+        renderItem={(booking) => <AthleteBookingCard key={booking.id} booking={booking} timezone={athlete?.user?.timezone || 'America/Chicago'} />}
       />
 
       <BookingSection
@@ -149,7 +154,7 @@ export default async function AthleteDashboard() {
             'Keep the momentum going by booking your next workout with a coach who fits your goals.',
           action: { href: '/coaches', label: 'Book a session' },
         }}
-        renderItem={(booking) => <AthleteBookingCard key={booking.id} booking={booking} />}
+        renderItem={(booking) => <AthleteBookingCard key={booking.id} booking={booking} timezone={athlete?.user?.timezone || 'America/Chicago'} />}
       />
 
       <InterestsSection sportsInterested={sportsInterested} />
@@ -172,7 +177,7 @@ function HeroBanner({
       : `${sportsInterested.length} sport${sportsInterested.length === 1 ? '' : 's'} on your radar.`;
 
   return (
-    <section className="relative overflow-hidden rounded-[36px] border border-white/70 bg-gradient-to-br from-[#FF6B4A]/12 via-white to-[#FFB84D]/12 shadow-[0_45px_120px_-80px_rgba(15,23,42,0.7)]">
+    <section className="relative overflow-hidden rounded-[36px] border border-white/70 bg-linear-to-br from-[#FF6B4A]/12 via-white to-[#FFB84D]/12 shadow-[0_45px_120px_-80px_rgba(15,23,42,0.7)]">
       <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_top_left,rgba(255,107,74,0.18),transparent_62%)]" />
       <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_bottom_right,rgba(255,184,77,0.18),transparent_60%)]" />
 
@@ -200,7 +205,7 @@ function HeroBanner({
               </p>
               <Link
                 href="/dashboard/profile"
-                className="mt-4 inline-flex items-center justify-center rounded-full bg-gradient-to-r from-[#FF6B4A] via-[#FF8C5A] to-[#FFB84D] px-4 py-2 text-xs font-semibold uppercase tracking-[0.32em] text-white shadow-[0_12px_30px_-18px_rgba(255,107,74,0.8)] transition hover:scale-[1.02]"
+                className="mt-4 inline-flex items-center justify-center rounded-full bg-linear-to-r from-[#FF6B4A] via-[#FF8C5A] to-[#FFB84D] px-4 py-2 text-xs font-semibold uppercase tracking-[0.32em] text-white shadow-[0_12px_30px_-18px_rgba(255,107,74,0.8)] transition hover:scale-[1.02]"
               >
                 Update interests
               </Link>
@@ -238,7 +243,7 @@ function HeroBanner({
               </p>
               <Link
                 href="/coaches"
-                className="mt-5 inline-flex items-center justify-center rounded-full bg-gradient-to-r from-[#FF6B4A] via-[#FF8C5A] to-[#FFB84D] px-6 py-2 text-sm font-semibold text-white shadow-[0_12px_30px_-18px_rgba(255,107,74,0.8)] transition hover:scale-[1.02]"
+                className="mt-5 inline-flex items-center justify-center rounded-full bg-linear-to-r from-[#FF6B4A] via-[#FF8C5A] to-[#FFB84D] px-6 py-2 text-sm font-semibold text-white shadow-[0_12px_30px_-18px_rgba(255,107,74,0.8)] transition hover:scale-[1.02]"
               >
                 Book a coach
               </Link>
@@ -362,7 +367,7 @@ function BookingSection<T>({
           {action && (
             <Link
               href={action.href}
-              className="mt-2 inline-flex items-center justify-center rounded-full bg-gradient-to-r from-[#FF6B4A] via-[#FF8C5A] to-[#FFB84D] px-5 py-2 text-xs font-semibold uppercase tracking-[0.32em] text-white shadow-[0_12px_30px_-18px_rgba(255,107,74,0.8)] transition hover:scale-[1.02]"
+              className="mt-2 inline-flex items-center justify-center rounded-full bg-linear-to-r from-[#FF6B4A] via-[#FF8C5A] to-[#FFB84D] px-5 py-2 text-xs font-semibold uppercase tracking-[0.32em] text-white shadow-[0_12px_30px_-18px_rgba(255,107,74,0.8)] transition hover:scale-[1.02]"
             >
               {action.label}
             </Link>
@@ -401,7 +406,7 @@ function InterestsSection({ sportsInterested }: { sportsInterested: string[] }) 
               href={`/coaches?sport=${encodeURIComponent(sport)}`}
               className="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700 transition hover:border-[#FF6B4A]/50 hover:text-[#FF6B4A]"
             >
-              <span className="h-1.5 w-1.5 rounded-full bg-gradient-to-r from-[#FF6B4A] to-[#FFB84D]" />
+              <span className="h-1.5 w-1.5 rounded-full bg-linear-to-r from-[#FF6B4A] to-[#FFB84D]" />
               {sport}
             </Link>
           ))

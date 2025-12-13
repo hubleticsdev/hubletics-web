@@ -13,6 +13,11 @@ export default async function CoachDashboard() {
 
   const coach = await db.query.coachProfile.findFirst({
     where: eq(coachProfile.userId, session.user.id),
+    with: {
+      user: {
+        columns: { timezone: true },
+      },
+    },
   });
 
   if (!coach) {
@@ -41,6 +46,7 @@ export default async function CoachDashboard() {
       upcomingSessions={upcomingSessions}
       earningsSummary={earningsSummary}
       recurringLessons={recurringLessons}
+      timezone={coach?.user?.timezone || 'America/Chicago'}
       needsApproval={needsApproval}
       needsStripeOnboarding={needsStripeOnboarding}
       isFullyOnboarded={isFullyOnboarded}

@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { cancelBooking, confirmBookingComplete } from '@/actions/bookings/manage';
 import Image from 'next/image';
 import type { UiBookingStatus } from '@/lib/booking-status';
+import { formatDateOnly, formatTimeOnly, formatDateWithTimezone } from '@/lib/utils/date';
 import { PaymentModal } from './payment-modal';
 
 interface AthleteBookingCardProps {
@@ -29,10 +30,11 @@ interface AthleteBookingCardProps {
       image: string | null;
     };
   };
+  timezone?: string;
   onUpdate?: () => void;
 }
 
-export function AthleteBookingCard({ booking, onUpdate }: AthleteBookingCardProps) {
+export function AthleteBookingCard({ booking, timezone = 'America/Chicago', onUpdate }: AthleteBookingCardProps) {
   const [isProcessing, setIsProcessing] = useState(false);
   const [showCancelForm, setShowCancelForm] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -143,11 +145,11 @@ export function AthleteBookingCard({ booking, onUpdate }: AthleteBookingCardProp
           </svg>
           <div>
             <div className="font-medium text-gray-900">
-              {startDate.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' })}
+              {formatDateOnly(startDate, timezone)}
             </div>
             <div className="text-sm text-gray-600">
-              {startDate.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })} -{' '}
-              {endDate.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })} ({booking.duration} min)
+              {formatTimeOnly(startDate, timezone)} -{' '}
+              {formatTimeOnly(endDate, timezone)} ({booking.duration} min)
             </div>
           </div>
         </div>
@@ -232,12 +234,7 @@ export function AthleteBookingCard({ booking, onUpdate }: AthleteBookingCardProp
             <svg className="h-3 w-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
             </svg>
-            Payment due: {new Date(booking.paymentDueAt).toLocaleDateString('en-US', {
-              month: 'short',
-              day: 'numeric',
-              hour: 'numeric',
-              minute: '2-digit'
-            })}
+            Payment due: {formatDateWithTimezone(new Date(booking.paymentDueAt!), timezone)}
           </div>
         </div>
       )}

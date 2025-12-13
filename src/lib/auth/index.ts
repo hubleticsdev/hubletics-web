@@ -73,6 +73,11 @@ export const auth = betterAuth({
         defaultValue: 'active',
         input: false,
       },
+      timezone: {
+        type: 'string',
+        required: true,
+        defaultValue: 'America/Chicago',
+      },
       profileComplete: {
         type: 'boolean',
         required: true,

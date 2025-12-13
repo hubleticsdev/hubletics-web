@@ -34,6 +34,7 @@ export const getSession = cache(async (): Promise<SessionResponse> => {
         image: headersList.get('x-user-image') || null,
         profileComplete: headersList.get('x-user-profile-complete') === 'true',
         status: headersList.get('x-user-status') as 'active' | 'suspended' | 'banned' | 'deactivated',
+        timezone: headersList.get('x-user-timezone') || 'America/Chicago',
         emailVerified: true,
         createdAt: new Date(),
         updatedAt: new Date(),
