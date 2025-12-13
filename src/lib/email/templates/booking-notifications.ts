@@ -9,9 +9,12 @@ export function getBookingRequestEmailTemplate(
     time: string;
     duration: number;
     location: string;
-    amount: string;
+    amountCents?: number | null;
   }
 ) {
+  const formatDollarsFromCents = (amountCents?: number | null) =>
+    !amountCents || Number.isNaN(amountCents) ? '0.00' : (amountCents / 100).toFixed(2);
+  const amount = formatDollarsFromCents(bookingDetails.amountCents);
   // Sanitize user names for email safety
   const safeCoachName = sanitizeName(coachName);
   const safeAthleteName = sanitizeName(athleteName);
@@ -33,7 +36,7 @@ export function getBookingRequestEmailTemplate(
             <p style="margin: 5px 0;"><strong>Time:</strong> ${bookingDetails.time}</p>
             <p style="margin: 5px 0;"><strong>Duration:</strong> ${bookingDetails.duration} minutes</p>
             <p style="margin: 5px 0;"><strong>Location:</strong> ${bookingDetails.location}</p>
-            <p style="margin: 5px 0;"><strong>Amount:</strong> $${bookingDetails.amount}</p>
+            <p style="margin: 5px 0;"><strong>Amount:</strong> $${amount}</p>
           </div>
 
           <p>The payment is currently on hold. Once you accept the booking, the payment will be processed automatically.</p>
@@ -58,7 +61,7 @@ Session Details:
 - Time: ${bookingDetails.time}
 - Duration: ${bookingDetails.duration} minutes
 - Location: ${bookingDetails.location}
-- Amount: $${bookingDetails.amount}
+            - Amount: $${amount}
 
 The payment is currently on hold. Once you accept the booking, the payment will be processed automatically.
 
@@ -79,9 +82,12 @@ export function getBookingAcceptedEmailTemplate(
     time: string;
     duration: number;
     location: string;
-    amount: string;
+    amountCents?: number | null;
   }
 ) {
+  const formatDollarsFromCents = (amountCents?: number | null) =>
+    !amountCents || Number.isNaN(amountCents) ? '0.00' : (amountCents / 100).toFixed(2);
+  const amount = formatDollarsFromCents(bookingDetails.amountCents);
   // Sanitize user names for email safety
   const safeAthleteName = sanitizeName(athleteName);
   const safeCoachName = sanitizeName(coachName);
@@ -103,7 +109,7 @@ export function getBookingAcceptedEmailTemplate(
             <p style="margin: 5px 0;"><strong>Time:</strong> ${bookingDetails.time}</p>
             <p style="margin: 5px 0;"><strong>Duration:</strong> ${bookingDetails.duration} minutes</p>
             <p style="margin: 5px 0;"><strong>Location:</strong> ${bookingDetails.location}</p>
-            <p style="margin: 5px 0;"><strong>Amount Charged:</strong> $${bookingDetails.amount}</p>
+            <p style="margin: 5px 0;"><strong>Amount Charged:</strong> $${amount}</p>
           </div>
 
           <p>Your payment has been processed. See you at the session!</p>
@@ -128,7 +134,7 @@ Confirmed Session Details:
 - Time: ${bookingDetails.time}
 - Duration: ${bookingDetails.duration} minutes
 - Location: ${bookingDetails.location}
-- Amount Charged: $${bookingDetails.amount}
+            - Amount Charged: $${amount}
 
 Your payment has been processed. See you at the session!
 
@@ -252,4 +258,3 @@ Best regards,
 The Hubletics Team`,
   };
 }
-

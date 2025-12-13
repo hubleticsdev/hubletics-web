@@ -19,7 +19,7 @@ export function ParticipantSelector({
   maxParticipants = 20,
 }: ParticipantSelectorProps) {
   const [searchQuery, setSearchQuery] = useState('');
-  const [searchResults, setSearchResults] = useState<Array<{ username: string; name: string; image: string | null }>>([]);
+  const [searchResults, setSearchResults] = useState<Array<{ username: string | null; name: string; image: string | null }>>([]);
   const isSearchingRef = useRef(false);
 
   // Derive if we should show search results
@@ -33,9 +33,11 @@ export function ParticipantSelector({
         try {
           const result = await searchUsersByUsername(searchQuery);
           if (result.success && result.users) {
-            setSearchResults(
-              result.users.filter(u => !selectedUsernames.includes(u.username))
+            const candidates = result.users.filter(
+              (u): u is { username: string; name: string; image: string | null } =>
+                Boolean(u.username) && !selectedUsernames.includes(u.username as string)
             );
+            setSearchResults(candidates);
           } else {
             setSearchResults([]);
           }
@@ -82,13 +84,15 @@ export function ParticipantSelector({
         <div className="border border-gray-200 rounded-lg divide-y max-h-48 overflow-y-auto">
           {searchResults.map((user) => (
             <button
-              key={user.username}
+              key={user.username || user.name}
               type="button"
               onClick={() => {
+                if (!user.username) return;
                 onAdd(user.username);
                 setSearchQuery('');
                 setSearchResults([]);
               }}
+              disabled={!user.username}
               className="w-full flex items-center gap-3 p-3 hover:bg-gray-50 transition-colors text-left"
             >
               <div className="w-10 h-10 rounded-full bg-gray-200 flex items-center justify-center overflow-hidden">
@@ -102,7 +106,9 @@ export function ParticipantSelector({
               </div>
               <div>
                 <div className="font-medium text-gray-900">{user.name}</div>
-                <div className="text-sm text-gray-500">@{user.username}</div>
+                <div className="text-sm text-gray-500">
+                  {user.username ? `@${user.username}` : 'No username'}
+                </div>
               </div>
             </button>
           ))}
@@ -142,4 +148,3 @@ export function ParticipantSelector({
     </div>
   );
 }
-

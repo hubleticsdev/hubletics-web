@@ -22,8 +22,10 @@ import { format } from 'date-fns';
 import { useState } from 'react';
 
 import { CoachBookingCard } from '@/components/bookings/coach-booking-card';
+import { GroupBookingCard } from '@/components/bookings/group-booking-card';
 import { EditRecurringLessonModal } from '@/components/group-bookings/edit-recurring-lesson-modal';
 import { cn } from '@/lib/utils';
+import type { UiBookingStatus } from '@/lib/booking-status';
 
 type StatusTone = 'warning' | 'info' | 'success';
 
@@ -64,10 +66,30 @@ interface CoachDashboardClientProps {
   };
   pendingRequests: Array<{
     id: string;
-    clientId: string;
-    client: { name: string };
+    clientId?: string;
+    client?: { name: string; email?: string; image?: string | null; id?: string };
     scheduledStartAt: Date;
-    location?: { name: string; address: string };
+    scheduledEndAt?: Date;
+    duration?: number;
+    location?: { name: string; address: string; notes?: string };
+    clientMessage?: string | null;
+    isGroupBooking?: boolean;
+    groupType?: string | null;
+    pricePerPerson?: string | null;
+    maxParticipants?: number | null;
+    currentParticipants?: number | null;
+    hasPendingParticipants?: boolean;
+    pendingParticipantsCount?: number;
+    pendingParticipants?: Array<{
+      id: string;
+      user: {
+        id: string;
+        name: string;
+        email: string;
+        image?: string | null;
+      };
+    }>;
+    status?: import('@/lib/booking-status').UiBookingStatus;
   }>;
   upcomingSessions: UpcomingBooking[];
   earningsSummary: {
@@ -267,7 +289,13 @@ export function CoachDashboardClient({
           description:
             'You have answered every inquiry. Keep an eye on your messages for new leads.',
         }}
-        renderItem={(booking) => <CoachBookingCard key={booking.id} booking={booking} />}
+        renderItem={(booking) => {
+          if (booking.hasPendingParticipants) {
+            return <GroupBookingCard key={booking.id} booking={booking} />;
+          }
+          const normalizedStatus = (booking.status ?? 'awaiting_coach') as UiBookingStatus;
+          return <CoachBookingCard key={booking.id} booking={{ ...booking, status: normalizedStatus }} />;
+        }}
       />
 
       <BookingSection
@@ -285,7 +313,10 @@ export function CoachDashboardClient({
           description:
             'Secure more bookings by updating availability and responding quickly to new requests.',
         }}
-        renderItem={(booking) => <CoachBookingCard key={booking.id} booking={booking} />}
+        renderItem={(booking) => {
+          const normalizedStatus = (booking.status ?? 'awaiting_coach') as UiBookingStatus;
+          return <CoachBookingCard key={booking.id} booking={{ ...booking, status: normalizedStatus }} />;
+        }}
       />
 
       {coach.allowPublicGroups && (
@@ -645,7 +676,7 @@ function StatusCard({ tone, title, description, cta, icon: Icon }: StatusBanner)
 function NextSessionCard({ booking }: { booking: UpcomingBooking }) {
   const start = new Date(booking.scheduledStartAt);
   const end = new Date(booking.scheduledEndAt);
-  const amount = Number.parseFloat(booking.clientPaid ?? '0');
+  const amount = booking.expectedGrossCents ? booking.expectedGrossCents / 100 : 0;
   const locationName = booking.location?.name ?? 'Location to be confirmed';
   const locationAddress = booking.location?.address ?? 'Address shared after confirmation';
   const durationLabel = Number.isFinite(booking.duration) ? `${booking.duration} min` : '—';

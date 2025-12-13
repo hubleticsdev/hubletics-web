@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import { cancelBooking, confirmBookingComplete } from '@/actions/bookings/manage';
 import Image from 'next/image';
+import type { UiBookingStatus } from '@/lib/booking-status';
 
 interface AthleteBookingCardProps {
   booking: {
@@ -15,10 +16,10 @@ interface AthleteBookingCardProps {
       address: string;
       notes?: string;
     };
-    clientPaid: string;
-    status: string;
-    markedCompleteByCoach: boolean;
-    confirmedByClient: boolean;
+    expectedGrossCents?: number | null;
+    status: UiBookingStatus;
+    coachConfirmedAt?: Date | null;
+    clientConfirmedAt?: Date | null;
     coach: {
       id: string;
       name: string;
@@ -37,6 +38,7 @@ export function AthleteBookingCard({ booking, onUpdate }: AthleteBookingCardProp
   const startDate = new Date(booking.scheduledStartAt);
   const endDate = new Date(booking.scheduledEndAt);
   const isPast = startDate < new Date();
+  const amount = booking.expectedGrossCents ? (booking.expectedGrossCents / 100).toFixed(2) : '0.00';
 
   const handleConfirmComplete = async () => {
     setIsProcessing(true);
@@ -74,9 +76,11 @@ export function AthleteBookingCard({ booking, onUpdate }: AthleteBookingCardProp
 
   const getStatusBadge = () => {
     switch (booking.status) {
-      case 'pending':
+      case 'awaiting_coach':
         return <span className="px-3 py-1 bg-yellow-100 text-yellow-800 text-sm font-medium rounded-full">Pending Coach Response</span>;
-      case 'accepted':
+      case 'awaiting_payment':
+        return <span className="px-3 py-1 bg-orange-100 text-orange-800 text-sm font-medium rounded-full">Payment Required</span>;
+      case 'confirmed':
         return <span className="px-3 py-1 bg-green-100 text-green-800 text-sm font-medium rounded-full">Confirmed</span>;
       case 'declined':
         return <span className="px-3 py-1 bg-red-100 text-red-800 text-sm font-medium rounded-full">Declined</span>;
@@ -84,6 +88,12 @@ export function AthleteBookingCard({ booking, onUpdate }: AthleteBookingCardProp
         return <span className="px-3 py-1 bg-gray-100 text-gray-800 text-sm font-medium rounded-full">Cancelled</span>;
       case 'completed':
         return <span className="px-3 py-1 bg-blue-100 text-blue-800 text-sm font-medium rounded-full">Completed</span>;
+      case 'disputed':
+        return <span className="px-3 py-1 bg-purple-100 text-purple-800 text-sm font-medium rounded-full">Disputed</span>;
+      case 'expired':
+        return <span className="px-3 py-1 bg-gray-200 text-gray-700 text-sm font-medium rounded-full">Expired</span>;
+      case 'open':
+        return <span className="px-3 py-1 bg-teal-100 text-teal-800 text-sm font-medium rounded-full">Open</span>;
       default:
         return null;
     }
@@ -172,12 +182,12 @@ export function AthleteBookingCard({ booking, onUpdate }: AthleteBookingCardProp
               d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
             />
           </svg>
-          <span className="text-lg font-bold text-[#FF6B4A]">${parseFloat(booking.clientPaid).toFixed(2)}</span>
+          <span className="text-lg font-bold text-[#FF6B4A]">${amount}</span>
         </div>
       </div>
 
       {/* Actions */}
-      {booking.status === 'accepted' && booking.markedCompleteByCoach && !booking.confirmedByClient && (
+      {booking.status === 'confirmed' && booking.coachConfirmedAt && !booking.clientConfirmedAt && (
         <div className="pt-4 border-t border-gray-200">
           <div className="p-3 bg-blue-50 border border-blue-200 rounded-lg mb-3">
             <p className="text-sm text-blue-800">
@@ -194,7 +204,7 @@ export function AthleteBookingCard({ booking, onUpdate }: AthleteBookingCardProp
         </div>
       )}
 
-      {booking.status === 'pending' && !showCancelForm && (
+      {booking.status === 'awaiting_coach' && !showCancelForm && (
         <div className="pt-4 border-t border-gray-200">
           <button
             onClick={() => setShowCancelForm(true)}
@@ -206,7 +216,7 @@ export function AthleteBookingCard({ booking, onUpdate }: AthleteBookingCardProp
         </div>
       )}
 
-      {booking.status === 'accepted' && !isPast && !showCancelForm && (
+      {['confirmed', 'awaiting_payment'].includes(booking.status) && !isPast && !showCancelForm && (
         <div className="pt-4 border-t border-gray-200">
           <button
             onClick={() => setShowCancelForm(true)}
@@ -253,4 +263,3 @@ export function AthleteBookingCard({ booking, onUpdate }: AthleteBookingCardProp
     </div>
   );
 }
-

@@ -14,6 +14,8 @@ export function AthleteCard({ athlete }: { athlete: AthleteSearchResult }) {
     return `$${budget.min}-${budget.max}`;
   })();
 
+  const usernameDisplay = athlete.user.username ? `@${athlete.user.username}` : '';
+
   return (
     <Link
       href={`/athletes/${athlete.userId}`}
@@ -37,9 +39,11 @@ export function AthleteCard({ athlete }: { athlete: AthleteSearchResult }) {
           <h3 className="text-xl font-bold text-gray-900 group-hover:text-[#FF6B4A] transition-colors inline">
             {athlete.fullName}
           </h3>
-          <span className="text-sm text-gray-500 ml-2">
-            @{athlete.user.username}
-          </span>
+          {usernameDisplay && (
+            <span className="text-sm text-gray-500 ml-2">
+              {usernameDisplay}
+            </span>
+          )}
         </div>
 
         <div className="flex items-center gap-2 text-gray-600 mb-3">
@@ -101,4 +105,3 @@ export function AthleteCard({ athlete }: { athlete: AthleteSearchResult }) {
     </Link>
   );
 }
-

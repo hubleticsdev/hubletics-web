@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
 import { booking } from '@/lib/db/schema';
-import { and, eq, isNull } from 'drizzle-orm';
+import { eq } from 'drizzle-orm';
 import { sendEmail } from '@/lib/email/resend';
 import {
   getBookingCancelledDueToPaymentEmailTemplate,
@@ -21,17 +21,13 @@ export async function GET(request: NextRequest) {
     console.log(`[CRON] Payment deadlines job started at ${now.toISOString()}`);
 
     const results = {
-      reminders12h: 0,
       reminders30m: 0,
       cancelled: 0,
       errors: [] as string[],
     };
 
     const awaitingPaymentBookings = await db.query.booking.findMany({
-      where: and(
-        eq(booking.status, 'awaiting_payment'),
-        isNull(booking.paymentCompletedAt)
-      ),
+      where: eq(booking.paymentStatus, 'awaiting_client_payment'),
       with: {
         client: {
           columns: {
@@ -62,7 +58,8 @@ export async function GET(request: NextRequest) {
           await db
             .update(booking)
             .set({
-              status: 'cancelled',
+              approvalStatus: 'cancelled',
+              paymentStatus: 'failed',
               cancelledBy: null,
               cancelledAt: now,
               cancellationReason: 'Payment not received within 24 hours',
@@ -100,53 +97,6 @@ export async function GET(request: NextRequest) {
           continue;
         }
 
-        if (hoursUntilDue <= 12 && hoursUntilDue > 11.98 && !bookingRecord.paymentReminderSentAt) {
-          const startDate = new Date(bookingRecord.scheduledStartAt);
-          const lessonDate = startDate.toLocaleDateString('en-US', {
-            weekday: 'long',
-            month: 'long',
-            day: 'numeric'
-          });
-          const lessonTime = startDate.toLocaleTimeString('en-US', {
-            hour: 'numeric',
-            minute: '2-digit'
-          });
-          const paymentDeadline = paymentDueAt.toLocaleString('en-US', {
-            weekday: 'long',
-            month: 'long',
-            day: 'numeric',
-            hour: 'numeric',
-            minute: '2-digit'
-          });
-
-          const emailTemplate = getPaymentReminder12HoursEmailTemplate(
-            bookingRecord.client.name,
-            bookingRecord.coach.name,
-            lessonDate,
-            lessonTime,
-            parseFloat(bookingRecord.clientPaid).toFixed(2),
-            paymentDeadline
-          );
-
-          await sendEmail({
-            to: bookingRecord.client.email,
-            subject: emailTemplate.subject,
-            html: emailTemplate.html,
-            text: emailTemplate.text,
-          });
-
-          await db
-            .update(booking)
-            .set({
-              paymentReminderSentAt: now,
-              updatedAt: now,
-            })
-            .where(eq(booking.id, bookingRecord.id));
-
-          console.log(`[CRON] Sent 12h payment reminder for booking ${bookingRecord.id}`);
-          results.reminders12h++;
-        }
-
         if (minutesUntilDue <= 30 && minutesUntilDue > 25 && !bookingRecord.paymentFinalReminderSentAt) {
           const startDate = new Date(bookingRecord.scheduledStartAt);
           const lessonDate = startDate.toLocaleDateString('en-US', {
@@ -168,7 +118,7 @@ export async function GET(request: NextRequest) {
             bookingRecord.coach.name,
             lessonDate,
             lessonTime,
-            parseFloat(bookingRecord.clientPaid).toFixed(2),
+            bookingRecord.expectedGrossCents ? (bookingRecord.expectedGrossCents / 100).toFixed(2) : '0.00',
             paymentDeadline
           );
 
@@ -217,4 +167,3 @@ export async function GET(request: NextRequest) {
     );
   }
 }
-

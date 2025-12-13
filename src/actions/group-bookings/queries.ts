@@ -13,7 +13,7 @@ export async function getPublicGroupLessons(coachId: string) {
         eq(booking.coachId, coachId),
         eq(booking.isGroupBooking, true),
         eq(booking.groupType, 'public'),
-        eq(booking.status, 'open'),
+        eq(booking.capacityStatus, 'open'),
         gte(booking.scheduledStartAt, now)
       ),
       orderBy: (booking, { asc }) => [asc(booking.scheduledStartAt)],
@@ -25,7 +25,7 @@ export async function getPublicGroupLessons(coachId: string) {
           where: eq(bookingParticipant.bookingId, lesson.id),
         });
 
-        const paidParticipants = allParticipants.filter(p => p.paymentStatus === 'paid');
+        const paidParticipants = allParticipants.filter(p => p.paymentStatus === 'captured');
 
         return {
           ...lesson,
@@ -52,4 +52,3 @@ export async function getCoachGroupLessons(coachId: string) {
     return { success: false, error: 'Failed to fetch lessons', lessons: [] };
   }
 }
-

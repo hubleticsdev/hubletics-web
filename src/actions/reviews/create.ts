@@ -32,7 +32,7 @@ export async function createReview(input: CreateReviewInput) {
       where: and(
         eq(booking.id, validatedInput.bookingId),
         eq(booking.clientId, session.user.id),
-        eq(booking.status, 'completed')
+        eq(booking.fulfillmentStatus, 'completed')
       ),
     });
 
@@ -116,4 +116,3 @@ export async function getCoachReviews(coachId: string, limit: number = 10) {
     return { success: false, error: 'Failed to fetch reviews', reviews: [] };
   }
 }
-

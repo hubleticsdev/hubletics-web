@@ -38,7 +38,9 @@ export async function leavePublicLesson(lessonId: string) {
       return { success: false, error: 'Cannot leave a lesson that has already started' };
     }
 
-    if (participant.paymentStatus === 'paid' && participant.stripePaymentIntentId) {
+    const participantCaptured = participant.paymentStatus === 'captured';
+
+    if (participantCaptured && participant.stripePaymentIntentId) {
       await refundBookingPayment(participant.stripePaymentIntentId);
     }
 
@@ -54,6 +56,10 @@ export async function leavePublicLesson(lessonId: string) {
         .update(booking)
         .set({
           currentParticipants: lesson.currentParticipants - 1,
+          capturedParticipants:
+            participantCaptured && lesson.capturedParticipants && lesson.capturedParticipants > 0
+              ? lesson.capturedParticipants - 1
+              : lesson.capturedParticipants,
         })
         .where(eq(booking.id, lessonId));
     }
@@ -94,14 +100,15 @@ export async function cancelPrivateGroupBooking(bookingId: string) {
       return { success: false, error: 'Cannot cancel a lesson that has already started' };
     }
 
-    if (bookingRecord.stripePaymentIntentId && bookingRecord.status === 'accepted') {
-      await refundBookingPayment(bookingRecord.stripePaymentIntentId);
+    if (bookingRecord.primaryStripePaymentIntentId && bookingRecord.paymentStatus === 'captured') {
+      await refundBookingPayment(bookingRecord.primaryStripePaymentIntentId);
     }
 
     await db
       .update(booking)
       .set({
-        status: 'cancelled',
+        approvalStatus: 'cancelled',
+        paymentStatus: bookingRecord.paymentStatus === 'captured' ? 'refunded' : bookingRecord.paymentStatus,
         updatedAt: new Date(),
       })
       .where(eq(booking.id, bookingId));
@@ -140,7 +147,7 @@ export async function coachCancelGroupLesson(lessonId: string) {
     const participants = await db.query.bookingParticipant.findMany({
       where: and(
         eq(bookingParticipant.bookingId, lessonId),
-        eq(bookingParticipant.paymentStatus, 'paid')
+        eq(bookingParticipant.paymentStatus, 'captured')
       ),
     });
 
@@ -154,9 +161,9 @@ export async function coachCancelGroupLesson(lessonId: string) {
       }
     }
 
-    if (lesson.groupType === 'private' && lesson.stripePaymentIntentId) {
+    if (lesson.groupType === 'private' && lesson.primaryStripePaymentIntentId && lesson.paymentStatus === 'captured') {
       try {
-        await refundBookingPayment(lesson.stripePaymentIntentId);
+        await refundBookingPayment(lesson.primaryStripePaymentIntentId);
       } catch (error) {
         console.error(`Failed to refund main payment intent:`, error);
       }
@@ -165,7 +172,8 @@ export async function coachCancelGroupLesson(lessonId: string) {
     await db
       .update(booking)
       .set({
-        status: 'cancelled',
+        approvalStatus: 'cancelled',
+        paymentStatus: 'refunded',
         updatedAt: new Date(),
       })
       .where(eq(booking.id, lessonId));
@@ -180,4 +188,3 @@ export async function coachCancelGroupLesson(lessonId: string) {
     return { success: false, error: 'Failed to cancel lesson' };
   }
 }
-

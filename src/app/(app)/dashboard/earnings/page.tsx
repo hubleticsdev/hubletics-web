@@ -2,6 +2,7 @@ import { requireRole } from '@/lib/auth/session';
 import { getCoachEarningsSummary, getCoachBookingEarnings } from '@/actions/coach/earnings';
 import { StripeDashboardButton } from '@/components/coach/StripeDashboardButton';
 import Link from 'next/link';
+import { formatUiBookingStatus, UiBookingStatus } from '@/lib/booking-status';
 
 export const dynamic = 'force-dynamic';
 
@@ -10,6 +11,30 @@ export default async function CoachEarningsPage() {
 
   const summary = await getCoachEarningsSummary();
   const bookings = await getCoachBookingEarnings();
+
+  const statusBadgeClass = (status: UiBookingStatus) => {
+    switch (status) {
+      case 'completed':
+        return 'bg-green-100 text-green-800';
+      case 'confirmed':
+        return 'bg-blue-100 text-blue-800';
+      case 'awaiting_payment':
+        return 'bg-orange-100 text-orange-800';
+      case 'awaiting_coach':
+        return 'bg-yellow-100 text-yellow-800';
+      case 'cancelled':
+      case 'expired':
+        return 'bg-gray-100 text-gray-800';
+      case 'declined':
+        return 'bg-red-100 text-red-800';
+      case 'disputed':
+        return 'bg-purple-100 text-purple-800';
+      case 'open':
+        return 'bg-teal-100 text-teal-800';
+      default:
+        return 'bg-gray-100 text-gray-800';
+    }
+  };
 
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-16">
@@ -219,16 +244,8 @@ export default async function CoachEarningsPage() {
                       {booking.duration} min
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
-                      <span
-                        className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${
-                          booking.status === 'completed'
-                            ? 'bg-green-100 text-green-800'
-                            : booking.status === 'accepted'
-                              ? 'bg-blue-100 text-blue-800'
-                              : 'bg-yellow-100 text-yellow-800'
-                        }`}
-                      >
-                        {booking.status}
+                      <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${statusBadgeClass(booking.status)}`}>
+                        {formatUiBookingStatus(booking.status)}
                       </span>
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">

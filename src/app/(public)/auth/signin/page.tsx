@@ -85,7 +85,7 @@ export default function SignInPage() {
             Or{' '}
             <Link
               href={authPaths.signUp()}
-              className="font-semibold text-[#FF6B4A] hover:text-[#FF8C5A] transition-colors"
+              className="cursor-pointer font-semibold text-[#FF6B4A] hover:text-[#FF8C5A] transition-colors"
             >
               create a new account
             </Link>
@@ -140,7 +140,7 @@ export default function SignInPage() {
               <div className="text-sm">
                 <Link
                   href={authPaths.forgotPassword()}
-                  className="font-medium text-[#FF6B4A] hover:text-[#FF8C5A] transition-colors"
+                  className="cursor-pointer font-medium text-[#FF6B4A] hover:text-[#FF8C5A] transition-colors"
                 >
                   Forgot your password?
                 </Link>
@@ -150,7 +150,7 @@ export default function SignInPage() {
             <button
               type="submit"
               disabled={loading}
-              className="w-full px-8 py-3 bg-linear-to-r from-[#FF6B4A] to-[#FF8C5A] text-white font-semibold rounded-lg hover:shadow-xl hover:scale-[1.02] transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100"
+              className="cursor-pointer w-full px-8 py-3 bg-linear-to-r from-[#FF6B4A] to-[#FF8C5A] text-white font-semibold rounded-lg hover:shadow-xl hover:scale-[1.02] transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100"
             >
               {loading ? 'Signing in...' : 'Sign in'}
             </button>
@@ -169,7 +169,7 @@ export default function SignInPage() {
             type="button"
             onClick={handleGoogleSignIn}
             disabled={loading}
-            className="w-full px-8 py-3 bg-white text-gray-900 font-semibold rounded-lg border-2 border-gray-200 hover:border-[#FF6B4A] hover:shadow-lg transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-3"
+            className="cursor-pointer w-full px-8 py-3 bg-white text-gray-900 font-semibold rounded-lg border-2 border-gray-200 hover:border-[#FF6B4A] hover:shadow-lg transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-3"
           >
             <svg className="mr-2 h-5 w-5" viewBox="0 0 24 24">
               <path

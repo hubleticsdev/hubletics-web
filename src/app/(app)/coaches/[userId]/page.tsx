@@ -182,7 +182,7 @@ function ProfileSummary({
 }) {
   return (
     <div className="flex flex-col gap-8 lg:flex-row">
-      <div className="flex-shrink-0">
+      <div className="shrink-0">
         <div className="relative h-48 w-48 overflow-hidden rounded-[28px] shadow-[0_30px_90px_-60px_rgba(15,23,42,0.6)]">
           <Image src={displayImage} alt={coach.fullName} fill className="object-cover" />
         </div>

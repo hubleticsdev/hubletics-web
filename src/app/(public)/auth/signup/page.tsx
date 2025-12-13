@@ -98,7 +98,7 @@ export default function SignUpPage() {
             Or{' '}
             <Link
               href={authPaths.signIn()}
-              className="font-semibold text-[#FF6B4A] hover:text-[#FF8C5A] transition-colors"
+              className="cursor-pointer font-semibold text-[#FF6B4A] hover:text-[#FF8C5A] transition-colors"
             >
               sign in to your existing account
             </Link>
@@ -187,7 +187,7 @@ export default function SignUpPage() {
             <button
               type="submit"
               disabled={loading}
-              className="w-full px-8 py-3 bg-linear-to-r from-[#FF6B4A] to-[#FF8C5A] text-white font-semibold rounded-lg hover:shadow-xl hover:scale-[1.02] transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100"
+              className="cursor-pointer w-full px-8 py-3 bg-linear-to-r from-[#FF6B4A] to-[#FF8C5A] text-white font-semibold rounded-lg hover:shadow-xl hover:scale-[1.02] transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100"
             >
               {loading ? 'Creating account...' : 'Create account'}
             </button>
@@ -206,7 +206,7 @@ export default function SignUpPage() {
             type="button"
             onClick={handleGoogleSignUp}
             disabled={loading}
-            className="w-full px-8 py-3 bg-white text-gray-900 font-semibold rounded-lg border-2 border-gray-200 hover:border-[#FF6B4A] hover:shadow-lg transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-3"
+            className="cursor-pointer w-full px-8 py-3 bg-white text-gray-900 font-semibold rounded-lg border-2 border-gray-200 hover:border-[#FF6B4A] hover:shadow-lg transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-3"
           >
             <svg className="mr-2 h-5 w-5" viewBox="0 0 24 24">
               <path

@@ -43,7 +43,7 @@ export default async function AthleteDashboard() {
   }
 
   const { bookings: upcomingBookings } = await getUpcomingBookings();
-  const { bookings: pendingBookings } = await getMyBookings('pending');
+  const { bookings: pendingBookings } = await getMyBookings('awaiting_coach');
   const spendSummary = await getAthleteSpendSummary();
 
   const sportsInterested = athlete.sportsInterested ?? [];
@@ -418,7 +418,7 @@ function InterestsSection({ sportsInterested }: { sportsInterested: string[] }) 
 function NextSessionCard({ booking }: { booking: UpcomingBooking }) {
   const start = new Date(booking.scheduledStartAt);
   const end = new Date(booking.scheduledEndAt);
-  const amount = Number.parseFloat(booking.clientPaid ?? '0');
+  const amount = booking.expectedGrossCents ? booking.expectedGrossCents / 100 : 0;
   const coachName = booking.coach?.name ?? 'Your coach';
   const locationName = booking.location?.name ?? 'Location to be confirmed';
   const durationLabel = Number.isFinite(booking.duration) ? `${booking.duration} min` : '—';

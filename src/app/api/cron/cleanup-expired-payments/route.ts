@@ -21,10 +21,10 @@ export async function GET(request: NextRequest) {
       skipped: 0,
     };
 
-    // Find participants with pending payments older than 24 hours
+    // Find participants with pending/awaiting payments older than 24 hours
     const expiredParticipants = await db.query.bookingParticipant.findMany({
       where: and(
-        eq(bookingParticipant.paymentStatus, 'pending'),
+        eq(bookingParticipant.status, 'awaiting_coach'),
         isNotNull(bookingParticipant.stripePaymentIntentId),
         lt(bookingParticipant.joinedAt, twentyFourHoursAgo)
       ),
@@ -44,9 +44,34 @@ export async function GET(request: NextRequest) {
       },
     });
 
-    console.log(`[CRON] Found ${expiredParticipants.length} participants with pending payments older than 24 hours`);
+    const paymentMethodMissing = await db.query.bookingParticipant.findMany({
+      where: and(
+        eq(bookingParticipant.status, 'awaiting_payment'),
+        isNotNull(bookingParticipant.stripePaymentIntentId),
+        lt(bookingParticipant.joinedAt, twentyFourHoursAgo)
+      ),
+      with: {
+        user: {
+          columns: {
+            name: true,
+            email: true,
+          },
+        },
+        booking: {
+          columns: {
+            id: true,
+            scheduledStartAt: true,
+          },
+        },
+      },
+    });
 
-    for (const participant of expiredParticipants) {
+    console.log(`[CRON] Found ${expiredParticipants.length} participants with authorized payments older than 24 hours`);
+    console.log(`[CRON] Found ${paymentMethodMissing.length} participants awaiting payment older than 24 hours`);
+
+    const participantsToProcess = [...expiredParticipants, ...paymentMethodMissing];
+
+    for (const participant of participantsToProcess) {
       try {
         if (!participant.stripePaymentIntentId) {
           console.warn(`Participant ${participant.id} has no stripePaymentIntentId`);
@@ -58,7 +83,7 @@ export async function GET(request: NextRequest) {
         const paymentIntent = await stripe.paymentIntents.retrieve(participant.stripePaymentIntentId);
 
         // Only cancel if still in requires_capture state (not yet captured/cancelled)
-        if (paymentIntent.status === 'requires_capture') {
+        if (paymentIntent.status === 'requires_capture' || paymentIntent.status === 'requires_payment_method') {
           // Cancel the PaymentIntent to release the authorization
           await stripe.paymentIntents.cancel(participant.stripePaymentIntentId);
 

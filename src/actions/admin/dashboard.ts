@@ -23,19 +23,19 @@ export async function getAdminDashboardMetrics(): Promise<AdminDashboardMetrics>
   const completedBookingsThisMonth = await db.$count(
     booking,
     and(
-      eq(booking.status, 'completed'),
+      eq(booking.fulfillmentStatus, 'completed'),
       gte(booking.createdAt, startOfMonth)
     )
   );
 
   const monthlyRevenueResult = await db
     .select({
-      total: sql<number>`COALESCE(SUM(${booking.platformFee}::numeric), 0)`
+      total: sql<number>`COALESCE(SUM(${booking.platformFeeCents}) / 100.0, 0)`
     })
     .from(booking)
     .where(
       and(
-        eq(booking.status, 'completed'),
+        eq(booking.fulfillmentStatus, 'completed'),
         gte(booking.createdAt, startOfMonth)
       )
     );

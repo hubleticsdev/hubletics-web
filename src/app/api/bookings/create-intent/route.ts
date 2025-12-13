@@ -69,7 +69,7 @@ export async function POST(req: NextRequest) {
     );
 
     const paymentIntent = await stripe.paymentIntents.create({
-      amount: Math.round(pricing.clientPays * 100),
+      amount: pricing.clientPaysCents,
       currency: 'usd',
       capture_method: 'manual',
       metadata: {

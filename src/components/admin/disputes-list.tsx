@@ -20,10 +20,10 @@ type DisputedBooking = {
   scheduledStartAt: Date;
   scheduledEndAt: Date;
   location: { name: string; address: string };
-  clientPaid: string;
-  coachPayout: string;
-  platformFee: string;
-  stripeFee: string;
+  expectedGrossCents?: number | null;
+  coachPayoutCents?: number | null;
+  platformFeeCents?: number | null;
+  stripeFeeCents?: number | null;
   cancellationReason: string | null;
   client: {
     id: string;
@@ -54,6 +54,9 @@ export function DisputesList({ bookings }: DisputesListProps) {
   const [refundReason, setRefundReason] = useState('');
   const [resolution, setResolution] = useState('');
   const [processing, setProcessing] = useState(false);
+
+  const formatDollars = (cents?: number | null) =>
+    cents !== undefined && cents !== null ? (cents / 100).toFixed(2) : '0.00';
 
   const handleRefund = async () => {
     if (!selectedBooking) return;
@@ -164,19 +167,19 @@ export function DisputesList({ bookings }: DisputesListProps) {
               <div>
                 <p className="text-xs text-gray-600 mb-1">Client Paid</p>
                 <p className="text-sm font-medium text-gray-900">
-                  ${parseFloat(booking.clientPaid).toFixed(2)}
+                  ${formatDollars(booking.expectedGrossCents)}
                 </p>
               </div>
               <div>
                 <p className="text-xs text-gray-600 mb-1">Coach Payout</p>
                 <p className="text-sm font-medium text-gray-900">
-                  ${parseFloat(booking.coachPayout).toFixed(2)}
+                  ${formatDollars(booking.coachPayoutCents)}
                 </p>
               </div>
               <div>
                 <p className="text-xs text-gray-600 mb-1">Platform Fee</p>
                 <p className="text-sm font-medium text-gray-900">
-                  ${parseFloat(booking.platformFee).toFixed(2)}
+                  ${formatDollars(booking.platformFeeCents)}
                 </p>
               </div>
             </div>
@@ -229,7 +232,7 @@ export function DisputesList({ bookings }: DisputesListProps) {
                   {selectedBooking.coach.name} & {selectedBooking.client.name}
                 </p>
                 <p className="text-xs text-gray-600">
-                  Client Paid: ${parseFloat(selectedBooking.clientPaid).toFixed(2)}
+                  Client Paid: ${formatDollars(selectedBooking.expectedGrossCents)}
                 </p>
               </div>
 
@@ -270,7 +273,7 @@ export function DisputesList({ bookings }: DisputesListProps) {
                     type="number"
                     step="0.01"
                     min="0"
-                    max={parseFloat(selectedBooking.clientPaid)}
+                    max={selectedBooking.expectedGrossCents ? selectedBooking.expectedGrossCents / 100 : undefined}
                     value={partialAmount}
                     onChange={(e) => setPartialAmount(e.target.value)}
                     placeholder="0.00"
@@ -367,4 +370,3 @@ export function DisputesList({ bookings }: DisputesListProps) {
     </>
   );
 }
-

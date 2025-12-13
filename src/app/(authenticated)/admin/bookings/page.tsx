@@ -5,6 +5,7 @@ import { desc } from 'drizzle-orm';
 import Image from 'next/image';
 import { Pagination } from '@/components/ui/pagination';
 import { getPaginationOptions, createPaginationResult, getOffset } from '@/lib/pagination';
+import { deriveUiBookingStatus, formatUiBookingStatus } from '@/lib/booking-status';
 
 export const dynamic = 'force-dynamic';
 
@@ -28,7 +29,7 @@ export default async function AdminBookingsPage({ searchParams }: AdminBookingsP
 
   const totalBookings = await db.$count(booking);
 
-  const bookings = await db.query.booking.findMany({
+  const rawBookings = await db.query.booking.findMany({
     with: {
       client: {
         columns: {
@@ -52,14 +53,27 @@ export default async function AdminBookingsPage({ searchParams }: AdminBookingsP
     offset,
   });
 
+  const bookings = rawBookings.map((b) => ({
+    ...b,
+    status: deriveUiBookingStatus({
+      approvalStatus: b.approvalStatus,
+      paymentStatus: b.paymentStatus,
+      fulfillmentStatus: b.fulfillmentStatus,
+      capacityStatus: b.capacityStatus,
+    }),
+  }));
+
+  const formatDollars = (cents?: number | null) =>
+    cents !== undefined && cents !== null ? (cents / 100).toFixed(2) : '0.00';
+
   const paginationResult = createPaginationResult(bookings, totalBookings, { page, limit });
 
   const stats = {
     total: totalBookings,
-    pending: bookings.filter((b) => b.status === 'pending').length,
-    accepted: bookings.filter((b) => b.status === 'accepted').length,
+    pending: bookings.filter((b) => b.status === 'awaiting_coach' || b.status === 'awaiting_payment').length,
+    accepted: bookings.filter((b) => b.status === 'confirmed').length,
     completed: bookings.filter((b) => b.status === 'completed').length,
-    cancelled: bookings.filter((b) => b.status === 'cancelled').length,
+    cancelled: bookings.filter((b) => ['cancelled', 'declined', 'expired'].includes(b.status)).length,
   };
 
   return (
@@ -146,23 +160,28 @@ export default async function AdminBookingsPage({ searchParams }: AdminBookingsP
                         <span className="font-medium">Duration:</span> {booking.duration} minutes
                       </p>
                       <p className="text-sm text-gray-900">
-                        <span className="font-medium">Total:</span> ${booking.clientPaid}
+                        <span className="font-medium">Total:</span>{' '}
+                        ${formatDollars(booking.expectedGrossCents)}
                       </p>
                     </div>
                   </div>
 
                   <span
                     className={`px-3 py-1 inline-flex text-xs leading-5 font-semibold rounded-full ${
-                      booking.status === 'pending'
-                        ? 'bg-yellow-100 text-yellow-800'
-                        : booking.status === 'accepted'
+                      booking.status === 'completed'
+                        ? 'bg-blue-100 text-blue-800'
+                        : booking.status === 'confirmed'
                           ? 'bg-green-100 text-green-800'
-                          : booking.status === 'completed'
-                            ? 'bg-blue-100 text-blue-800'
-                            : 'bg-red-100 text-red-800'
+                          : booking.status === 'awaiting_coach'
+                            ? 'bg-yellow-100 text-yellow-800'
+                            : booking.status === 'awaiting_payment'
+                              ? 'bg-orange-100 text-orange-800'
+                              : booking.status === 'open'
+                                ? 'bg-teal-100 text-teal-800'
+                                : 'bg-red-100 text-red-800'
                     }`}
                   >
-                    {booking.status}
+                    {formatUiBookingStatus(booking.status)}
                   </span>
                 </div>
               </div>

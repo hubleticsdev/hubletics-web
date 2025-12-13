@@ -53,7 +53,8 @@ export async function getBookingParticipants(bookingId: string) {
         image: user.image,
         username: user.username,
         paymentStatus: p.paymentStatus,
-        amountPaid: p.amountPaid,
+        status: p.status,
+        amountCents: p.amountCents,
         joinedAt: p.joinedAt,
       };
     });
@@ -69,4 +70,3 @@ export async function getBookingParticipants(bookingId: string) {
     return { success: false, error: 'Failed to fetch participants' };
   }
 }
-

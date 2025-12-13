@@ -9,9 +9,13 @@ export interface PricingBreakdown {
   coachDesiredRate: number;
   sessionDurationMinutes: number;
   coachPayout: number;
+  coachPayoutCents: number;
   stripeFee: number;
+  stripeFeeCents: number;
   platformFee: number;
+  platformFeeCents: number;
   clientPays: number;
+  clientPaysCents: number;
   effectiveMarkupPercentage: number;
 }
 
@@ -51,9 +55,13 @@ export function calculateBookingPricing(
     coachDesiredRate: Number(coachHourlyRate.toFixed(2)),
     sessionDurationMinutes,
     coachPayout: Number(coachPayout.toFixed(2)),
+    coachPayoutCents: Math.round(coachPayout * 100),
     stripeFee: Number(stripeFee.toFixed(2)),
+    stripeFeeCents: Math.round(stripeFee * 100),
     platformFee: Number(platformFee.toFixed(2)),
+    platformFeeCents: Math.round(platformFee * 100),
     clientPays: Number(clientPays.toFixed(2)),
+    clientPaysCents: Math.round(clientPays * 100),
     effectiveMarkupPercentage: Number(effectiveMarkup.toFixed(2)),
   };
 }
@@ -73,6 +81,9 @@ export function calculateCoachEarnings(
   stripeFee: number;
   platformFee: number;
   coachPayout: number;
+  stripeFeeCents: number;
+  platformFeeCents: number;
+  coachPayoutCents: number;
 } {
   const config = { ...DEFAULT_CONFIG };
   if (customPlatformFee !== undefined) {
@@ -92,6 +103,36 @@ export function calculateCoachEarnings(
     stripeFee: Number(stripeFee.toFixed(2)),
     platformFee: Number(platformFee.toFixed(2)),
     coachPayout: Number(coachPayout.toFixed(2)),
+    stripeFeeCents: Math.round(stripeFee * 100),
+    platformFeeCents: Math.round(platformFee * 100),
+    coachPayoutCents: Math.round(coachPayout * 100),
+  };
+}
+
+export function calculateGroupTotals(
+  pricePerPerson: number,
+  participants: number,
+  customPlatformFee?: number
+): {
+  pricePerPerson: number;
+  totalGrossCents: number;
+  platformFeeCents: number;
+  stripeFeeCents: number;
+  coachPayoutCents: number;
+} {
+  const { stripeFeeCents, platformFeeCents, coachPayoutCents } = calculateCoachEarnings(
+    pricePerPerson,
+    customPlatformFee
+  );
+
+  const totalGrossCents = Math.round(pricePerPerson * 100 * participants);
+
+  return {
+    pricePerPerson,
+    totalGrossCents,
+    platformFeeCents: platformFeeCents * participants,
+    stripeFeeCents: stripeFeeCents * participants,
+    coachPayoutCents: coachPayoutCents * participants,
   };
 }
 

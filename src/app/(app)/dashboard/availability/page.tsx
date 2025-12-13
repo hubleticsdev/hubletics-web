@@ -23,7 +23,7 @@ export default async function AvailabilityPage() {
   const upcomingBookings = await db.query.booking.findMany({
     where: and(
       eq(booking.coachId, session.user.id),
-      eq(booking.status, 'accepted'),
+      eq(booking.approvalStatus, 'accepted'),
       gte(booking.scheduledStartAt, now)
     ),
     with: {

@@ -5,7 +5,7 @@ import { db } from '@/lib/db';
 import { booking, recurringGroupLesson, coachProfile } from '@/lib/db/schema';
 import { eq, and, gte, lte, or } from 'drizzle-orm';
 import { revalidatePath } from 'next/cache';
-import { calculateCoachEarnings } from '@/lib/pricing';
+import { calculateGroupTotals } from '@/lib/pricing';
 import { generateBookingsFromRecurringTemplate } from '@/lib/recurring-lessons';
 import crypto from 'crypto';
 
@@ -86,10 +86,9 @@ export async function createPublicGroupLesson(input: PublicLessonInput) {
           )
         ),
         or(
-          eq(booking.status, 'pending'),
-          eq(booking.status, 'awaiting_payment'),
-          eq(booking.status, 'accepted'),
-          eq(booking.status, 'open')
+          eq(booking.approvalStatus, 'pending_review'),
+          eq(booking.approvalStatus, 'accepted'),
+          eq(booking.capacityStatus, 'open')
         )
       ),
     });
@@ -99,13 +98,7 @@ export async function createPublicGroupLesson(input: PublicLessonInput) {
     }
 
     const userPlatformFee = parseFloat(coach.user.platformFeePercentage || '15');
-    const { platformFee: platformFeePerPerson, stripeFee: stripeFeePerPerson, coachPayout: coachPayoutPerPerson } = 
-      calculateCoachEarnings(input.pricePerPerson, userPlatformFee);
-    
-    const maxTotalRevenue = input.pricePerPerson * input.maxParticipants;
-    const maxPlatformFee = platformFeePerPerson * input.maxParticipants;
-    const maxStripeFee = stripeFeePerPerson * input.maxParticipants;
-    const maxCoachPayout = coachPayoutPerPerson * input.maxParticipants;
+    const totals = calculateGroupTotals(input.pricePerPerson, input.maxParticipants, userPlatformFee);
 
     const bookingId = crypto.randomUUID();
     
@@ -119,18 +112,20 @@ export async function createPublicGroupLesson(input: PublicLessonInput) {
       location: input.location,
       clientMessage: input.description || null,
       coachRate: input.pricePerPerson.toString(),
-      clientPaid: maxTotalRevenue.toString(),
-      platformFee: maxPlatformFee.toString(),
-      stripeFee: maxStripeFee.toString(),
-      coachPayout: maxCoachPayout.toString(),
-      stripePaymentIntentId: null,
-      status: 'open',
+      pricePerPerson: input.pricePerPerson.toString(),
+      expectedGrossCents: totals.totalGrossCents,
+      platformFeeCents: totals.platformFeeCents,
+      stripeFeeCents: totals.stripeFeeCents,
+      coachPayoutCents: totals.coachPayoutCents,
+      approvalStatus: 'accepted',
+      paymentStatus: 'not_required',
+      fulfillmentStatus: 'scheduled',
+      capacityStatus: 'open',
       isGroupBooking: true,
       groupType: 'public',
       organizerId: session.user.id,
       maxParticipants: input.maxParticipants,
       minParticipants: input.minParticipants,
-      pricePerPerson: input.pricePerPerson.toString(),
       currentParticipants: 0,
     });
 
@@ -255,4 +250,3 @@ export async function createRecurringGroupLesson(input: RecurringLessonInput) {
     return { success: false, error: 'Failed to create recurring lesson' };
   }
 }
-

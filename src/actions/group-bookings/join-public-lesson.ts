@@ -20,7 +20,7 @@ export async function joinPublicLesson(lessonId: string) {
     const lesson = await db.query.booking.findFirst({
       where: and(
         eq(booking.id, lessonId),
-        eq(booking.status, 'open'),
+        eq(booking.capacityStatus, 'open'),
         eq(booking.groupType, 'public')
       ),
     });
@@ -69,7 +69,7 @@ export async function joinPublicLesson(lessonId: string) {
     const currentParticipants = await db.query.bookingParticipant.findMany({
       where: and(
         eq(bookingParticipant.bookingId, lessonId),
-        eq(bookingParticipant.paymentStatus, 'paid')
+        eq(bookingParticipant.paymentStatus, 'captured')
       ),
     });
 
@@ -96,14 +96,17 @@ export async function joinPublicLesson(lessonId: string) {
     await db.insert(bookingParticipant).values({
       bookingId: lessonId,
       userId: session.user.id,
-      paymentStatus: 'pending',
+      role: 'participant',
+      status: 'awaiting_payment',
+      paymentStatus: 'requires_payment_method',
       amountPaid: pricePerPerson.toString(),
+      amountCents: Math.round(pricePerPerson * 100),
       stripePaymentIntentId: paymentIntent.id,
+      expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000),
     });
 
-    console.log(`User ${session.user.id} joined public lesson ${lessonId}`);
+    console.log(`User ${session.user.id} requested to join public lesson ${lessonId}`);
 
-    // Send notification to coach about new participant request
     const { user } = await import('@/lib/db/schema');
     const coachUser = await db.query.user.findFirst({
       where: eq(user.id, lesson.coachId),
@@ -131,7 +134,7 @@ export async function joinPublicLesson(lessonId: string) {
         session.user.name,
         lessonDate,
         lessonTime,
-        pricePerPerson.toFixed(2)
+        Math.round(pricePerPerson * 100)
       );
 
       await sendEmail({
@@ -140,6 +143,8 @@ export async function joinPublicLesson(lessonId: string) {
         html: emailTemplate.html,
         text: emailTemplate.text,
       });
+
+      console.log(`Coach ${coachUser.name} notified of participant request from ${session.user.name}`);
     }
 
     revalidatePath('/dashboard/bookings');
@@ -155,4 +160,3 @@ export async function joinPublicLesson(lessonId: string) {
     return { success: false, error: 'Failed to join lesson' };
   }
 }
-

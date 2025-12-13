@@ -17,20 +17,20 @@ export async function getAthleteSpendSummary(): Promise<AthleteSpendSummary> {
   const completedBookings = await db.query.booking.findMany({
     where: and(
       eq(booking.clientId, athleteId),
-      eq(booking.status, 'completed')
+      eq(booking.fulfillmentStatus, 'completed')
     ),
     columns: {
-      clientPaid: true,
+      expectedGrossCents: true,
     },
   });
 
   const totalSpent = completedBookings.reduce(
-    (sum, b) => sum + parseFloat(b.clientPaid as unknown as string),
+    (sum, b) => sum + (b.expectedGrossCents || 0),
     0
   );
 
   return {
-    totalSpent: Number(totalSpent.toFixed(2)),
+    totalSpent: Number((totalSpent / 100).toFixed(2)),
     completedBookings: completedBookings.length,
   };
 }

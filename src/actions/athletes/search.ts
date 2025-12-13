@@ -27,7 +27,7 @@ export interface AthleteSearchResult {
   bio: string | null;
   user: {
     name: string;
-    username: string;
+    username: string | null;
     image: string | null;
   };
 }
@@ -156,4 +156,3 @@ export async function getAthletePublicProfile(userId: string) {
   });
   return athlete;
 }
-

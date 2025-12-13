@@ -20,7 +20,6 @@ export async function GET(request: NextRequest) {
       ),
       columns: {
         id: true,
-        status: true,
         lockedUntil: true,
       },
     });

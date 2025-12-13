@@ -1,11 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
 import { booking, coachProfile } from '@/lib/db/schema';
-import { and, eq, lt } from 'drizzle-orm';
+import { and, eq, lt, isNull } from 'drizzle-orm';
 import { transferToCoach, stripe } from '@/lib/stripe';
 import { sendEmail } from '@/lib/email/resend';
 import { getAutoConfirmationClientEmailTemplate, getAutoConfirmationCoachEmailTemplate } from '@/lib/email/templates/payment-notifications';
 import { validateCronAuth } from '@/lib/cron/auth';
+import { incrementCoachLessonsCompleted } from '@/lib/coach-stats';
 
 export async function GET(request: NextRequest) {
   const authError = validateCronAuth(request);
@@ -20,10 +21,10 @@ export async function GET(request: NextRequest) {
 
     const eligibleBookings = await db.query.booking.findMany({
       where: and(
-        eq(booking.status, 'accepted'),
-        eq(booking.markedCompleteByCoach, true),
-        eq(booking.confirmedByClient, false),
-        lt(booking.markedCompleteByCoachAt, sevenDaysAgo)
+        eq(booking.approvalStatus, 'accepted'),
+        eq(booking.fulfillmentStatus, 'scheduled'),
+        lt(booking.coachConfirmedAt, sevenDaysAgo),
+        isNull(booking.clientConfirmedAt)
       ),
       with: {
         client: {
@@ -59,16 +60,17 @@ export async function GET(request: NextRequest) {
         await db
           .update(booking)
           .set({
-            confirmedByClient: true,
-            confirmedByClientAt: new Date(),
-            status: 'completed',
+            clientConfirmedAt: new Date(),
+            fulfillmentStatus: 'completed',
             updatedAt: new Date(),
           })
           .where(eq(booking.id, bookingRecord.id));
 
-        if (bookingRecord.stripePaymentIntentId) {
+        await incrementCoachLessonsCompleted(bookingRecord.coachId);
+
+        if (bookingRecord.primaryStripePaymentIntentId) {
           const paymentIntent = await stripe.paymentIntents.retrieve(
-            bookingRecord.stripePaymentIntentId
+            bookingRecord.primaryStripePaymentIntentId
           );
 
           if (paymentIntent.status !== 'succeeded') {
@@ -80,7 +82,7 @@ export async function GET(request: NextRequest) {
           }
 
           const charges = await stripe.charges.list({
-            payment_intent: bookingRecord.stripePaymentIntentId,
+            payment_intent: bookingRecord.primaryStripePaymentIntentId,
             limit: 1,
           });
           const charge = charges.data[0];
@@ -109,14 +111,16 @@ export async function GET(request: NextRequest) {
           });
 
           if (coach?.stripeAccountId) {
-            const coachPayoutAmount = parseFloat(bookingRecord.coachPayout);
+            const coachPayoutAmount = bookingRecord.coachPayoutCents
+              ? bookingRecord.coachPayoutCents / 100
+              : 0;
 
             const transfer = await transferToCoach(
               coachPayoutAmount,
               coach.stripeAccountId,
               {
                 bookingId: bookingRecord.id,
-                paymentIntentId: bookingRecord.stripePaymentIntentId,
+                paymentIntentId: bookingRecord.primaryStripePaymentIntentId,
                 coachId: bookingRecord.coachId,
               }
             );
@@ -156,7 +160,7 @@ export async function GET(request: NextRequest) {
           bookingRecord.coach.name,
           bookingRecord.client.name,
           startDate.toLocaleDateString(),
-          parseFloat(bookingRecord.coachPayout).toFixed(2)
+          bookingRecord.coachPayoutCents ? (bookingRecord.coachPayoutCents / 100).toFixed(2) : '0.00'
         );
 
         await sendEmail({
@@ -196,4 +200,3 @@ export async function GET(request: NextRequest) {
     );
   }
 }
-

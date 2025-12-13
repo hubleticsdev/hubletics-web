@@ -4,7 +4,7 @@ import { getSession } from '@/lib/auth/session';
 import { db } from '@/lib/db';
 import { booking, bookingParticipant, coachProfile, user } from '@/lib/db/schema';
 import { eq, and, gte, lte, or, inArray } from 'drizzle-orm';
-import { calculateCoachEarnings } from '@/lib/pricing';
+import { calculateGroupTotals } from '@/lib/pricing';
 import { getApplicableTier } from './pricing-tiers';
 import { sendEmail } from '@/lib/email/resend';
 import { getBookingRequestEmailTemplate } from '@/lib/email/templates/booking-notifications';
@@ -76,10 +76,8 @@ export async function createPrivateGroupBooking(input: PrivateGroupBookingInput)
     }
 
     const pricePerPerson = parseFloat(tierResult.tier.pricePerPerson);
-    const totalAmount = pricePerPerson * totalParticipants;
-
     const userPlatformFee = parseFloat(coach.user.platformFeePercentage || '15');
-    const { platformFee, stripeFee, coachPayout } = calculateCoachEarnings(totalAmount, userPlatformFee);
+    const groupTotals = calculateGroupTotals(pricePerPerson, totalParticipants, userPlatformFee);
 
     const conflicts = await db.query.booking.findMany({
       where: and(
@@ -99,10 +97,9 @@ export async function createPrivateGroupBooking(input: PrivateGroupBookingInput)
           )
         ),
         or(
-          eq(booking.status, 'pending'),
-          eq(booking.status, 'awaiting_payment'),
-          eq(booking.status, 'accepted'),
-          eq(booking.status, 'open')
+          eq(booking.approvalStatus, 'pending_review'),
+          eq(booking.approvalStatus, 'accepted'),
+          eq(booking.capacityStatus, 'open')
         )
       ),
     });
@@ -145,18 +142,19 @@ export async function createPrivateGroupBooking(input: PrivateGroupBookingInput)
       location: input.location,
       clientMessage: input.clientMessage || null,
       coachRate: pricePerPerson.toString(),
-      clientPaid: totalAmount.toString(),
-      platformFee: platformFee.toString(),
-      stripeFee: stripeFee.toString(),
-      coachPayout: coachPayout.toString(),
-      stripePaymentIntentId: null,
-      status: 'pending',
+      pricePerPerson: pricePerPerson.toString(),
+      expectedGrossCents: groupTotals.totalGrossCents,
+      platformFeeCents: groupTotals.platformFeeCents,
+      stripeFeeCents: groupTotals.stripeFeeCents,
+      coachPayoutCents: groupTotals.coachPayoutCents,
+      approvalStatus: 'pending_review',
+      paymentStatus: 'not_required',
+      fulfillmentStatus: 'scheduled',
       isGroupBooking: true,
       groupType: 'private',
       organizerId: session.user.id,
       maxParticipants: totalParticipants,
       minParticipants: totalParticipants,
-      pricePerPerson: pricePerPerson.toString(),
       currentParticipants: totalParticipants,
       idempotencyKey,
       lockedUntil: new Date(Date.now() + 5 * 60 * 1000),
@@ -166,13 +164,18 @@ export async function createPrivateGroupBooking(input: PrivateGroupBookingInput)
       {
         bookingId,
         userId: session.user.id,
-        paymentStatus: 'pending',
-        amountPaid: totalAmount.toString(),
+        role: 'organizer',
+        status: 'requested',
+        paymentStatus: 'requires_payment_method',
+        amountPaid: (groupTotals.totalGrossCents / 100).toFixed(2),
+        amountCents: groupTotals.totalGrossCents,
       },
       ...participants.map(p => ({
         bookingId,
         userId: p.id,
-        paymentStatus: 'pending' as const,
+        role: 'participant' as const,
+        status: 'requested' as const,
+        paymentStatus: 'requires_payment_method' as const,
         amountPaid: null,
       })),
     ]);
@@ -185,7 +188,7 @@ export async function createPrivateGroupBooking(input: PrivateGroupBookingInput)
         time: `${input.scheduledStartAt.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })} - ${input.scheduledEndAt.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })}`,
         duration: input.duration,
         location: `${input.location.name}, ${input.location.address}`,
-        amount: totalAmount.toFixed(2),
+        amountCents: groupTotals.totalGrossCents,
       }
     );
 
@@ -205,4 +208,3 @@ export async function createPrivateGroupBooking(input: PrivateGroupBookingInput)
     return { success: false, error: 'Failed to create group booking' };
   }
 }
-

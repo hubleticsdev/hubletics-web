@@ -4,14 +4,17 @@ import { getSession } from '@/lib/auth/session';
 import { db } from '@/lib/db';
 import { booking, coachProfile } from '@/lib/db/schema';
 import { eq, and, or, sql } from 'drizzle-orm';
+import { incrementCoachLessonsCompleted } from '@/lib/coach-stats';
 import {
   cancelBookingPayment,
   refundBookingPayment,
   transferToCoach,
 } from '@/lib/stripe';
 import { sendEmail } from '@/lib/email/resend';
-import { getBookingAcceptedEmailTemplate } from '@/lib/email/templates/booking-management-notifications';
+import { getBookingAcceptedEmailTemplate, getBookingDeclinedEmailTemplate } from '@/lib/email/templates/booking-management-notifications';
 import { uuidSchema, validateInput } from '@/lib/validations';
+import { recordStateTransition, recordMultipleTransitions } from '@/lib/booking-audit';
+import { recordPaymentEvent } from '@/lib/payment-audit';
 
 async function processCoachPayoutSafely(bookingId: string): Promise<{ success: boolean; error?: string }> {
   try {
@@ -28,7 +31,9 @@ async function processCoachPayoutSafely(bookingId: string): Promise<{ success: b
       return { success: true };
     }
 
-    if (!bookingRecord.stripePaymentIntentId) {
+    const paymentIntentId = bookingRecord.primaryStripePaymentIntentId;
+
+    if (!paymentIntentId) {
       return { success: false, error: 'No payment intent found' };
     }
 
@@ -44,7 +49,10 @@ async function processCoachPayoutSafely(bookingId: string): Promise<{ success: b
       return { success: false, error: 'Coach Stripe account not configured' };
     }
 
-    const coachPayoutAmount = parseFloat(bookingRecord.coachPayout);
+    const coachPayoutAmount =
+      bookingRecord.coachPayoutCents !== null && bookingRecord.coachPayoutCents !== undefined
+        ? bookingRecord.coachPayoutCents / 100
+        : 0;
 
     console.log(`[TRANSFER] Transferring $${coachPayoutAmount} to coach for booking ${bookingId}`);
     const transfer = await transferToCoach(
@@ -52,7 +60,7 @@ async function processCoachPayoutSafely(bookingId: string): Promise<{ success: b
       coach.stripeAccountId,
       {
         bookingId: bookingRecord.id,
-        paymentIntentId: bookingRecord.stripePaymentIntentId,
+        paymentIntentId,
         coachId: bookingRecord.coachId,
       }
     );
@@ -93,7 +101,7 @@ export async function acceptBooking(bookingId: string) {
       where: and(
         eq(booking.id, validatedBookingId),
         eq(booking.coachId, session.user.id),
-        eq(booking.status, 'pending')
+        eq(booking.approvalStatus, 'pending_review')
       ),
       with: {
         client: {
@@ -120,12 +128,23 @@ export async function acceptBooking(bookingId: string) {
     await db
       .update(booking)
       .set({
-        status: 'awaiting_payment',
+        approvalStatus: 'accepted',
+        paymentStatus: 'awaiting_client_payment',
         coachRespondedAt: new Date(),
         paymentDueAt,
         updatedAt: new Date(),
       })
       .where(eq(booking.id, validatedBookingId));
+
+    // Record state transitions
+    await recordMultipleTransitions(
+      bookingRecord.id,
+      [
+        { field: 'approvalStatus', oldStatus: 'pending_review', newStatus: 'accepted' },
+        { field: 'paymentStatus', oldStatus: 'not_required', newStatus: 'awaiting_client_payment' },
+      ],
+      session.user.id
+    );
 
     console.log(`Booking accepted: ${validatedBookingId}`);
     console.log(`Payment due by: ${paymentDueAt.toISOString()}`);
@@ -157,7 +176,7 @@ export async function acceptBooking(bookingId: string) {
       lessonDate,
       lessonTime,
       bookingRecord.location ? `${bookingRecord.location.name}, ${bookingRecord.location.address}` : 'Location to be confirmed',
-      parseFloat(bookingRecord.clientPaid).toFixed(2),
+      bookingRecord.expectedGrossCents ?? 0,
       paymentDeadline
     );
 
@@ -189,32 +208,84 @@ export async function declineBooking(bookingId: string, reason?: string) {
       where: and(
         eq(booking.id, bookingId),
         eq(booking.coachId, session.user.id),
-        eq(booking.status, 'pending')
+        eq(booking.approvalStatus, 'pending_review')
       ),
+      with: {
+        client: {
+          columns: {
+            name: true,
+            email: true,
+          },
+        },
+        coach: {
+          columns: {
+            name: true,
+          },
+        },
+      },
     });
 
     if (!bookingRecord) {
       return { success: false, error: 'Booking not found' };
     }
 
-    if (!bookingRecord.stripePaymentIntentId) {
-      return { success: false, error: 'No payment intent found' };
+    // Only cancel PI if one exists (won't exist for pending_review individual bookings with deferred payment)
+    if (bookingRecord.primaryStripePaymentIntentId) {
+      await cancelBookingPayment(bookingRecord.primaryStripePaymentIntentId);
+      console.log(`Payment cancelled: ${bookingRecord.primaryStripePaymentIntentId}`);
     }
-
-    await cancelBookingPayment(bookingRecord.stripePaymentIntentId!);
 
     await db
       .update(booking)
       .set({
-        status: 'declined',
+        approvalStatus: 'declined',
         coachRespondedAt: new Date(),
         cancellationReason: reason,
         updatedAt: new Date(),
       })
       .where(eq(booking.id, bookingId));
 
+    // Record state transition
+    await recordStateTransition({
+      bookingId: bookingRecord.id,
+      field: 'approvalStatus',
+      oldStatus: 'pending_review',
+      newStatus: 'declined',
+      changedBy: session.user.id,
+      reason,
+    });
+
     console.log(`Booking declined: ${bookingId}`);
-    console.log(`Payment cancelled: ${bookingRecord.stripePaymentIntentId}`);
+
+    // Send decline notification email to client
+    const startDate = new Date(bookingRecord.scheduledStartAt);
+    const lessonDate = startDate.toLocaleDateString('en-US', {
+      weekday: 'long',
+      month: 'long',
+      day: 'numeric',
+      year: 'numeric'
+    });
+    const lessonTime = startDate.toLocaleTimeString('en-US', {
+      hour: 'numeric',
+      minute: '2-digit'
+    });
+
+    const emailTemplate = getBookingDeclinedEmailTemplate(
+      bookingRecord.client.name,
+      bookingRecord.coach.name,
+      lessonDate,
+      lessonTime,
+      reason
+    );
+
+    await sendEmail({
+      to: bookingRecord.client.email,
+      subject: emailTemplate.subject,
+      html: emailTemplate.html,
+      text: emailTemplate.text,
+    });
+
+    console.log(`Decline notification sent to: ${bookingRecord.client.email}`);
 
     return { success: true };
   } catch (error) {
@@ -245,35 +316,61 @@ export async function cancelBooking(bookingId: string, reason: string) {
       return { success: false, error: 'Booking not found' };
     }
 
-    if (bookingRecord.status !== 'pending' && bookingRecord.status !== 'accepted') {
+    if (
+      bookingRecord.approvalStatus !== 'pending_review' &&
+      bookingRecord.approvalStatus !== 'accepted'
+    ) {
       return { success: false, error: 'Cannot cancel this booking' };
     }
 
-    if (!bookingRecord.stripePaymentIntentId) {
-      return { success: false, error: 'No payment intent found' };
+    const paymentIntentId = bookingRecord.primaryStripePaymentIntentId;
+
+    if (paymentIntentId) {
+    if (bookingRecord.paymentStatus === 'captured' || bookingRecord.paymentStatus === 'authorized') {
+      await refundBookingPayment(paymentIntentId);
+    } else if (bookingRecord.paymentStatus === 'awaiting_client_payment') {
+      await cancelBookingPayment(paymentIntentId);
+    }
     }
 
-    if (bookingRecord.status === 'accepted') {
-      await refundBookingPayment(bookingRecord.stripePaymentIntentId!);
-    } else {
-      await cancelBookingPayment(bookingRecord.stripePaymentIntentId!);
-    }
+    const newPaymentStatus =
+      bookingRecord.paymentStatus === 'captured' || bookingRecord.paymentStatus === 'authorized'
+        ? 'refunded'
+        : bookingRecord.paymentStatus;
 
     await db
       .update(booking)
       .set({
-        status: 'cancelled',
+        approvalStatus: 'cancelled',
+        paymentStatus: newPaymentStatus,
         cancelledBy: session.user.id,
         cancelledAt: new Date(),
         cancellationReason: reason,
-        refundAmount: bookingRecord.clientPaid,
-        refundProcessedAt: new Date(),
         updatedAt: new Date(),
       })
       .where(eq(booking.id, bookingId));
 
+    // Record state transitions
+    const transitions: Array<{ field: 'approvalStatus' | 'paymentStatus'; oldStatus: string; newStatus: string }> = [
+      { field: 'approvalStatus', oldStatus: bookingRecord.approvalStatus, newStatus: 'cancelled' },
+    ];
+    if (newPaymentStatus !== bookingRecord.paymentStatus) {
+      transitions.push({ field: 'paymentStatus', oldStatus: bookingRecord.paymentStatus, newStatus: newPaymentStatus });
+    }
+    await recordMultipleTransitions(bookingRecord.id, transitions, session.user.id, reason);
+
+    // Record payment event if refunded
+    if (paymentIntentId && newPaymentStatus === 'refunded') {
+      await recordPaymentEvent({
+        bookingId: bookingRecord.id,
+        stripePaymentIntentId: paymentIntentId,
+        amountCents: bookingRecord.expectedGrossCents ?? 0,
+        status: 'refunded',
+      });
+    }
+
     console.log(`Booking cancelled: ${bookingId}`);
-    console.log(`Refund processed: ${bookingRecord.stripePaymentIntentId}`);
+    console.log(`Refund processed: ${paymentIntentId ?? 'n/a'}`);
 
     return { success: true };
   } catch (error) {
@@ -294,7 +391,7 @@ export async function markBookingComplete(bookingId: string) {
       where: and(
         eq(booking.id, bookingId),
         eq(booking.coachId, session.user.id),
-        eq(booking.status, 'accepted')
+        eq(booking.approvalStatus, 'accepted')
       ),
       with: {
         client: {
@@ -315,19 +412,22 @@ export async function markBookingComplete(bookingId: string) {
       return { success: false, error: 'Booking not found' };
     }
 
-    const newStatus = bookingRecord.confirmedByClient ? 'completed' : 'accepted';
+    const newFulfillmentStatus = bookingRecord.clientConfirmedAt ? 'completed' : 'scheduled';
 
     await db
       .update(booking)
       .set({
-        markedCompleteByCoach: true,
-        markedCompleteByCoachAt: new Date(),
-        status: newStatus,
+        coachConfirmedAt: new Date(),
+        fulfillmentStatus: newFulfillmentStatus,
         updatedAt: new Date(),
       })
       .where(eq(booking.id, bookingId));
 
-    if (!bookingRecord.confirmedByClient) {
+    if (newFulfillmentStatus === 'completed') {
+      await incrementCoachLessonsCompleted(bookingRecord.coachId);
+    }
+
+    if (!bookingRecord.clientConfirmedAt) {
       const startDate = new Date(bookingRecord.scheduledStartAt);
       
       await sendEmail({
@@ -357,7 +457,7 @@ export async function markBookingComplete(bookingId: string) {
     }
 
     // If BOTH have now confirmed (client confirmed first, coach marking now), transfer funds
-    if (newStatus === 'completed') {
+    if (newFulfillmentStatus === 'completed') {
       await processCoachPayoutSafely(bookingId);
     }
 
@@ -382,7 +482,7 @@ export async function confirmBookingComplete(bookingId: string) {
       where: and(
         eq(booking.id, bookingId),
         eq(booking.clientId, session.user.id),
-        eq(booking.status, 'accepted')
+        eq(booking.approvalStatus, 'accepted')
       ),
     });
 
@@ -390,19 +490,18 @@ export async function confirmBookingComplete(bookingId: string) {
       return { success: false, error: 'Booking not found' };
     }
 
-    const newStatus = bookingRecord.markedCompleteByCoach ? 'completed' : 'accepted';
+    const newFulfillmentStatus = bookingRecord.coachConfirmedAt ? 'completed' : 'scheduled';
 
     await db
       .update(booking)
       .set({
-        confirmedByClient: true,
-        confirmedByClientAt: new Date(),
-        status: newStatus,
+        clientConfirmedAt: new Date(),
+        fulfillmentStatus: newFulfillmentStatus,
         updatedAt: new Date(),
       })
       .where(eq(booking.id, bookingId));
 
-    if (newStatus === 'completed') {
+    if (newFulfillmentStatus === 'completed') {
       await processCoachPayoutSafely(bookingId);
     }
 
@@ -414,4 +513,3 @@ export async function confirmBookingComplete(bookingId: string) {
     return { success: false, error: 'Failed to confirm booking' };
   }
 }
-

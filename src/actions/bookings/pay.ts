@@ -6,6 +6,8 @@ import { booking, coachProfile, bookingParticipant } from '@/lib/db/schema';
 import { eq, and } from 'drizzle-orm';
 import { createBookingPaymentIntent, captureBookingPayment } from '@/lib/stripe';
 import { validateInput, uuidSchema } from '@/lib/validations';
+import { recordPaymentEvent } from '@/lib/payment-audit';
+import { recordStateTransition } from '@/lib/booking-audit';
 
 export async function createPaymentForBooking(bookingId: string) {
   try {
@@ -21,7 +23,7 @@ export async function createPaymentForBooking(bookingId: string) {
       where: and(
         eq(booking.id, validatedBookingId),
         eq(booking.clientId, session.user.id),
-        eq(booking.status, 'awaiting_payment')
+        eq(booking.paymentStatus, 'awaiting_client_payment')
       ),
     });
 
@@ -45,7 +47,7 @@ export async function createPaymentForBooking(bookingId: string) {
     }
 
     const paymentIntent = await createBookingPaymentIntent(
-      parseFloat(bookingRecord.clientPaid),
+      bookingRecord.expectedGrossCents ? bookingRecord.expectedGrossCents / 100 : 0,
       coach.stripeAccountId,
       {
         bookingId: bookingRecord.id,
@@ -57,10 +59,19 @@ export async function createPaymentForBooking(bookingId: string) {
     await db
       .update(booking)
       .set({
-        stripePaymentIntentId: paymentIntent.id,
+        primaryStripePaymentIntentId: paymentIntent.id,
         updatedAt: new Date(),
       })
       .where(eq(booking.id, validatedBookingId));
+
+    // Record payment audit event
+    await recordPaymentEvent({
+      bookingId: bookingRecord.id,
+      stripePaymentIntentId: paymentIntent.id,
+      amountCents: bookingRecord.expectedGrossCents ?? 0,
+      status: 'created',
+      captureMethod: 'manual',
+    });
 
     console.log(`PaymentIntent created for booking ${validatedBookingId}: ${paymentIntent.id}`);
 
@@ -89,7 +100,7 @@ export async function confirmBookingPayment(bookingId: string) {
       where: and(
         eq(booking.id, validatedBookingId),
         eq(booking.clientId, session.user.id),
-        eq(booking.status, 'awaiting_payment')
+        eq(booking.paymentStatus, 'awaiting_client_payment')
       ),
     });
 
@@ -97,26 +108,49 @@ export async function confirmBookingPayment(bookingId: string) {
       return { success: false, error: 'Booking not found' };
     }
 
-    if (!bookingRecord.stripePaymentIntentId) {
+    if (!bookingRecord.primaryStripePaymentIntentId) {
       return { success: false, error: 'No payment intent found' };
     }
 
-    await captureBookingPayment(bookingRecord.stripePaymentIntentId);
+    await captureBookingPayment(bookingRecord.primaryStripePaymentIntentId);
+
+    const oldPaymentStatus = bookingRecord.paymentStatus;
 
     await db
       .update(booking)
       .set({
-        status: 'accepted',
-        paymentCompletedAt: new Date(),
+        paymentStatus: 'captured',
+        primaryStripePaymentIntentId: bookingRecord.primaryStripePaymentIntentId,
         updatedAt: new Date(),
+        paymentDueAt: null,
+        lockedUntil: null,
+        fulfillmentStatus: 'scheduled',
       })
       .where(eq(booking.id, validatedBookingId));
+
+    // Record payment and state audit events
+    await recordPaymentEvent({
+      bookingId: bookingRecord.id,
+      stripePaymentIntentId: bookingRecord.primaryStripePaymentIntentId,
+      amountCents: bookingRecord.expectedGrossCents ?? 0,
+      status: 'captured',
+    });
+
+    await recordStateTransition({
+      bookingId: bookingRecord.id,
+      field: 'paymentStatus',
+      oldStatus: oldPaymentStatus,
+      newStatus: 'captured',
+      changedBy: session.user.id,
+    });
 
     if (bookingRecord.isGroupBooking && bookingRecord.groupType === 'private') {
       await db
         .update(bookingParticipant)
         .set({
-          paymentStatus: 'paid',
+          paymentStatus: 'captured',
+          status: 'accepted',
+          capturedAt: new Date(),
         })
         .where(eq(bookingParticipant.bookingId, validatedBookingId));
       
@@ -131,4 +165,3 @@ export async function confirmBookingPayment(bookingId: string) {
     return { success: false, error: 'Failed to confirm payment' };
   }
 }
-

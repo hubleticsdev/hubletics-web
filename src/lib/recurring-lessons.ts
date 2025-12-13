@@ -1,7 +1,7 @@
 import { db } from '@/lib/db';
 import { booking, recurringGroupLesson } from '@/lib/db/schema';
 import { eq } from 'drizzle-orm';
-import { calculateCoachEarnings } from '@/lib/pricing';
+import { calculateGroupTotals } from '@/lib/pricing';
 import crypto from 'crypto';
 
 interface RecurringLessonTemplate {
@@ -67,13 +67,7 @@ export async function generateBookingsFromRecurringTemplate(
       scheduledEndAt.setMinutes(scheduledEndAt.getMinutes() + typedTemplate.duration);
 
       const pricePerPerson = parseFloat(typedTemplate.pricePerPerson);
-      const { platformFee: platformFeePerPerson, stripeFee: stripeFeePerPerson, coachPayout: coachPayoutPerPerson } =
-        calculateCoachEarnings(pricePerPerson, platformFeePercentage);
-
-      const maxTotalRevenue = pricePerPerson * typedTemplate.maxParticipants;
-      const maxPlatformFee = platformFeePerPerson * typedTemplate.maxParticipants;
-      const maxStripeFee = stripeFeePerPerson * typedTemplate.maxParticipants;
-      const maxCoachPayout = coachPayoutPerPerson * typedTemplate.maxParticipants;
+      const totals = calculateGroupTotals(pricePerPerson, typedTemplate.maxParticipants, platformFeePercentage);
 
       bookingsToCreate.push({
         id: crypto.randomUUID(),
@@ -85,18 +79,20 @@ export async function generateBookingsFromRecurringTemplate(
         location: typedTemplate.location,
         clientMessage: typedTemplate.description || typedTemplate.title,
         coachRate: pricePerPerson.toString(),
-        clientPaid: maxTotalRevenue.toString(),
-        platformFee: maxPlatformFee.toString(),
-        stripeFee: maxStripeFee.toString(),
-        coachPayout: maxCoachPayout.toString(),
-        stripePaymentIntentId: null,
-        status: 'open' as const,
+        pricePerPerson: pricePerPerson.toString(),
+        expectedGrossCents: totals.totalGrossCents,
+        platformFeeCents: totals.platformFeeCents,
+        stripeFeeCents: totals.stripeFeeCents,
+        coachPayoutCents: totals.coachPayoutCents,
+        approvalStatus: 'accepted' as const,
+        paymentStatus: 'not_required' as const,
+        fulfillmentStatus: 'scheduled' as const,
+        capacityStatus: 'open' as const,
         isGroupBooking: true,
         groupType: 'public' as const,
         organizerId: typedTemplate.coachId,
         maxParticipants: typedTemplate.maxParticipants,
         minParticipants: typedTemplate.minParticipants,
-        pricePerPerson: pricePerPerson.toString(),
         currentParticipants: 0,
         recurringLessonId: recurringId,
       });

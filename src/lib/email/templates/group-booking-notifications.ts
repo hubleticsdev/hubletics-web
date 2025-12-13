@@ -75,10 +75,14 @@ export function getNewParticipantRequestEmailTemplate(
   participantName: string,
   lessonDate: string,
   lessonTime: string,
-  amount: string
+  amountCents?: number | null
 ) {
   const safeCoachName = sanitizeName(coachName);
   const safeParticipantName = sanitizeName(participantName);
+  const amount =
+    amountCents === undefined || amountCents === null || Number.isNaN(amountCents)
+      ? '0.00'
+      : (amountCents / 100).toFixed(2);
 
   return {
     subject: 'New participant request for your group lesson',
@@ -100,5 +104,39 @@ export function getNewParticipantRequestEmailTemplate(
       <p>Best regards,<br>The Hubletics Team</p>
     `,
     text: `Hi ${safeCoachName}, ${safeParticipantName} has requested to join your group lesson on ${lessonDate} at ${lessonTime}. Amount: $${amount}. Please review and approve/decline from your dashboard.`,
+  };
+}
+
+export function getParticipantPaymentConfirmedEmailTemplate(
+  coachName: string,
+  participantName: string,
+  lessonDate: string,
+  lessonTime: string,
+  amount: string
+) {
+  const safeCoachName = sanitizeName(coachName);
+  const safeParticipantName = sanitizeName(participantName);
+
+  return {
+    subject: 'Participant payment confirmed for your group lesson',
+    html: `
+      <h2>💰 Participant Payment Confirmed</h2>
+      <p>Hi ${safeCoachName},</p>
+      <p>Great news! ${safeParticipantName} has successfully paid for their spot in your group lesson.</p>
+
+      <div style="background-color: #f0f9ff; padding: 20px; border-radius: 8px; margin: 20px 0; border-left: 4px solid #0ea5e9;">
+        <h3 style="margin-top: 0; color: #0ea5e9;">Confirmed Participant</h3>
+        <p><strong>Participant:</strong> ${safeParticipantName}</p>
+        <p><strong>Amount Paid:</strong> $${amount}</p>
+        <p><strong>Date:</strong> ${lessonDate}</p>
+        <p><strong>Time:</strong> ${lessonTime}</p>
+      </div>
+
+      <p>The participant has been automatically added to your lesson. You can manage participants from your dashboard.</p>
+      <p><a href="${process.env.NEXT_PUBLIC_APP_URL}/dashboard/bookings" style="display: inline-block; padding: 12px 24px; background: linear-gradient(to right, #FF6B4A, #FF8C5A); color: white; text-decoration: none; border-radius: 6px; margin: 20px 0;">Manage Lesson</a></p>
+
+      <p>Best regards,<br>The Hubletics Team</p>
+    `,
+    text: `Hi ${safeCoachName}, ${safeParticipantName} has paid $${amount} for your group lesson on ${lessonDate} at ${lessonTime}. The participant has been added to your lesson.`,
   };
 }

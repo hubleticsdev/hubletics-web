@@ -4,6 +4,7 @@ import { db } from '@/lib/db';
 import { booking } from '@/lib/db/schema';
 import { eq, desc } from 'drizzle-orm';
 import { BookingsList } from '@/components/bookings/bookings-list';
+import { deriveUiBookingStatus } from '@/lib/booking-status';
 
 export default async function BookingsPage() {
   const session = await getSession();
@@ -11,51 +12,58 @@ export default async function BookingsPage() {
     redirect('/login');
   }
 
-  let bookings;
+  const bookings =
+    session.user.role === 'coach'
+      ? await db.query.booking.findMany({
+          where: eq(booking.coachId, session.user.id),
+          with: {
+            client: {
+              columns: {
+                id: true,
+                name: true,
+                email: true,
+                image: true,
+              },
+            },
+            review: {
+              columns: {
+                id: true,
+                rating: true,
+              },
+            },
+          },
+          orderBy: [desc(booking.scheduledStartAt)],
+        })
+      : await db.query.booking.findMany({
+          where: eq(booking.clientId, session.user.id),
+          with: {
+            coach: {
+              columns: {
+                id: true,
+                name: true,
+                email: true,
+                image: true,
+              },
+            },
+            review: {
+              columns: {
+                id: true,
+                rating: true,
+              },
+            },
+          },
+          orderBy: [desc(booking.scheduledStartAt)],
+        });
 
-  if (session.user.role === 'coach') {
-    bookings = await db.query.booking.findMany({
-      where: eq(booking.coachId, session.user.id),
-      with: {
-        client: {
-          columns: {
-            id: true,
-            name: true,
-            email: true,
-            image: true,
-          },
-        },
-        review: {
-          columns: {
-            id: true,
-            rating: true,
-          },
-        },
-      },
-      orderBy: [desc(booking.scheduledStartAt)],
-    });
-  } else {
-    bookings = await db.query.booking.findMany({
-      where: eq(booking.clientId, session.user.id),
-      with: {
-        coach: {
-          columns: {
-            id: true,
-            name: true,
-            email: true,
-            image: true,
-          },
-        },
-        review: {
-          columns: {
-            id: true,
-            rating: true,
-          },
-        },
-      },
-      orderBy: [desc(booking.scheduledStartAt)],
-    });
-  }
+  const bookingsWithStatus = bookings.map((b) => ({
+    ...b,
+    status: deriveUiBookingStatus({
+      approvalStatus: b.approvalStatus,
+      paymentStatus: b.paymentStatus,
+      fulfillmentStatus: b.fulfillmentStatus,
+      capacityStatus: b.capacityStatus,
+    }),
+  }));
 
   return (
     <div className="min-h-screen bg-gray-50 pt-20">
@@ -72,7 +80,7 @@ export default async function BookingsPage() {
         </div>
 
         <BookingsList
-          bookings={bookings}
+          bookings={bookingsWithStatus}
           userRole={session.user.role as 'client' | 'coach' | 'admin' | 'pending'}
           userId={session.user.id}
         />

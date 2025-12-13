@@ -5,6 +5,7 @@ import { db } from '@/lib/db';
 import { booking, coachProfile } from '@/lib/db/schema';
 import { eq, and, inArray } from 'drizzle-orm';
 import { stripe } from '@/lib/stripe';
+import { deriveUiBookingStatus, UiBookingStatus } from '@/lib/booking-status';
 
 export type EarningsSummary = {
   totalEarnings: number;
@@ -22,7 +23,7 @@ export type BookingEarning = {
   scheduledStartAt: Date;
   duration: number;
   coachPayout: number;
-  status: string;
+  status: UiBookingStatus;
   stripeTransferId: string | null;
 };
 
@@ -41,10 +42,10 @@ export async function getCoachEarningsSummary(): Promise<EarningsSummary> {
   const completedBookings = await db.query.booking.findMany({
     where: and(
       eq(booking.coachId, coachId),
-      eq(booking.status, 'completed')
+      eq(booking.fulfillmentStatus, 'completed')
     ),
     columns: {
-      coachPayout: true,
+      coachPayoutCents: true,
       stripeTransferId: true,
     },
   });
@@ -52,7 +53,7 @@ export async function getCoachEarningsSummary(): Promise<EarningsSummary> {
   const upcomingBookings = await db.query.booking.findMany({
     where: and(
       eq(booking.coachId, coachId),
-      eq(booking.status, 'accepted')
+      eq(booking.approvalStatus, 'accepted')
     ),
     columns: {
       id: true,
@@ -60,22 +61,22 @@ export async function getCoachEarningsSummary(): Promise<EarningsSummary> {
   });
 
   const totalEarnings = completedBookings.reduce(
-    (sum, b) => sum + parseFloat(b.coachPayout as unknown as string),
+    (sum, b) => sum + (b.coachPayoutCents || 0),
     0
   );
 
   const pendingBookings = completedBookings.filter(b => !b.stripeTransferId);
   const pendingBalance = pendingBookings.reduce(
-    (sum, b) => sum + parseFloat(b.coachPayout as unknown as string),
+    (sum, b) => sum + (b.coachPayoutCents || 0),
     0
   );
 
   const availableBalance = totalEarnings - pendingBalance;
 
   return {
-    totalEarnings: Number(totalEarnings.toFixed(2)),
-    availableBalance: Number(availableBalance.toFixed(2)),
-    pendingBalance: Number(pendingBalance.toFixed(2)),
+    totalEarnings: Number((totalEarnings / 100).toFixed(2)),
+    availableBalance: Number((availableBalance / 100).toFixed(2)),
+    pendingBalance: Number((pendingBalance / 100).toFixed(2)),
     completedBookings: completedBookings.length,
     upcomingBookings: upcomingBookings.length,
     stripeAccountId: profile?.stripeAccountId || null,
@@ -88,10 +89,7 @@ export async function getCoachBookingEarnings(): Promise<BookingEarning[]> {
   const coachId = session.user.id;
 
   const bookings = await db.query.booking.findMany({
-    where: and(
-      eq(booking.coachId, coachId),
-      inArray(booking.status, ['completed', 'accepted', 'pending'])
-    ),
+    where: eq(booking.coachId, coachId),
     with: {
       client: {
         columns: {
@@ -108,8 +106,13 @@ export async function getCoachBookingEarnings(): Promise<BookingEarning[]> {
     clientName: b.client.name,
     scheduledStartAt: b.scheduledStartAt,
     duration: b.duration,
-    coachPayout: parseFloat(b.coachPayout as unknown as string),
-    status: b.status,
+    coachPayout: b.coachPayoutCents ? b.coachPayoutCents / 100 : 0,
+    status: deriveUiBookingStatus({
+      approvalStatus: b.approvalStatus,
+      paymentStatus: b.paymentStatus,
+      fulfillmentStatus: b.fulfillmentStatus,
+      capacityStatus: b.capacityStatus,
+    }),
     stripeTransferId: b.stripeTransferId,
   }));
 }

@@ -27,8 +27,9 @@ export function ParticipantsModal({ bookingId, isOpen, onClose }: ParticipantsMo
     email: string;
     image: string | null;
     username: string | null;
-    paymentStatus: string;
-    amountPaid: string | null;
+    paymentStatus: 'requires_payment_method' | 'authorized' | 'captured' | 'refunded' | 'cancelled';
+    status: 'requested' | 'awaiting_payment' | 'awaiting_coach' | 'accepted' | 'declined' | 'cancelled' | 'completed';
+    amountCents: number | null;
     joinedAt: Date;
   }>>([]);
   const [isCoach, setIsCoach] = useState(false);
@@ -131,21 +132,21 @@ export function ParticipantsModal({ bookingId, isOpen, onClose }: ParticipantsMo
                     {participant.username && (
                       <div className="text-sm text-gray-500">@{participant.username}</div>
                     )}
-                    {participant.amountPaid && (
+                    {participant.amountCents !== null && participant.amountCents !== undefined && (
                       <div className="text-xs text-gray-600 mt-0.5">
-                        ${parseFloat(participant.amountPaid).toFixed(2)}
+                        ${(participant.amountCents / 100).toFixed(2)}
                       </div>
                     )}
                   </div>
                 </div>
 
                 <div className="flex items-center gap-2">
-                  {participant.paymentStatus === 'paid' ? (
+                  {participant.paymentStatus === 'captured' ? (
                     <div className="flex items-center gap-1 px-2 py-1 bg-green-100 text-green-700 rounded text-xs font-medium">
                       <CheckCircle className="h-3 w-3" />
                       Paid
                     </div>
-                  ) : participant.paymentStatus === 'pending' && isCoach ? (
+                  ) : participant.paymentStatus === 'authorized' && isCoach ? (
                     <div className="flex items-center gap-2">
                       <Button
                         size="sm"
@@ -176,7 +177,11 @@ export function ParticipantsModal({ bookingId, isOpen, onClose }: ParticipantsMo
                   ) : (
                     <div className="flex items-center gap-1 px-2 py-1 bg-orange-100 text-orange-700 rounded text-xs font-medium">
                       <Clock className="h-3 w-3" />
-                      Pending
+                      {participant.paymentStatus === 'requires_payment_method'
+                        ? 'Payment required'
+                        : participant.status === 'awaiting_coach'
+                          ? 'Awaiting coach approval'
+                          : 'Pending'}
                     </div>
                   )}
                 </div>
@@ -188,4 +193,3 @@ export function ParticipantsModal({ bookingId, isOpen, onClose }: ParticipantsMo
     </Dialog>
   );
 }
-

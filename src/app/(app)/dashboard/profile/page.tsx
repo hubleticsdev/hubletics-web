@@ -44,7 +44,7 @@ export default async function ProfilePage() {
           user={{
             id: session.user.id,
             name: session.user.name,
-            username: session.user.username,
+            username: session.user.username ?? '',
             email: session.user.email,
             image: session.user.image ?? null,
             role: session.user.role as 'client' | 'coach' | 'admin' | 'pending',

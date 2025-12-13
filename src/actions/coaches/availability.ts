@@ -12,7 +12,7 @@ export async function getCoachBookings(coachId: string) {
     const bookings = await db.query.booking.findMany({
       where: and(
         eq(booking.coachId, coachId),
-        eq(booking.status, 'accepted'),
+        eq(booking.approvalStatus, 'accepted'),
         gte(booking.scheduledStartAt, now)
       ),
       columns: {
@@ -59,4 +59,3 @@ export async function updateCoachAvailability({
     return { success: false, error: 'Failed to update availability' };
   }
 }
-

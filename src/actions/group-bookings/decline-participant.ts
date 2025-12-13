@@ -60,7 +60,7 @@ export async function declineParticipant(bookingId: string, participantId: strin
       return { success: false, error: 'Participant not found' };
     }
 
-    if (participant.paymentStatus === 'paid') {
+    if (participant.paymentStatus === 'captured') {
       return { success: false, error: 'Cannot decline - participant already paid. Use cancel/refund instead.' };
     }
 
@@ -96,7 +96,8 @@ export async function declineParticipant(bookingId: string, participantId: strin
     await db
       .update(bookingParticipant)
       .set({
-        paymentStatus: 'refunded', // Treated as "declined/cancelled"
+        paymentStatus: 'cancelled',
+        status: 'declined',
         cancelledAt: new Date(),
       })
       .where(eq(bookingParticipant.id, participantId));

@@ -21,7 +21,7 @@ import {
   DialogDescription,
 } from '@/components/ui/dialog';
 import { Calendar, MapPin, Clock, DollarSign, User, Loader2, Star, AlertCircle, Users, MessageCircle, Flag } from 'lucide-react';
-import { acceptBooking, declineBooking } from '@/actions/bookings/respond';
+import { acceptBooking, declineBooking } from '@/actions/bookings/manage';
 import { leavePublicLesson, cancelPrivateGroupBooking, coachCancelGroupLesson } from '@/actions/group-bookings/cancel';
 import { initiateDispute } from '@/actions/admin/disputes';
 import Link from 'next/link';
@@ -31,8 +31,9 @@ import { ParticipantsModal } from '@/components/group-bookings/participants-moda
 import { useRouter } from 'next/navigation';
 import { toast } from 'sonner';
 import Image from 'next/image';
+import { formatUiBookingStatus, UiBookingStatus } from '@/lib/booking-status';
 
-type BookingStatus = 'pending' | 'awaiting_payment' | 'accepted' | 'declined' | 'cancelled' | 'completed' | 'disputed' | 'open';
+type BookingStatus = UiBookingStatus;
 
 interface Booking {
   id: string;
@@ -45,8 +46,15 @@ interface Booking {
     notes?: string;
   };
   clientMessage: string | null;
-  clientPaid: string;
+  expectedGrossCents?: number | null;
+  coachPayoutCents?: number | null;
+  stripeFeeCents?: number | null;
+  platformFeeCents?: number | null;
   status: BookingStatus;
+  approvalStatus?: string | null;
+  paymentStatus?: string | null;
+  fulfillmentStatus?: string | null;
+  capacityStatus?: string | null;
   coachRespondedAt: Date | null;
   paymentDueAt?: Date | null;
   isGroupBooking?: boolean;
@@ -111,14 +119,21 @@ export function BookingsList({ bookings, userRole, userId }: BookingsListProps) 
   const [disputeDialogOpen, setDisputeDialogOpen] = useState(false);
   const [bookingToDispute, setBookingToDispute] = useState<Booking | null>(null);
   const [disputeReason, setDisputeReason] = useState('');
+  const pendingCount = bookings.filter(
+    (b) => b.status === 'awaiting_coach' || b.status === 'awaiting_payment'
+  ).length;
 
   const now = new Date();
+  const formatDollars = (cents?: number | null) =>
+    cents !== undefined && cents !== null ? (cents / 100).toFixed(2) : '0.00';
 
   const filteredBookings = bookings.filter((booking) => {
     const bookingDate = new Date(booking.scheduledStartAt);
     const isPast = bookingDate < now;
-    const isUpcoming = bookingDate >= now && (booking.status === 'accepted' || booking.status === 'pending');
-    const isPending = booking.status === 'pending';
+    const isUpcoming =
+      bookingDate >= now &&
+      (['confirmed', 'awaiting_payment', 'awaiting_coach', 'open'] as BookingStatus[]).includes(booking.status);
+    const isPending = booking.status === 'awaiting_coach' || booking.status === 'awaiting_payment';
 
     let statusMatch = true;
     switch (filter) {
@@ -129,7 +144,9 @@ export function BookingsList({ bookings, userRole, userId }: BookingsListProps) 
         statusMatch = isUpcoming && !isPast;
         break;
       case 'past':
-        statusMatch = isPast || booking.status === 'completed' || booking.status === 'cancelled';
+        statusMatch =
+          isPast ||
+          ['completed', 'cancelled', 'declined', 'disputed', 'expired'].includes(booking.status);
         break;
       default:
         statusMatch = true;
@@ -155,15 +172,16 @@ export function BookingsList({ bookings, userRole, userId }: BookingsListProps) 
 
   const getStatusColor = (status: BookingStatus) => {
     switch (status) {
-      case 'pending':
+      case 'awaiting_coach':
         return 'bg-yellow-100 text-yellow-800';
       case 'awaiting_payment':
         return 'bg-orange-100 text-orange-800';
-      case 'accepted':
+      case 'confirmed':
         return 'bg-green-100 text-green-800';
       case 'declined':
         return 'bg-red-100 text-red-800';
       case 'cancelled':
+      case 'expired':
         return 'bg-gray-100 text-gray-800';
       case 'completed':
         return 'bg-blue-100 text-blue-800';
@@ -370,9 +388,9 @@ export function BookingsList({ bookings, userRole, userId }: BookingsListProps) 
                 }`}
               >
                 Pending Requests
-                {bookings.filter((b) => b.status === 'pending').length > 0 && (
+                {pendingCount > 0 && (
                   <span className="ml-2 px-2 py-0.5 bg-[#FF6B4A] text-white text-xs rounded-full">
-                    {bookings.filter((b) => b.status === 'pending').length}
+                    {pendingCount}
                   </span>
                 )}
               </button>
@@ -446,7 +464,7 @@ export function BookingsList({ bookings, userRole, userId }: BookingsListProps) 
           <h3 className="text-lg font-semibold text-gray-900 mb-2">No bookings found</h3>
           <p className="text-gray-600">
             {filter === 'pending'
-              ? 'You have no pending booking requests'
+              ? 'You have no booking requests needing action'
               : filter === 'upcoming'
               ? 'You have no upcoming sessions'
               : filter === 'past'
@@ -469,7 +487,7 @@ export function BookingsList({ bookings, userRole, userId }: BookingsListProps) 
                             booking.status
                           )}`}
                         >
-                          {booking.status}
+                          {formatUiBookingStatus(booking.status)}
                         </span>
                         {booking.isGroupBooking && (
                           <span className="px-3 py-1 rounded-full text-xs font-semibold bg-purple-100 text-purple-700 flex items-center gap-1">
@@ -483,7 +501,7 @@ export function BookingsList({ bookings, userRole, userId }: BookingsListProps) 
                             {booking.pendingParticipantsCount} pending approval
                           </span>
                         )}
-                        {booking.status === 'pending' && userRole === 'coach' && (
+                        {booking.status === 'awaiting_coach' && userRole === 'coach' && (
                           <span className="text-xs text-gray-500">Awaiting your response</span>
                         )}
                       </div>
@@ -537,7 +555,9 @@ export function BookingsList({ bookings, userRole, userId }: BookingsListProps) 
                         <div className="flex items-start gap-2">
                           <DollarSign className="h-5 w-5 text-gray-400 mt-0.5" />
                           <div>
-                            <div className="text-sm font-medium text-gray-900">${booking.clientPaid}</div>
+                            <div className="text-sm font-medium text-gray-900">
+                              ${formatDollars(booking.expectedGrossCents)}
+                            </div>
                             <div className="text-sm text-gray-600">
                               {booking.isGroupBooking && booking.pricePerPerson 
                                 ? `$${booking.pricePerPerson}/person` 
@@ -568,7 +588,7 @@ export function BookingsList({ bookings, userRole, userId }: BookingsListProps) 
                     </div>
 
                     <div className="ml-6 flex flex-col gap-2">
-                      {booking.status === 'pending' && userRole === 'coach' && (
+                      {booking.status === 'awaiting_coach' && userRole === 'coach' && (
                         <>
                           <Button
                             type="button"
@@ -629,7 +649,7 @@ export function BookingsList({ bookings, userRole, userId }: BookingsListProps) 
                       )}
 
                       {booking.isGroupBooking && userRole === 'client' && booking.groupType === 'public' && 
-                       (booking.status === 'open' || booking.status === 'accepted') && 
+                       (booking.status === 'open' || booking.status === 'confirmed') && 
                        new Date() < new Date(booking.scheduledStartAt) && (
                         <Button
                           type="button"
@@ -646,7 +666,7 @@ export function BookingsList({ bookings, userRole, userId }: BookingsListProps) 
 
                       {booking.isGroupBooking && userRole === 'client' && booking.groupType === 'private' && 
                        booking.organizerId === userId &&
-                       ['pending', 'awaiting_payment', 'accepted'].includes(booking.status) && 
+                       ['awaiting_coach', 'awaiting_payment', 'confirmed'].includes(booking.status) && 
                        new Date() < new Date(booking.scheduledStartAt) && (
                         <Button
                           type="button"
@@ -662,7 +682,7 @@ export function BookingsList({ bookings, userRole, userId }: BookingsListProps) 
                       )}
 
                       {booking.isGroupBooking && userRole === 'coach' && 
-                       (booking.status === 'open' || booking.status === 'accepted') && 
+                       (booking.status === 'open' || booking.status === 'confirmed') && 
                        new Date() < new Date(booking.scheduledStartAt) && (
                         <Button
                           type="button"
@@ -677,7 +697,7 @@ export function BookingsList({ bookings, userRole, userId }: BookingsListProps) 
                         </Button>
                       )}
 
-                      {(booking.status === 'accepted' || booking.status === 'completed') && (
+                      {(booking.status === 'confirmed' || booking.status === 'completed') && (
                         <Button
                           type="button"
                           onClick={() => handleReportIssue(booking)}
@@ -700,7 +720,7 @@ export function BookingsList({ bookings, userRole, userId }: BookingsListProps) 
                                 setSelectedPayment({
                                   id: booking.id,
                                   coachName: booking.coach?.name || 'Coach',
-                                  amount: parseFloat(booking.clientPaid),
+                                  amount: booking.expectedGrossCents ? booking.expectedGrossCents / 100 : 0,
                                   paymentDueAt: new Date(booking.paymentDueAt),
                                 });
                                 setPaymentModalOpen(true);

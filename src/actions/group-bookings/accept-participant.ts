@@ -60,7 +60,7 @@ export async function acceptParticipant(bookingId: string, participantId: string
       return { success: false, error: 'Participant not found' };
     }
 
-    if (participant.paymentStatus === 'paid') {
+    if (participant.paymentStatus === 'captured') {
       return { success: false, error: 'Participant already accepted' };
     }
 
@@ -97,7 +97,9 @@ export async function acceptParticipant(bookingId: string, participantId: string
     await db
       .update(bookingParticipant)
       .set({
-        paymentStatus: 'paid',
+        paymentStatus: 'captured',
+        status: 'accepted',
+        capturedAt: new Date(),
       })
       .where(eq(bookingParticipant.id, participantId));
 
@@ -105,6 +107,7 @@ export async function acceptParticipant(bookingId: string, participantId: string
       .update(booking)
       .set({
         currentParticipants: sql`${booking.currentParticipants} + 1`,
+        capturedParticipants: sql`${booking.capturedParticipants} + 1`,
         updatedAt: new Date(),
       })
       .where(eq(booking.id, bookingId));
@@ -125,7 +128,7 @@ export async function acceptParticipant(bookingId: string, participantId: string
       await db
         .update(booking)
         .set({
-          status: 'accepted',
+          capacityStatus: 'full',
           updatedAt: new Date(),
         })
         .where(eq(booking.id, bookingId));

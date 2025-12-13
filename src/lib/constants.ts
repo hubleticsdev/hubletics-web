@@ -99,12 +99,14 @@ export const USER_ROLES = ['client', 'coach', 'admin'] as const;
 export const USER_STATUSES = ['active', 'inactive', 'suspended', 'pending'] as const;
 
 export const BOOKING_STATUSES = [
-  'pending',
-  'accepted',
+  'awaiting_coach',
+  'awaiting_payment',
+  'confirmed',
   'declined',
   'cancelled',
   'completed',
   'disputed',
+  'expired',
   'open'
 ] as const;
 

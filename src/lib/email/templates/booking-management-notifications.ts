@@ -1,15 +1,21 @@
 import { sanitizeName } from '@/lib/utils';
 
+function formatDollarsFromCents(amountCents: number | null | undefined): string {
+  if (!amountCents || Number.isNaN(amountCents)) return '0.00';
+  return (amountCents / 100).toFixed(2);
+}
+
 export function getBookingAcceptedEmailTemplate(
   clientName: string,
   coachName: string,
   lessonDate: string,
   lessonTime: string,
   location: string,
-  amount: string,
+  amountCents: number | null | undefined,
   paymentDueDate: string
 ) {
   const safeClientName = sanitizeName(clientName);
+  const formattedAmount = formatDollarsFromCents(amountCents);
 
   return {
     subject: 'Lesson Accepted - Payment Required',
@@ -23,7 +29,7 @@ export function getBookingAcceptedEmailTemplate(
         <p><strong>Date:</strong> ${lessonDate}</p>
         <p><strong>Time:</strong> ${lessonTime}</p>
         <p><strong>Location:</strong> ${location}</p>
-        <p><strong>Amount:</strong> $${amount}</p>
+        <p><strong>Amount:</strong> $${formattedAmount}</p>
       </div>
 
       <h3>⏰ Payment Required</h3>
@@ -43,7 +49,7 @@ export function getBookingAcceptedEmailTemplate(
 
       <p>Best regards,<br>The Hubletics Team</p>
     `,
-    text: `Hi ${safeClientName}, Your lesson has been accepted! Please complete payment within 24 hours. Payment deadline: ${paymentDueDate}. Amount: $${amount}. Visit ${process.env.NEXT_PUBLIC_APP_URL}/dashboard/bookings to pay now.`,
+    text: `Hi ${safeClientName}, Your lesson has been accepted! Please complete payment within 24 hours. Payment deadline: ${paymentDueDate}. Amount: $${formattedAmount}. Visit ${process.env.NEXT_PUBLIC_APP_URL}/dashboard/bookings to pay now.`,
   };
 }
 

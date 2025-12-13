@@ -1,10 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { stripe } from '@/lib/stripe';
 import { db } from '@/lib/db';
-import { coachProfile, idempotencyKey, booking } from '@/lib/db/schema';
-import { eq, and, gt } from 'drizzle-orm';
+import { coachProfile, idempotencyKey, booking, bookingParticipant } from '@/lib/db/schema';
+import { eq, and, gt, sql } from 'drizzle-orm';
 import Stripe from 'stripe';
 import { stripeWebhookSchema, safeValidateInput } from '@/lib/validations';
+import { revalidatePath } from 'next/cache';
+import { recordPaymentEvent } from '@/lib/payment-audit';
+import { recordStateTransition } from '@/lib/booking-audit';
 
 export async function POST(request: NextRequest) {
   const body = await request.text();
@@ -92,14 +95,79 @@ export async function POST(request: NextRequest) {
         const paymentIntent = event.data.object as Stripe.PaymentIntent;
         console.log(`Payment intent succeeded: ${paymentIntent.id}`);
 
+        // First check if it's a main booking payment
         const bookingRecord = await db.query.booking.findFirst({
-          where: eq(booking.stripePaymentIntentId, paymentIntent.id),
+          where: eq(booking.primaryStripePaymentIntentId, paymentIntent.id),
         });
 
         if (bookingRecord) {
+          const oldPaymentStatus = bookingRecord.paymentStatus;
+
+          await db
+            .update(booking)
+            .set({
+              paymentStatus: 'captured',
+              updatedAt: new Date(),
+            })
+            .where(eq(booking.id, bookingRecord.id));
+
+          // Record audit events
+          await recordPaymentEvent({
+            bookingId: bookingRecord.id,
+            stripePaymentIntentId: paymentIntent.id,
+            amountCents: bookingRecord.expectedGrossCents ?? 0,
+            status: 'captured',
+          });
+
+          await recordStateTransition({
+            bookingId: bookingRecord.id,
+            field: 'paymentStatus',
+            oldStatus: oldPaymentStatus,
+            newStatus: 'captured',
+          });
+
           console.log(`Payment confirmed for booking: ${bookingRecord.id}`);
         } else {
-          console.warn(`Payment intent ${paymentIntent.id} not found in bookings`);
+          // Check if it's a group booking participant payment
+          const participantRecord = await db.query.bookingParticipant.findFirst({
+            where: eq(bookingParticipant.stripePaymentIntentId, paymentIntent.id),
+            with: {
+              booking: {
+                with: {
+                  coach: {
+                    columns: { name: true, email: true }
+                  }
+                }
+              }
+            }
+          });
+
+          if (participantRecord) {
+            await db
+              .update(bookingParticipant)
+              .set({
+                paymentStatus: 'authorized',
+                status: 'awaiting_coach',
+                authorizedAt: new Date(),
+              })
+              .where(eq(bookingParticipant.id, participantRecord.id));
+
+            // Increment authorizedParticipants counter on the booking
+            await db
+              .update(booking)
+              .set({
+                authorizedParticipants: sql`${booking.authorizedParticipants} + 1`,
+                updatedAt: new Date(),
+              })
+              .where(eq(booking.id, participantRecord.bookingId));
+
+            console.log(`Payment authorized for participant ${participantRecord.userId} in booking ${participantRecord.bookingId} - waiting for coach approval`);
+
+            revalidatePath('/dashboard/bookings');
+            revalidatePath(`/coaches/${participantRecord.booking.coachId}`);
+          } else {
+            console.warn(`Payment intent ${paymentIntent.id} not found in bookings or participants`);
+          }
         }
         break;
       }
@@ -109,14 +177,15 @@ export async function POST(request: NextRequest) {
         console.log(`Payment intent failed: ${paymentIntent.id}`);
 
         const bookingRecord = await db.query.booking.findFirst({
-          where: eq(booking.stripePaymentIntentId, paymentIntent.id),
+          where: eq(booking.primaryStripePaymentIntentId, paymentIntent.id),
         });
 
-        if (bookingRecord && bookingRecord.status === 'pending') {
+        if (bookingRecord) {
           await db
             .update(booking)
             .set({
-              status: 'cancelled',
+              approvalStatus: 'cancelled',
+              paymentStatus: 'failed',
               cancellationReason: 'Payment failed',
               cancelledAt: new Date(),
               updatedAt: new Date(),
@@ -134,15 +203,14 @@ export async function POST(request: NextRequest) {
 
         // Note: We might need to store charge IDs for better refund tracking
         const bookingRecord = await db.query.booking.findFirst({
-          where: eq(booking.stripePaymentIntentId, charge.payment_intent as string),
+          where: eq(booking.primaryStripePaymentIntentId, charge.payment_intent as string),
         });
 
         if (bookingRecord) {
           await db
             .update(booking)
             .set({
-              refundAmount: (charge.amount_refunded / 100).toString(),
-              refundProcessedAt: new Date(),
+              paymentStatus: 'refunded',
               updatedAt: new Date(),
             })
             .where(eq(booking.id, bookingRecord.id));
@@ -159,8 +227,8 @@ export async function POST(request: NextRequest) {
         // Find booking by payment intent and get coach's Stripe account
         const bookingRecord = await db.query.booking.findFirst({
           where: and(
-            eq(booking.status, 'completed'),
-            eq(booking.stripePaymentIntentId, transfer.source_transaction as string)
+            eq(booking.fulfillmentStatus, 'completed'),
+            eq(booking.primaryStripePaymentIntentId, transfer.source_transaction as string)
           ),
           with: {
             coach: {
@@ -203,10 +271,10 @@ export async function POST(request: NextRequest) {
           await db
             .update(booking)
             .set({
-              status: 'cancelled',
+              approvalStatus: 'cancelled',
+              paymentStatus: 'refunded',
+              fulfillmentStatus: 'disputed',
               cancellationReason: 'Transfer reversed - refund processed',
-              refundAmount: (transfer.amount_reversed / 100).toString(),
-              refundProcessedAt: new Date(),
               updatedAt: new Date(),
             })
             .where(eq(booking.id, bookingRecord.id));
@@ -241,4 +309,3 @@ export async function POST(request: NextRequest) {
     );
   }
 }
-

@@ -41,7 +41,6 @@ export async function createBooking(input: CreateBookingInput) {
       where: eq(booking.idempotencyKey, idempotencyKey),
       columns: {
         id: true,
-        status: true,
         createdAt: true,
       },
     });
@@ -77,13 +76,14 @@ export async function createBooking(input: CreateBookingInput) {
           )
         ),
         or(
-          sql`${booking.status} IN ('pending', 'awaiting_payment', 'accepted', 'open')`,
+          sql`${booking.approvalStatus} IN ('pending_review', 'accepted')`,
+          sql`${booking.paymentStatus} = 'awaiting_client_payment'`,
+          sql`${booking.capacityStatus} = 'open'`,
           sql`${booking.lockedUntil} > ${now}`
         )
       ),
       columns: {
         id: true,
-        status: true,
         lockedUntil: true,
       },
     });
@@ -140,12 +140,13 @@ export async function createBooking(input: CreateBookingInput) {
       location: validatedInput.location,
       clientMessage: validatedInput.clientMessage ? sanitizeText(validatedInput.clientMessage) : validatedInput.clientMessage,
       coachRate: pricing.coachDesiredRate.toString(),
-      clientPaid: pricing.clientPays.toString(),
-      platformFee: pricing.platformFee.toString(),
-      stripeFee: pricing.stripeFee.toString(),
-      coachPayout: pricing.coachPayout.toString(),
-      stripePaymentIntentId: null,
-      status: 'pending',
+      expectedGrossCents: pricing.clientPaysCents,
+      platformFeeCents: pricing.platformFeeCents,
+      stripeFeeCents: pricing.stripeFeeCents,
+      coachPayoutCents: pricing.coachPayoutCents,
+      approvalStatus: 'pending_review',
+      paymentStatus: 'not_required',
+      fulfillmentStatus: 'scheduled',
       idempotencyKey,
       lockedUntil: new Date(Date.now() + 5 * 60 * 1000),
     });
@@ -160,7 +161,7 @@ export async function createBooking(input: CreateBookingInput) {
         time: `${validatedInput.scheduledStartAt.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })} - ${validatedInput.scheduledEndAt.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })}`,
         duration,
         location: `${validatedInput.location.name}, ${validatedInput.location.address}`,
-        amount: pricing.clientPays.toFixed(2),
+        amountCents: pricing.clientPaysCents,
       }
     );
 
@@ -182,4 +183,3 @@ export async function createBooking(input: CreateBookingInput) {
     return { success: false, error: 'Failed to create booking' };
   }
 }
-

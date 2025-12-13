@@ -3,12 +3,9 @@
 import { db } from '@/lib/db';
 import { booking } from '@/lib/db/schema';
 import { eq } from 'drizzle-orm';
-import Stripe from 'stripe';
 import { Resend } from 'resend';
-
-const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
-  apiVersion: '2025-09-30.clover',
-});
+import { incrementCoachLessonsCompleted } from '@/lib/coach-stats';
+import { stripe } from '@/lib/stripe';
 
 const resend = new Resend(process.env.RESEND_API_KEY!);
 
@@ -16,10 +13,10 @@ export async function getDisputedBookings(page = 1, limit = 25) {
   try {
     const offset = (page - 1) * limit;
 
-    const totalDisputed = await db.$count(booking, eq(booking.status, 'disputed'));
+    const totalDisputed = await db.$count(booking, eq(booking.fulfillmentStatus, 'disputed'));
 
     const bookings = await db.query.booking.findMany({
-      where: eq(booking.status, 'disputed'),
+      where: eq(booking.fulfillmentStatus, 'disputed'),
       with: {
         client: {
           columns: {
@@ -92,13 +89,13 @@ export async function processRefund(
       return { success: false, error: 'Booking not found' };
     }
 
-    if (!bookingRecord.stripePaymentIntentId) {
+    if (!bookingRecord.primaryStripePaymentIntentId) {
       return { success: false, error: 'No payment found for this booking' };
     }
 
     // Fetch the PaymentIntent to get the charge ID
     const paymentIntent = await stripe.paymentIntents.retrieve(
-      bookingRecord.stripePaymentIntentId
+      bookingRecord.primaryStripePaymentIntentId
     );
 
     if (paymentIntent.status !== 'succeeded') {
@@ -107,7 +104,7 @@ export async function processRefund(
 
     // Get the charge from the payment intent
     const charges = await stripe.charges.list({
-      payment_intent: bookingRecord.stripePaymentIntentId,
+      payment_intent: bookingRecord.primaryStripePaymentIntentId,
       limit: 1,
     });
 
@@ -117,7 +114,7 @@ export async function processRefund(
 
     const charge = charges.data[0];
 
-    const clientPaidCents = Math.round(parseFloat(bookingRecord.clientPaid) * 100);
+    const clientPaidCents = bookingRecord.expectedGrossCents || 0;
     const refundAmountCents =
       refundType === 'full' ? clientPaidCents : Math.round((partialAmount || 0) * 100);
 
@@ -136,9 +133,9 @@ export async function processRefund(
     await db
       .update(booking)
       .set({
-        status: 'cancelled',
-        refundAmount: (refundAmountCents / 100).toString(),
-        refundProcessedAt: new Date(),
+        approvalStatus: 'cancelled',
+        paymentStatus: 'refunded',
+        fulfillmentStatus: 'disputed',
         cancellationReason: reason || 'Refund processed by admin',
         updatedAt: new Date(),
       })
@@ -156,7 +153,7 @@ export async function processRefund(
         <ul>
           <li>Coach: ${bookingRecord.coach.name}</li>
           <li>Date: ${new Date(bookingRecord.scheduledStartAt).toLocaleDateString()}</li>
-          <li>Original Amount: $${parseFloat(bookingRecord.clientPaid).toFixed(2)}</li>
+          <li>Original Amount: $${(clientPaidCents / 100).toFixed(2)}</li>
           <li>Refund Amount: $${(refundAmountCents / 100).toFixed(2)}</li>
         </ul>
         ${reason ? `<p><strong>Reason:</strong> ${reason}</p>` : ''}
@@ -201,14 +198,25 @@ export async function processRefund(
 
 export async function markDisputeResolved(bookingId: string, resolution: string) {
   try {
+    const bookingRecord = await db.query.booking.findFirst({
+      where: eq(booking.id, bookingId),
+      columns: { coachId: true },
+    });
+
+    if (!bookingRecord) {
+      return { success: false, error: 'Booking not found' };
+    }
+
     await db
       .update(booking)
       .set({
-        status: 'completed',
+        fulfillmentStatus: 'completed',
         cancellationReason: `Dispute resolved: ${resolution}`,
         updatedAt: new Date(),
       })
       .where(eq(booking.id, bookingId));
+
+    await incrementCoachLessonsCompleted(bookingRecord.coachId);
 
     return { success: true, message: 'Dispute marked as resolved' };
   } catch (error) {
@@ -246,11 +254,13 @@ export async function initiateDispute(bookingId: string, reason: string, initiat
     await db
       .update(booking)
       .set({
-        status: 'disputed',
+        fulfillmentStatus: 'disputed',
         cancellationReason: `${initiatedBy === 'client' ? 'Client' : 'Coach'} initiated dispute: ${reason}`,
         updatedAt: new Date(),
       })
       .where(eq(booking.id, bookingId));
+
+    const clientPaidCents = bookingRecord.expectedGrossCents || 0;
 
     await resend.emails.send({
       from: 'Hubletics <noreply@hubletics.com>',
@@ -264,7 +274,7 @@ export async function initiateDispute(bookingId: string, reason: string, initiat
           <li>Coach: ${bookingRecord.coach.name}</li>
           <li>Client: ${bookingRecord.client.name}</li>
           <li>Date: ${new Date(bookingRecord.scheduledStartAt).toLocaleDateString()}</li>
-          <li>Amount: $${parseFloat(bookingRecord.clientPaid).toFixed(2)}</li>
+          <li>Amount: $${(clientPaidCents / 100).toFixed(2)}</li>
         </ul>
         <p><strong>Reason:</strong> ${reason}</p>
         <p><a href="${process.env.NEXT_PUBLIC_URL}/admin/disputes">View in Admin Panel</a></p>
@@ -298,4 +308,3 @@ export async function initiateDispute(bookingId: string, reason: string, initiat
     };
   }
 }
-

@@ -15,7 +15,7 @@ export function CoachCard({ coach }: { coach: CoachSearchResult }) {
       href={`/coaches/${coach.userId}`}
       className="group bg-white rounded-xl shadow-md border border-gray-100 hover:shadow-xl hover:border-[#FF6B4A] transition-all duration-200 overflow-hidden"
     >
-      <div className="relative h-48 bg-gradient-to-br from-gray-100 to-gray-200 overflow-hidden">
+      <div className="relative h-48 bg-linear-to-br from-gray-100 to-gray-200 overflow-hidden">
         <Image
           src={displayImage}
           alt={coach.fullName}
