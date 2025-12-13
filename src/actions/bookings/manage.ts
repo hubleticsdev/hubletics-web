@@ -16,6 +16,7 @@ import { uuidSchema, validateInput } from '@/lib/validations';
 import { recordStateTransition, recordMultipleTransitions } from '@/lib/booking-audit';
 import { recordPaymentEvent } from '@/lib/payment-audit';
 import { revalidatePath } from 'next/cache';
+import { formatDateOnly, formatTimeOnly, formatDateWithTimezone } from '@/lib/utils/date';
 
 async function processCoachPayoutSafely(bookingId: string): Promise<{ success: boolean; error?: string }> {
   try {
@@ -109,6 +110,7 @@ export async function acceptBooking(bookingId: string) {
           columns: {
             name: true,
             email: true,
+            timezone: true,
           },
         },
         coach: {
@@ -151,25 +153,11 @@ export async function acceptBooking(bookingId: string) {
     console.log(`Payment due by: ${paymentDueAt.toISOString()}`);
 
     const startDate = new Date(bookingRecord.scheduledStartAt);
-    
-    const lessonDate = startDate.toLocaleDateString('en-US', {
-      weekday: 'long',
-      month: 'long',
-      day: 'numeric',
-      year: 'numeric'
-    });
-    const lessonTime = startDate.toLocaleTimeString('en-US', {
-      hour: 'numeric',
-      minute: '2-digit'
-    });
-    const paymentDeadline = paymentDueAt.toLocaleString('en-US', {
-      weekday: 'long',
-      month: 'long',
-      day: 'numeric',
-      year: 'numeric',
-      hour: 'numeric',
-      minute: '2-digit'
-    });
+    const clientTimezone = bookingRecord.client.timezone || 'America/Chicago';
+
+    const lessonDate = formatDateOnly(startDate, clientTimezone);
+    const lessonTime = formatTimeOnly(startDate, clientTimezone);
+    const paymentDeadline = formatDateWithTimezone(paymentDueAt, clientTimezone);
 
     const emailTemplate = getBookingAcceptedEmailTemplate(
       bookingRecord.client.name,
@@ -218,6 +206,7 @@ export async function declineBooking(bookingId: string, reason?: string) {
           columns: {
             name: true,
             email: true,
+            timezone: true,
           },
         },
         coach: {
@@ -262,16 +251,9 @@ export async function declineBooking(bookingId: string, reason?: string) {
 
     // Send decline notification email to client
     const startDate = new Date(bookingRecord.scheduledStartAt);
-    const lessonDate = startDate.toLocaleDateString('en-US', {
-      weekday: 'long',
-      month: 'long',
-      day: 'numeric',
-      year: 'numeric'
-    });
-    const lessonTime = startDate.toLocaleTimeString('en-US', {
-      hour: 'numeric',
-      minute: '2-digit'
-    });
+    const clientTimezone = bookingRecord.client.timezone || 'America/Chicago';
+    const lessonDate = formatDateOnly(startDate, clientTimezone);
+    const lessonTime = formatTimeOnly(startDate, clientTimezone);
 
     const emailTemplate = getBookingDeclinedEmailTemplate(
       bookingRecord.client.name,
@@ -406,6 +388,7 @@ export async function markBookingComplete(bookingId: string) {
           columns: {
             name: true,
             email: true,
+            timezone: true,
           },
         },
         coach: {
@@ -445,7 +428,7 @@ export async function markBookingComplete(bookingId: string) {
           <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
             <h2 style="color: #FF6B4A;">Lesson Completion Confirmation</h2>
             <p>Hi ${bookingRecord.client.name},</p>
-            <p>${bookingRecord.coach.name} has marked your lesson on <strong>${startDate.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })}</strong> as complete.</p>
+            <p>${bookingRecord.coach.name} has marked your lesson on <strong>${formatDateOnly(startDate, bookingRecord.client.timezone || 'America/Chicago')}</strong> as complete.</p>
             <p>Please confirm that the lesson was completed successfully:</p>
             <p style="margin: 30px 0; text-align: center;">
               <a href="${process.env.NEXT_PUBLIC_URL}/dashboard/bookings" 
@@ -458,7 +441,7 @@ export async function markBookingComplete(bookingId: string) {
             </p>
           </div>
         `,
-        text: `Hi ${bookingRecord.client.name}, ${bookingRecord.coach.name} has marked your lesson on ${startDate.toLocaleDateString()} as complete. Please log in to confirm at ${process.env.NEXT_PUBLIC_URL}/dashboard/bookings or contact support if there was an issue.`,
+        text: `Hi ${bookingRecord.client.name}, ${bookingRecord.coach.name} has marked your lesson on ${formatDateOnly(startDate, bookingRecord.client.timezone || 'America/Chicago')} as complete. Please log in to confirm at ${process.env.NEXT_PUBLIC_URL}/dashboard/bookings or contact support if there was an issue.`,
       });
 
       console.log(`Completion confirmation email sent to: ${bookingRecord.client.email}`);

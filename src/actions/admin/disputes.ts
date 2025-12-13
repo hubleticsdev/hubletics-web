@@ -6,6 +6,7 @@ import { eq } from 'drizzle-orm';
 import { Resend } from 'resend';
 import { incrementCoachLessonsCompleted } from '@/lib/coach-stats';
 import { stripe } from '@/lib/stripe';
+import { formatDateOnly } from '@/lib/utils/date';
 
 const resend = new Resend(process.env.RESEND_API_KEY!);
 
@@ -73,6 +74,7 @@ export async function processRefund(
             id: true,
             name: true,
             email: true,
+            timezone: true,
           },
         },
         coach: {
@@ -80,6 +82,7 @@ export async function processRefund(
             id: true,
             name: true,
             email: true,
+            timezone: true,
           },
         },
       },
@@ -152,7 +155,7 @@ export async function processRefund(
         <p><strong>Booking Details:</strong></p>
         <ul>
           <li>Coach: ${bookingRecord.coach.name}</li>
-          <li>Date: ${new Date(bookingRecord.scheduledStartAt).toLocaleDateString()}</li>
+          <li>Date: ${formatDateOnly(new Date(bookingRecord.scheduledStartAt), bookingRecord.client.timezone || 'America/Chicago')}
           <li>Original Amount: $${(clientPaidCents / 100).toFixed(2)}</li>
           <li>Refund Amount: $${(refundAmountCents / 100).toFixed(2)}</li>
         </ul>
@@ -173,13 +176,13 @@ export async function processRefund(
         <p><strong>Booking Details:</strong></p>
         <ul>
           <li>Client: ${bookingRecord.client.name}</li>
-          <li>Date: ${new Date(bookingRecord.scheduledStartAt).toLocaleDateString()}</li>
+          <li>Date: ${formatDateOnly(new Date(bookingRecord.scheduledStartAt), bookingRecord.client.timezone || 'America/Chicago')}
           <li>Refund Amount: $${(refundAmountCents / 100).toFixed(2)}</li>
         </ul>
         ${reason ? `<p><strong>Reason:</strong> ${reason}</p>` : ''}
         <p>The funds will be reversed from your account accordingly.</p>
       `,
-      text: `Hi ${bookingRecord.coach.name}, A refund of $${(refundAmountCents / 100).toFixed(2)} has been issued to ${bookingRecord.client.name} for your booking on ${new Date(bookingRecord.scheduledStartAt).toLocaleDateString()}.`,
+      text: `Hi ${bookingRecord.coach.name}, A refund of $${(refundAmountCents / 100).toFixed(2)} has been issued to ${bookingRecord.client.name} for your booking on ${formatDateOnly(new Date(bookingRecord.scheduledStartAt), bookingRecord.coach.timezone || 'America/Chicago')}.`,
     });
 
     return {
@@ -235,6 +238,7 @@ export async function initiateDispute(bookingId: string, reason: string, initiat
             id: true,
             name: true,
             email: true,
+            timezone: true,
           },
         },
         coach: {
@@ -242,6 +246,7 @@ export async function initiateDispute(bookingId: string, reason: string, initiat
             id: true,
             name: true,
             email: true,
+            timezone: true,
           },
         },
       },
@@ -273,7 +278,7 @@ export async function initiateDispute(bookingId: string, reason: string, initiat
         <ul>
           <li>Coach: ${bookingRecord.coach.name}</li>
           <li>Client: ${bookingRecord.client.name}</li>
-          <li>Date: ${new Date(bookingRecord.scheduledStartAt).toLocaleDateString()}</li>
+          <li>Date: ${formatDateOnly(new Date(bookingRecord.scheduledStartAt), bookingRecord.client.timezone || 'America/Chicago')}
           <li>Amount: $${(clientPaidCents / 100).toFixed(2)}</li>
         </ul>
         <p><strong>Reason:</strong> ${reason}</p>
@@ -291,12 +296,12 @@ export async function initiateDispute(bookingId: string, reason: string, initiat
       html: `
         <h2>Booking Dispute</h2>
         <p>Hi ${otherParty.name},</p>
-        <p>A dispute has been initiated for your booking on ${new Date(bookingRecord.scheduledStartAt).toLocaleDateString()}.</p>
+        <p>A dispute has been initiated for your booking on ${formatDateOnly(new Date(bookingRecord.scheduledStartAt), otherParty.timezone || 'America/Chicago')}.</p>
         <p><strong>Reason:</strong> ${reason}</p>
         <p>Our support team will review this case and contact you if additional information is needed.</p>
         <p><a href="${process.env.NEXT_PUBLIC_URL}/dashboard/bookings">View Booking</a></p>
       `,
-      text: `A dispute has been initiated for your booking on ${new Date(bookingRecord.scheduledStartAt).toLocaleDateString()}. Our support team will review this case.`,
+      text: `A dispute has been initiated for your booking on ${formatDateOnly(new Date(bookingRecord.scheduledStartAt), otherParty.timezone || 'America/Chicago')}. Our support team will review this case.`,
     });
 
     return { success: true, message: 'Dispute initiated successfully' };

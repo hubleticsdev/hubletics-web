@@ -10,6 +10,7 @@ import { sendEmail } from '@/lib/email/resend';
 import { getBookingRequestEmailTemplate } from '@/lib/email/templates/booking-notifications';
 import crypto from 'crypto';
 import { revalidatePath } from 'next/cache';
+import { formatDateOnly, formatTimeOnly } from '@/lib/utils/date';
 
 interface PrivateGroupBookingInput {
   coachId: string;
@@ -44,6 +45,7 @@ export async function createPrivateGroupBooking(input: PrivateGroupBookingInput)
           columns: {
             email: true,
             platformFeePercentage: true,
+            timezone: true,
           },
         },
       },
@@ -184,8 +186,8 @@ export async function createPrivateGroupBooking(input: PrivateGroupBookingInput)
       coach.fullName,
       session.user.name,
       {
-        date: input.scheduledStartAt.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' }),
-        time: `${input.scheduledStartAt.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })} - ${input.scheduledEndAt.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })}`,
+        date: formatDateOnly(input.scheduledStartAt, coach.user.timezone || 'America/Chicago'),
+        time: `${formatTimeOnly(input.scheduledStartAt, coach.user.timezone || 'America/Chicago')} - ${formatTimeOnly(input.scheduledEndAt, coach.user.timezone || 'America/Chicago')}`,
         duration: input.duration,
         location: `${input.location.name}, ${input.location.address}`,
         amountCents: groupTotals.totalGrossCents,

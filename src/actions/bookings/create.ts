@@ -11,6 +11,7 @@ import { getBookingRequestEmailTemplate } from '@/lib/email/templates/booking-no
 import { z } from 'zod';
 import { createBookingSchema, validateInput } from '@/lib/validations';
 import { sanitizeText } from '@/lib/utils';
+import { formatDateOnly, formatTimeOnly } from '@/lib/utils/date';
 
 export type CreateBookingInput = z.infer<typeof createBookingSchema>;
 
@@ -103,6 +104,7 @@ export async function createBooking(input: CreateBookingInput) {
           columns: {
             email: true,
             platformFeePercentage: true,
+            timezone: true,
           },
         },
       },
@@ -157,8 +159,8 @@ export async function createBooking(input: CreateBookingInput) {
       coach.fullName,
       session.user.name,
       {
-        date: validatedInput.scheduledStartAt.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' }),
-        time: `${validatedInput.scheduledStartAt.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })} - ${validatedInput.scheduledEndAt.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })}`,
+        date: formatDateOnly(validatedInput.scheduledStartAt, coach.user.timezone || 'America/Chicago'),
+        time: `${formatTimeOnly(validatedInput.scheduledStartAt, coach.user.timezone || 'America/Chicago')} - ${formatTimeOnly(validatedInput.scheduledEndAt, coach.user.timezone || 'America/Chicago')}`,
         duration,
         location: `${validatedInput.location.name}, ${validatedInput.location.address}`,
         amountCents: pricing.clientPaysCents,

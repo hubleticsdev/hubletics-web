@@ -8,6 +8,9 @@ import { stripe } from '@/lib/stripe';
 import { sendEmail } from '@/lib/email/resend';
 import { getGroupLessonDeclinedEmailTemplate } from '@/lib/email/templates/group-booking-notifications';
 import { revalidatePath } from 'next/cache';
+import { formatDateOnly, formatTimeOnly } from '@/lib/utils/date';
+import { recordPaymentEvent } from '@/lib/payment-audit';
+import { recordStateTransition } from '@/lib/booking-audit';
 
 export async function declineParticipant(bookingId: string, participantId: string, reason?: string) {
   try {
@@ -51,6 +54,7 @@ export async function declineParticipant(bookingId: string, participantId: strin
             id: true,
             name: true,
             email: true,
+            timezone: true,
           },
         },
       },
@@ -92,7 +96,9 @@ export async function declineParticipant(bookingId: string, participantId: strin
       }
     }
 
-    // Update participant status
+    const oldPaymentStatus = participant.paymentStatus;
+    const oldStatus = participant.status;
+
     await db
       .update(bookingParticipant)
       .set({
@@ -102,15 +108,41 @@ export async function declineParticipant(bookingId: string, participantId: strin
       })
       .where(eq(bookingParticipant.id, participantId));
 
-    // Send notification email to participant
-    const startDate = new Date(bookingRecord.scheduledStartAt);
-    const participantUser = participant.user as { id: string; name: string; email: string };
+    if (participant.stripePaymentIntentId) {
+      await recordPaymentEvent({
+        bookingId,
+        participantId,
+        stripePaymentIntentId: participant.stripePaymentIntentId,
+        amountCents: participant.amountCents ?? 0,
+        status: 'cancelled',
+      });
+    }
 
-    const lessonDate = startDate.toLocaleDateString('en-US', {
-      weekday: 'long',
-      month: 'long',
-      day: 'numeric'
+    await recordStateTransition({
+      bookingId,
+      participantId,
+      field: 'paymentStatus',
+      oldStatus: oldPaymentStatus,
+      newStatus: 'cancelled',
+      changedBy: session.user.id,
+      reason,
     });
+
+    await recordStateTransition({
+      bookingId,
+      participantId,
+      field: 'status',
+      oldStatus: oldStatus,
+      newStatus: 'declined',
+      changedBy: session.user.id,
+      reason,
+    });
+
+    const startDate = new Date(bookingRecord.scheduledStartAt);
+    const participantUser = participant.user as { id: string; name: string; email: string; timezone: string };
+
+    const participantTimezone = participantUser.timezone || 'America/Chicago';
+    const lessonDate = formatDateOnly(startDate, participantTimezone);
 
     const emailTemplate = getGroupLessonDeclinedEmailTemplate(
       participantUser.name,

@@ -9,6 +9,7 @@ import {
   getPaymentReminder30MinutesEmailTemplate
 } from '@/lib/email/templates/payment-notifications';
 import { validateCronAuth } from '@/lib/cron/auth';
+import { formatDateOnly, formatTimeOnly } from '@/lib/utils/date';
 
 export async function GET(request: NextRequest) {
   const authError = validateCronAuth(request);
@@ -33,6 +34,7 @@ export async function GET(request: NextRequest) {
           columns: {
             name: true,
             email: true,
+            timezone: true,
           },
         },
         coach: {
@@ -68,15 +70,9 @@ export async function GET(request: NextRequest) {
             .where(eq(booking.id, bookingRecord.id));
 
           const startDate = new Date(bookingRecord.scheduledStartAt);
-          const lessonDate = startDate.toLocaleDateString('en-US', {
-            weekday: 'long',
-            month: 'long',
-            day: 'numeric'
-          });
-          const lessonTime = startDate.toLocaleTimeString('en-US', {
-            hour: 'numeric',
-            minute: '2-digit'
-          });
+          const clientTimezone = bookingRecord.client.timezone || 'America/Chicago';
+          const lessonDate = formatDateOnly(startDate, clientTimezone);
+          const lessonTime = formatTimeOnly(startDate, clientTimezone);
 
           const emailTemplate = getBookingCancelledDueToPaymentEmailTemplate(
             bookingRecord.client.name,
@@ -99,18 +95,13 @@ export async function GET(request: NextRequest) {
 
         if (minutesUntilDue <= 30 && minutesUntilDue > 25 && !bookingRecord.paymentFinalReminderSentAt) {
           const startDate = new Date(bookingRecord.scheduledStartAt);
-          const lessonDate = startDate.toLocaleDateString('en-US', {
-            weekday: 'long',
-            month: 'long',
-            day: 'numeric'
-          });
-          const lessonTime = startDate.toLocaleTimeString('en-US', {
-            hour: 'numeric',
-            minute: '2-digit'
-          });
+          const clientTimezone = bookingRecord.client.timezone || 'America/Chicago';
+          const lessonDate = formatDateOnly(startDate, clientTimezone);
+          const lessonTime = formatTimeOnly(startDate, clientTimezone);
           const paymentDeadline = paymentDueAt.toLocaleString('en-US', {
             hour: 'numeric',
-            minute: '2-digit'
+            minute: '2-digit',
+            timeZone: clientTimezone
           });
 
           const emailTemplate = getPaymentReminder30MinutesEmailTemplate(

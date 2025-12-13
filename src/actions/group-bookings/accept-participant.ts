@@ -8,6 +8,9 @@ import { stripe } from '@/lib/stripe';
 import { sendEmail } from '@/lib/email/resend';
 import { getGroupLessonAcceptedEmailTemplate } from '@/lib/email/templates/group-booking-notifications';
 import { revalidatePath } from 'next/cache';
+import { formatDateOnly, formatTimeOnly } from '@/lib/utils/date';
+import { recordPaymentEvent } from '@/lib/payment-audit';
+import { recordStateTransition } from '@/lib/booking-audit';
 
 export async function acceptParticipant(bookingId: string, participantId: string) {
   try {
@@ -51,6 +54,7 @@ export async function acceptParticipant(bookingId: string, participantId: string
             id: true,
             name: true,
             email: true,
+            timezone: true,
           },
         },
       },
@@ -94,6 +98,9 @@ export async function acceptParticipant(bookingId: string, participantId: string
       return { success: false, error: `Payment capture failed: ${errorMessage}` };
     }
 
+    const oldPaymentStatus = participant.paymentStatus;
+    const oldStatus = participant.status;
+
     await db
       .update(bookingParticipant)
       .set({
@@ -111,6 +118,33 @@ export async function acceptParticipant(bookingId: string, participantId: string
         updatedAt: new Date(),
       })
       .where(eq(booking.id, bookingId));
+
+    // Record audit events
+    await recordPaymentEvent({
+      bookingId,
+      participantId,
+      stripePaymentIntentId: participant.stripePaymentIntentId,
+      amountCents: participant.amountCents ?? 0,
+      status: 'captured',
+    });
+
+    await recordStateTransition({
+      bookingId,
+      participantId,
+      field: 'paymentStatus',
+      oldStatus: oldPaymentStatus,
+      newStatus: 'captured',
+      changedBy: session.user.id,
+    });
+
+    await recordStateTransition({
+      bookingId,
+      participantId,
+      field: 'status',
+      oldStatus: oldStatus,
+      newStatus: 'accepted',
+      changedBy: session.user.id,
+    });
 
     const updatedBooking = await db.query.booking.findFirst({
       where: eq(booking.id, bookingId),
@@ -138,16 +172,14 @@ export async function acceptParticipant(bookingId: string, participantId: string
 
     const startDate = new Date(bookingRecord.scheduledStartAt);
     const endDate = new Date(bookingRecord.scheduledEndAt);
-    const participantUser = participant.user as { id: string; name: string; email: string };
+    const participantUser = participant.user as { id: string; name: string; email: string; timezone: string };
 
-    const lessonDate = startDate.toLocaleDateString('en-US', {
-      weekday: 'long',
-      month: 'long',
-      day: 'numeric',
-      year: 'numeric'
-    });
+    const participantTimezone = participantUser.timezone || 'America/Chicago';
 
-    const lessonTime = `${startDate.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })} - ${endDate.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })}`;
+    const lessonDate = formatDateOnly(startDate, participantTimezone);
+    const startTime = formatTimeOnly(startDate, participantTimezone);
+    const endTime = formatTimeOnly(endDate, participantTimezone);
+    const lessonTime = `${startTime} - ${endTime}`;
 
     const location = bookingRecord.location
       ? `${bookingRecord.location.name}, ${bookingRecord.location.address}`

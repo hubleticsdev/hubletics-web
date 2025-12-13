@@ -95,7 +95,6 @@ export async function POST(request: NextRequest) {
         const paymentIntent = event.data.object as Stripe.PaymentIntent;
         console.log(`Payment intent succeeded: ${paymentIntent.id}`);
 
-        // First check if it's a main booking payment
         const bookingRecord = await db.query.booking.findFirst({
           where: eq(booking.primaryStripePaymentIntentId, paymentIntent.id),
         });
@@ -111,7 +110,6 @@ export async function POST(request: NextRequest) {
             })
             .where(eq(booking.id, bookingRecord.id));
 
-          // Record audit events
           await recordPaymentEvent({
             bookingId: bookingRecord.id,
             stripePaymentIntentId: paymentIntent.id,
@@ -128,7 +126,6 @@ export async function POST(request: NextRequest) {
 
           console.log(`Payment confirmed for booking: ${bookingRecord.id}`);
         } else {
-          // Check if it's a group booking participant payment
           const participantRecord = await db.query.bookingParticipant.findFirst({
             where: eq(bookingParticipant.stripePaymentIntentId, paymentIntent.id),
             with: {
@@ -143,6 +140,9 @@ export async function POST(request: NextRequest) {
           });
 
           if (participantRecord) {
+            const oldPaymentStatus = participantRecord.paymentStatus;
+            const oldStatus = participantRecord.status;
+
             await db
               .update(bookingParticipant)
               .set({
@@ -152,7 +152,6 @@ export async function POST(request: NextRequest) {
               })
               .where(eq(bookingParticipant.id, participantRecord.id));
 
-            // Increment authorizedParticipants counter on the booking
             await db
               .update(booking)
               .set({
@@ -160,6 +159,30 @@ export async function POST(request: NextRequest) {
                 updatedAt: new Date(),
               })
               .where(eq(booking.id, participantRecord.bookingId));
+
+            await recordPaymentEvent({
+              bookingId: participantRecord.bookingId,
+              participantId: participantRecord.id,
+              stripePaymentIntentId: paymentIntent.id,
+              amountCents: participantRecord.amountCents ?? 0,
+              status: 'authorized',
+            });
+
+            await recordStateTransition({
+              bookingId: participantRecord.bookingId,
+              participantId: participantRecord.id,
+              field: 'paymentStatus',
+              oldStatus: oldPaymentStatus,
+              newStatus: 'authorized',
+            });
+
+            await recordStateTransition({
+              bookingId: participantRecord.bookingId,
+              participantId: participantRecord.id,
+              field: 'status',
+              oldStatus: oldStatus,
+              newStatus: 'awaiting_coach',
+            });
 
             console.log(`Payment authorized for participant ${participantRecord.userId} in booking ${participantRecord.bookingId} - waiting for coach approval`);
 
@@ -201,7 +224,7 @@ export async function POST(request: NextRequest) {
         const charge = event.data.object as Stripe.Charge;
         console.log(`Charge refunded: ${charge.id}, amount: $${charge.amount_refunded / 100}`);
 
-        // Note: We might need to store charge IDs for better refund tracking
+        // might need to store charge IDs for better refund tracking
         const bookingRecord = await db.query.booking.findFirst({
           where: eq(booking.primaryStripePaymentIntentId, charge.payment_intent as string),
         });
@@ -224,7 +247,6 @@ export async function POST(request: NextRequest) {
         const transfer = event.data.object as Stripe.Transfer;
         console.log(`Transfer created: ${transfer.id}, amount: $${transfer.amount / 100}`);
 
-        // Find booking by payment intent and get coach's Stripe account
         const bookingRecord = await db.query.booking.findFirst({
           where: and(
             eq(booking.fulfillmentStatus, 'completed'),
@@ -261,13 +283,11 @@ export async function POST(request: NextRequest) {
         const transfer = event.data.object as Stripe.Transfer;
         console.log(`Transfer reversed: ${transfer.id}, amount: $${transfer.amount_reversed / 100}`);
 
-        // Find booking by transfer ID
         const bookingRecord = await db.query.booking.findFirst({
           where: eq(booking.stripeTransferId, transfer.id),
         });
 
         if (bookingRecord) {
-          // Transfer was reversed
           await db
             .update(booking)
             .set({

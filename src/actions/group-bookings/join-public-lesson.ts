@@ -8,6 +8,8 @@ import { createBookingPaymentIntent } from '@/lib/stripe';
 import { sendEmail } from '@/lib/email/resend';
 import { getNewParticipantRequestEmailTemplate } from '@/lib/email/templates/group-booking-notifications';
 import { revalidatePath } from 'next/cache';
+import { formatDateOnly, formatTimeOnly } from '@/lib/utils/date';
+import { recordPaymentEvent } from '@/lib/payment-audit';
 
 export async function joinPublicLesson(lessonId: string) {
   try {
@@ -38,6 +40,7 @@ export async function joinPublicLesson(lessonId: string) {
         user: {
           columns: {
             platformFeePercentage: true,
+            timezone: true,
           },
         },
       },
@@ -93,7 +96,7 @@ export async function joinPublicLesson(lessonId: string) {
       throw new Error('Failed to create payment intent');
     }
 
-    await db.insert(bookingParticipant).values({
+    const [insertedParticipant] = await db.insert(bookingParticipant).values({
       bookingId: lessonId,
       userId: session.user.id,
       role: 'participant',
@@ -103,6 +106,15 @@ export async function joinPublicLesson(lessonId: string) {
       amountCents: Math.round(pricePerPerson * 100),
       stripePaymentIntentId: paymentIntent.id,
       expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000),
+    }).returning({ id: bookingParticipant.id });
+
+    await recordPaymentEvent({
+      bookingId: lessonId,
+      participantId: insertedParticipant.id,
+      stripePaymentIntentId: paymentIntent.id,
+      amountCents: Math.round(pricePerPerson * 100),
+      status: 'created',
+      captureMethod: 'manual',
     });
 
     console.log(`User ${session.user.id} requested to join public lesson ${lessonId}`);
@@ -120,14 +132,11 @@ export async function joinPublicLesson(lessonId: string) {
       const startDate = new Date(lesson.scheduledStartAt);
       const endDate = new Date(lesson.scheduledEndAt);
 
-      const lessonDate = startDate.toLocaleDateString('en-US', {
-        weekday: 'long',
-        month: 'long',
-        day: 'numeric',
-        year: 'numeric'
-      });
-
-      const lessonTime = `${startDate.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })} - ${endDate.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })}`;
+      const coachTimezone = coach.user.timezone || 'America/Chicago';
+      const lessonDate = formatDateOnly(startDate, coachTimezone);
+      const startTime = formatTimeOnly(startDate, coachTimezone);
+      const endTime = formatTimeOnly(endDate, coachTimezone);
+      const lessonTime = `${startTime} - ${endTime}`;
 
       const emailTemplate = getNewParticipantRequestEmailTemplate(
         coachUser.name,
