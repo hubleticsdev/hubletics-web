@@ -27,21 +27,47 @@ export const approvalStatusEnum = pgEnum('approval_status', [
   'approved',
   'rejected',
 ]);
-export const bookingStatusEnum = pgEnum('booking_status', [
-  'pending',
+export const bookingApprovalStatusEnum = pgEnum('booking_approval_status', [
+  'pending_review',
+  'accepted',
+  'declined',
+  'expired',
+  'cancelled',
+]);
+export const bookingPaymentStatusEnum = pgEnum('booking_payment_status', [
+  'not_required',
+  'awaiting_client_payment',
+  'authorized',
+  'captured',
+  'refunded',
+  'failed',
+]);
+export const bookingFulfillmentStatusEnum = pgEnum('booking_fulfillment_status', [
+  'scheduled',
+  'completed',
+  'disputed',
+]);
+export const bookingCapacityStatusEnum = pgEnum('booking_capacity_status', [
+  'open',
+  'full',
+  'closed',
+]);
+export const groupTypeEnum = pgEnum('group_type', ['private', 'public']);
+export const participantStatusEnum = pgEnum('participant_status', [
+  'requested',
   'awaiting_payment',
+  'awaiting_coach',
   'accepted',
   'declined',
   'cancelled',
   'completed',
-  'disputed',
-  'open',
 ]);
-export const groupTypeEnum = pgEnum('group_type', ['private', 'public']);
 export const participantPaymentStatusEnum = pgEnum('participant_payment_status', [
-  'pending',
-  'paid',
+  'requires_payment_method',
+  'authorized',
+  'captured',
   'refunded',
+  'cancelled',
 ]);
 export const refundReasonEnum = pgEnum('refund_reason', [
   'coach_no_show',
@@ -86,7 +112,7 @@ export const user = pgTable(
     createdAt: timestamp('createdAt').notNull().defaultNow(),
     updatedAt: timestamp('updatedAt').notNull().defaultNow(),
 
-    username: varchar('username', { length: 30 }).notNull().unique(),
+    username: varchar('username', { length: 30 }).unique(),
     role: userRoleEnum('role').notNull().default('client'),
     status: userStatusEnum('status').notNull().default('active'),
     profileComplete: boolean('profileComplete').notNull().default(false),
@@ -359,22 +385,31 @@ export const booking = pgTable(
     clientMessage: text('clientMessage'),
 
     coachRate: decimal('coachRate', { precision: 10, scale: 2 }).notNull(),
-    clientPaid: decimal('clientPaid', { precision: 10, scale: 2 }).notNull(),
-    platformFee: decimal('platformFee', { precision: 10, scale: 2 }).notNull(),
-    stripeFee: decimal('stripeFee', { precision: 10, scale: 2 }).notNull(),
-    coachPayout: decimal('coachPayout', { precision: 10, scale: 2 }).notNull(),
+    pricePerPerson: decimal('pricePerPerson', { precision: 10, scale: 2 }),
+    expectedGrossCents: integer('expectedGrossCents'),
+    platformFeeCents: integer('platformFeeCents'),
+    stripeFeeCents: integer('stripeFeeCents'),
+    coachPayoutCents: integer('coachPayoutCents'),
 
-    stripePaymentIntentId: varchar('stripePaymentIntentId', {
-      length: 255,
-    }).unique(),
     stripeTransferId: varchar('stripeTransferId', { length: 255 }),
+    primaryStripePaymentIntentId: varchar('primaryStripePaymentIntentId', {
+      length: 255,
+    }),
 
     paymentDueAt: timestamp('paymentDueAt'),
-    paymentCompletedAt: timestamp('paymentCompletedAt'),
-    paymentReminderSentAt: timestamp('paymentReminderSentAt'),
+    expiresAt: timestamp('expiresAt'),
     paymentFinalReminderSentAt: timestamp('paymentFinalReminderSentAt'),
 
-    status: bookingStatusEnum('status').notNull().default('pending'),
+    approvalStatus: bookingApprovalStatusEnum('approvalStatus')
+      .notNull()
+      .default('pending_review'),
+    paymentStatus: bookingPaymentStatusEnum('paymentStatus')
+      .notNull()
+      .default('not_required'),
+    fulfillmentStatus: bookingFulfillmentStatusEnum('fulfillmentStatus')
+      .notNull()
+      .default('scheduled'),
+    capacityStatus: bookingCapacityStatusEnum('capacityStatus'),
 
     coachRespondedAt: timestamp('coachRespondedAt'),
     proposedAlternateTime: jsonb('proposedAlternateTime').$type<{
@@ -382,18 +417,13 @@ export const booking = pgTable(
       endAt: string;
     }>(),
 
-    markedCompleteByCoach: boolean('markedCompleteByCoach')
-      .notNull()
-      .default(false),
-    markedCompleteByCoachAt: timestamp('markedCompleteByCoachAt'),
-    confirmedByClient: boolean('confirmedByClient').notNull().default(false),
-    confirmedByClientAt: timestamp('confirmedByClientAt'),
+    coachConfirmedAt: timestamp('coachConfirmedAt'),
+    clientConfirmedAt: timestamp('clientConfirmedAt'),
+    completedAt: timestamp('completedAt'),
 
     cancelledBy: text('cancelledBy').references(() => user.id),
     cancelledAt: timestamp('cancelledAt'),
     cancellationReason: text('cancellationReason'),
-    refundAmount: decimal('refundAmount', { precision: 10, scale: 2 }),
-    refundProcessedAt: timestamp('refundProcessedAt'),
 
     idempotencyKey: varchar('idempotencyKey', { length: 255 }).unique(),
 
@@ -404,8 +434,9 @@ export const booking = pgTable(
     organizerId: text('organizerId').references(() => user.id),
     maxParticipants: integer('maxParticipants'),
     minParticipants: integer('minParticipants'),
-    pricePerPerson: decimal('pricePerPerson', { precision: 10, scale: 2 }),
     currentParticipants: integer('currentParticipants').default(0),
+    authorizedParticipants: integer('authorizedParticipants').default(0),
+    capturedParticipants: integer('capturedParticipants').default(0),
     recurringLessonId: text('recurringLessonId'),
 
     createdAt: timestamp('createdAt').notNull().defaultNow(),
@@ -414,13 +445,13 @@ export const booking = pgTable(
   (table) => [
     index('booking_client_idx').on(table.clientId),
     index('booking_coach_idx').on(table.coachId),
-    index('booking_status_idx').on(table.status),
+    index('booking_approval_status_idx').on(table.approvalStatus),
+    index('booking_payment_status_idx').on(table.paymentStatus),
+    index('booking_fulfillment_status_idx').on(table.fulfillmentStatus),
     index('booking_scheduled_start_idx').on(table.scheduledStartAt),
-    index('booking_payment_intent_idx').on(table.stripePaymentIntentId),
-    index('booking_coach_date_status_idx').on(
+    index('booking_coach_date_idx').on(
       table.coachId,
-      table.scheduledStartAt,
-      table.status
+      table.scheduledStartAt
     ),
     index('booking_group_type_idx').on(table.groupType),
     index('booking_organizer_idx').on(table.organizerId),
@@ -453,15 +484,23 @@ export const bookingParticipant = pgTable(
     userId: text('userId')
       .notNull()
       .references(() => user.id, { onDelete: 'cascade' }),
+    role: varchar('role', { length: 20 }).notNull().default('participant'),
+    status: participantStatusEnum('status')
+      .notNull()
+      .default('requested'),
     paymentStatus: participantPaymentStatusEnum('paymentStatus')
       .notNull()
-      .default('pending'),
+      .default('requires_payment_method'),
     amountPaid: decimal('amountPaid', { precision: 10, scale: 2 }),
+    amountCents: integer('amountCents'),
     stripePaymentIntentId: varchar('stripePaymentIntentId', { length: 255 }),
-    joinedAt: timestamp('joinedAt').notNull().defaultNow(),
-    cancelledAt: timestamp('cancelledAt'),
+    expiresAt: timestamp('expiresAt'),
+    authorizedAt: timestamp('authorizedAt'),
+    capturedAt: timestamp('capturedAt'),
     refundedAt: timestamp('refundedAt'),
     refundAmount: decimal('refundAmount', { precision: 10, scale: 2 }),
+    joinedAt: timestamp('joinedAt').notNull().defaultNow(),
+    cancelledAt: timestamp('cancelledAt'),
   },
   (table) => [
     uniqueIndex('booking_participant_unique_idx').on(table.bookingId, table.userId),
@@ -480,6 +519,52 @@ export const bookingParticipantRelations = relations(bookingParticipant, ({ one 
     references: [booking.id],
   }),
 }));
+
+export const bookingPayment = pgTable(
+  'booking_payment',
+  {
+    id: text('id')
+      .primaryKey()
+      .$defaultFn(() => crypto.randomUUID()),
+    bookingId: text('bookingId')
+      .notNull()
+      .references(() => booking.id, { onDelete: 'cascade' }),
+    participantId: text('participantId').references(() => bookingParticipant.id, {
+      onDelete: 'cascade',
+    }),
+    stripePaymentIntentId: varchar('stripePaymentIntentId', { length: 255 }).notNull(),
+    amountCents: integer('amountCents').notNull(),
+    currency: varchar('currency', { length: 10 }).notNull().default('usd'),
+    captureMethod: varchar('captureMethod', { length: 32 }).notNull().default('manual'),
+    status: varchar('status', { length: 50 }).notNull(),
+    lastEventAt: timestamp('lastEventAt').notNull().defaultNow(),
+    idempotencyKey: varchar('idempotencyKey', { length: 255 }),
+    createdAt: timestamp('createdAt').notNull().defaultNow(),
+    updatedAt: timestamp('updatedAt').notNull().defaultNow(),
+  },
+  (table) => [
+    uniqueIndex('booking_payment_intent_unique_idx').on(table.stripePaymentIntentId),
+    index('booking_payment_booking_idx').on(table.bookingId),
+    index('booking_payment_participant_idx').on(table.participantId),
+  ]
+);
+
+export const bookingStateTransition = pgTable('booking_state_transition', {
+  id: text('id')
+    .primaryKey()
+    .$defaultFn(() => crypto.randomUUID()),
+  bookingId: text('bookingId')
+    .notNull()
+    .references(() => booking.id, { onDelete: 'cascade' }),
+  participantId: text('participantId').references(() => bookingParticipant.id, {
+    onDelete: 'cascade',
+  }),
+  oldStatus: text('oldStatus').notNull(),
+  newStatus: text('newStatus').notNull(),
+  changedBy: text('changedBy').references(() => user.id),
+  reason: text('reason'),
+  createdAt: timestamp('createdAt').notNull().defaultNow(),
+});
 
 export const recurringGroupLesson = pgTable('recurring_group_lesson', {
   id: text('id')
@@ -764,6 +849,35 @@ export const bookingRelations = relations(booking, ({ one }) => ({
     references: [user.id],
   }),
 }));
+
+export const bookingPaymentRelations = relations(bookingPayment, ({ one }) => ({
+  booking: one(booking, {
+    fields: [bookingPayment.bookingId],
+    references: [booking.id],
+  }),
+  participant: one(bookingParticipant, {
+    fields: [bookingPayment.participantId],
+    references: [bookingParticipant.id],
+  }),
+}));
+
+export const bookingStateTransitionRelations = relations(
+  bookingStateTransition,
+  ({ one }) => ({
+    booking: one(booking, {
+      fields: [bookingStateTransition.bookingId],
+      references: [booking.id],
+    }),
+    participant: one(bookingParticipant, {
+      fields: [bookingStateTransition.participantId],
+      references: [bookingParticipant.id],
+    }),
+    actor: one(user, {
+      fields: [bookingStateTransition.changedBy],
+      references: [user.id],
+    }),
+  })
+);
 
 export const reviewRelations = relations(review, ({ one }) => ({
   booking: one(booking, {

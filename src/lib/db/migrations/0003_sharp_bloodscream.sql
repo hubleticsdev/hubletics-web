@@ -1,1 +1,0 @@
-ALTER TABLE "user" ADD COLUMN "platformFeePercentage" numeric(5, 2) DEFAULT '15.00' NOT NULL;

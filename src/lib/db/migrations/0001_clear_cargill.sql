@@ -1,1 +1,0 @@
-ALTER TABLE "user" ADD COLUMN "profileComplete" boolean DEFAULT false NOT NULL;
