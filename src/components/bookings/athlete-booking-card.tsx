@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { cancelBooking, confirmBookingComplete } from '@/actions/bookings/manage';
 import Image from 'next/image';
 import type { UiBookingStatus } from '@/lib/booking-status';
+import { PaymentModal } from './payment-modal';
 
 interface AthleteBookingCardProps {
   booking: {
@@ -20,6 +21,7 @@ interface AthleteBookingCardProps {
     status: UiBookingStatus;
     coachConfirmedAt?: Date | null;
     clientConfirmedAt?: Date | null;
+    paymentDueAt?: Date | null;
     coach: {
       id: string;
       name: string;
@@ -34,6 +36,7 @@ export function AthleteBookingCard({ booking, onUpdate }: AthleteBookingCardProp
   const [isProcessing, setIsProcessing] = useState(false);
   const [showCancelForm, setShowCancelForm] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [paymentModalOpen, setPaymentModalOpen] = useState(false);
 
   const startDate = new Date(booking.scheduledStartAt);
   const endDate = new Date(booking.scheduledEndAt);
@@ -216,6 +219,29 @@ export function AthleteBookingCard({ booking, onUpdate }: AthleteBookingCardProp
         </div>
       )}
 
+      {booking.status === 'awaiting_payment' && booking.paymentDueAt && !isPast && (
+        <div className="pt-4 border-t border-gray-200 space-y-3">
+          <button
+            onClick={() => setPaymentModalOpen(true)}
+            disabled={isProcessing}
+            className="cursor-pointer w-full px-4 py-2 bg-linear-to-r from-[#FF6B4A] to-[#FF8C5A] text-white font-medium rounded-lg hover:shadow-lg transition-all disabled:opacity-50"
+          >
+            Pay Now
+          </button>
+          <div className="px-2 py-1 bg-orange-50 rounded text-xs text-orange-700 flex items-center gap-1 justify-center">
+            <svg className="h-3 w-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+            </svg>
+            Payment due: {new Date(booking.paymentDueAt).toLocaleDateString('en-US', {
+              month: 'short',
+              day: 'numeric',
+              hour: 'numeric',
+              minute: '2-digit'
+            })}
+          </div>
+        </div>
+      )}
+
       {['confirmed', 'awaiting_payment'].includes(booking.status) && !isPast && !showCancelForm && (
         <div className="pt-4 border-t border-gray-200">
           <button
@@ -260,6 +286,19 @@ export function AthleteBookingCard({ booking, onUpdate }: AthleteBookingCardProp
           </div>
         </form>
       )}
+
+      <PaymentModal
+        isOpen={paymentModalOpen}
+        onClose={() => setPaymentModalOpen(false)}
+        bookingId={booking.id}
+        coachName={booking.coach.name}
+        amount={booking.expectedGrossCents ? booking.expectedGrossCents / 100 : 0}
+        paymentDueAt={booking.paymentDueAt ? new Date(booking.paymentDueAt) : new Date()}
+        onSuccess={() => {
+          setPaymentModalOpen(false);
+          onUpdate?.();
+        }}
+      />
     </div>
   );
 }

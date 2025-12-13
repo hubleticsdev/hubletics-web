@@ -15,6 +15,7 @@ import { getBookingAcceptedEmailTemplate, getBookingDeclinedEmailTemplate } from
 import { uuidSchema, validateInput } from '@/lib/validations';
 import { recordStateTransition, recordMultipleTransitions } from '@/lib/booking-audit';
 import { recordPaymentEvent } from '@/lib/payment-audit';
+import { revalidatePath } from 'next/cache';
 
 async function processCoachPayoutSafely(bookingId: string): Promise<{ success: boolean; error?: string }> {
   try {
@@ -189,6 +190,8 @@ export async function acceptBooking(bookingId: string) {
 
     console.log(`Payment request email sent to: ${bookingRecord.client.email}`);
 
+    revalidatePath('/dashboard/coach');
+
     return { success: true };
   } catch (error) {
     console.error('Accept booking error:', error);
@@ -287,6 +290,8 @@ export async function declineBooking(bookingId: string, reason?: string) {
 
     console.log(`Decline notification sent to: ${bookingRecord.client.email}`);
 
+    revalidatePath('/dashboard/coach');
+
     return { success: true };
   } catch (error) {
     console.error('Decline booking error:', error);
@@ -371,6 +376,9 @@ export async function cancelBooking(bookingId: string, reason: string) {
 
     console.log(`Booking cancelled: ${bookingId}`);
     console.log(`Refund processed: ${paymentIntentId ?? 'n/a'}`);
+
+    revalidatePath('/dashboard/coach');
+    revalidatePath('/dashboard/bookings');
 
     return { success: true };
   } catch (error) {
@@ -463,6 +471,9 @@ export async function markBookingComplete(bookingId: string) {
 
     console.log(`Booking marked complete by coach: ${bookingId}`);
 
+    revalidatePath('/dashboard/coach');
+    revalidatePath('/dashboard/bookings');
+
     return { success: true };
   } catch (error) {
     console.error('Mark complete error:', error);
@@ -506,6 +517,9 @@ export async function confirmBookingComplete(bookingId: string) {
     }
 
     console.log(`Booking confirmed by client: ${bookingId}`);
+
+    revalidatePath('/dashboard/coach');
+    revalidatePath('/dashboard/bookings');
 
     return { success: true };
   } catch (error) {
