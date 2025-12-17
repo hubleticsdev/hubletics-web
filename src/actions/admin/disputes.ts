@@ -6,14 +6,12 @@ import { eq, and } from 'drizzle-orm';
 import type { BookingWithDetails } from '@/lib/booking-type-guards';
 import { isIndividualBooking, isPrivateGroupBooking, isPublicGroupBooking } from '@/lib/booking-type-guards';
 import { requireRole, requireAuth } from '@/lib/auth/session';
-import { Resend } from 'resend';
+import { resend } from '@/lib/email/resend';
 import { incrementCoachLessonsCompleted } from '@/lib/coach-stats';
 import { stripe } from '@/lib/stripe';
 import { formatDateOnly } from '@/lib/utils/date';
 import { z } from 'zod';
 import { validateInput } from '@/lib/validations';
-
-const resend = new Resend(process.env.RESEND_API_KEY!);
 
 export async function getDisputedBookings(page = 1, limit = 25) {
   await requireRole('admin');
