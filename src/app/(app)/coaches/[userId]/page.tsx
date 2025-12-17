@@ -334,6 +334,7 @@ function BookingSummary({
             existingBookings={existingBookings}
             preferredLocations={coach.preferredLocations || []}
             allowPrivateGroups={coach.allowPrivateGroups || false}
+            coachTimezone={coach.user?.timezone || undefined}
           />
         </div>
       ) : (

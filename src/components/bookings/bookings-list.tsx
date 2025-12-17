@@ -32,6 +32,7 @@ import { useRouter } from 'next/navigation';
 import { toast } from 'sonner';
 import Image from 'next/image';
 import { formatUiBookingStatus, UiBookingStatus } from '@/lib/booking-status';
+import { formatDateOnly, formatTimeRange, DEFAULT_TIMEZONE } from '@/lib/utils/date';
 
 type BookingStatus = UiBookingStatus;
 
@@ -528,7 +529,7 @@ export function BookingsList({ bookings, userRole, userId }: BookingsListProps) 
                           <div>
                             <div className="text-sm font-medium text-gray-900">{formatDate(booking.scheduledStartAt)}</div>
                             <div className="text-sm text-gray-600">
-                              {formatTime(booking.scheduledStartAt)} - {formatTime(booking.scheduledEndAt)}
+                              {formatTimeRange(booking.scheduledStartAt, booking.scheduledEndAt, DEFAULT_TIMEZONE)}
                             </div>
                           </div>
                         </div>
@@ -914,11 +915,8 @@ export function BookingsList({ bookings, userRole, userId }: BookingsListProps) 
                   {userRole === 'coach' ? bookingToDispute.client?.name : bookingToDispute.coach?.name}
                 </p>
                 <p className="text-xs text-gray-600">
-                  {new Date(bookingToDispute.scheduledStartAt).toLocaleDateString()} at{' '}
-                  {new Date(bookingToDispute.scheduledStartAt).toLocaleTimeString([], {
-                    hour: '2-digit',
-                    minute: '2-digit',
-                  })}
+                  {formatDateOnly(new Date(bookingToDispute.scheduledStartAt), DEFAULT_TIMEZONE)} at{' '}
+                  {formatTime(new Date(bookingToDispute.scheduledStartAt))}
                 </p>
               </div>
 

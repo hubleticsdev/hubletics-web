@@ -48,11 +48,12 @@ export function formatBookingDateTime(date: Date, timezone: string = DEFAULT_TIM
   }).format(date);
 }
 
-export function formatTimeRange(start: Date, end: Date, timezone: string = DEFAULT_TIMEZONE): string {
+export function formatTimeRange(start: Date, end: Date, timezone: string = DEFAULT_TIMEZONE, includeTimezone: boolean = true): string {
   const startTime = new Intl.DateTimeFormat('en-US', {
     hour: 'numeric',
     minute: '2-digit',
     timeZone: timezone,
+    ...(includeTimezone && { timeZoneName: 'short' }),
   }).format(start);
 
   const endTime = new Intl.DateTimeFormat('en-US', {
@@ -76,11 +77,12 @@ export function formatDateWithTimezone(date: Date, timezone: string = DEFAULT_TI
   }).format(date);
 }
 
-export function formatTimeOnly(date: Date, timezone: string = DEFAULT_TIMEZONE): string {
+export function formatTimeOnly(date: Date, timezone: string = DEFAULT_TIMEZONE, includeTimezone: boolean = true): string {
   return new Intl.DateTimeFormat('en-US', {
     hour: 'numeric',
     minute: '2-digit',
     timeZone: timezone,
+    ...(includeTimezone && { timeZoneName: 'short' }),
   }).format(date);
 }
 

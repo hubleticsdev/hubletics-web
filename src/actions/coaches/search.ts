@@ -129,6 +129,7 @@ export async function getCoachPublicProfile(userId: string) {
             username: true,
             image: true,
             platformFeePercentage: true,
+            timezone: true,
           },
         },
       },

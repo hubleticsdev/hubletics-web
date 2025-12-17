@@ -1,9 +1,12 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import { createBooking } from '@/actions/bookings/create';
 import { createPrivateGroupBooking } from '@/actions/group-bookings/create-private-group';
+import { getCoachPricingTiersPublic, getApplicableTier } from '@/actions/group-bookings/pricing-tiers';
+import { calculateBookingPricing, calculateGroupTotals } from '@/lib/pricing';
+import { formatDateOnly, formatTimeRange, DEFAULT_TIMEZONE } from '@/lib/utils/date';
 import { BookingCalendar } from './booking-calendar';
 import { ParticipantSelector } from '../group-bookings/participant-selector';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
@@ -24,6 +27,7 @@ interface BookingModalProps {
   existingBookings: Array<{ scheduledStartAt: Date; scheduledEndAt: Date }>;
   preferredLocations: Array<{ name: string; address: string; notes?: string }>;
   allowPrivateGroups?: boolean;
+  coachTimezone?: string;
   onClose: () => void;
 }
 
@@ -37,6 +41,7 @@ export function BookingModal({
   existingBookings,
   preferredLocations,
   allowPrivateGroups = false,
+  coachTimezone = DEFAULT_TIMEZONE,
   onClose,
 }: BookingModalProps) {
   const router = useRouter();
@@ -52,6 +57,9 @@ export function BookingModal({
   const [isProcessing, setIsProcessing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [step, setStep] = useState<'datetime' | 'details' | 'review'>('datetime');
+  const [pricingTiers, setPricingTiers] = useState<Array<{ minParticipants: number; maxParticipants: number | null; pricePerPerson: string }>>([]);
+  const [platformFeePercentage, setPlatformFeePercentage] = useState<number>(15);
+  const [isLoadingTiers, setIsLoadingTiers] = useState(false);
 
   const handleBookingTypeChange = (type: 'individual' | 'group') => {
     setBookingType(type);
@@ -81,7 +89,83 @@ export function BookingModal({
     }
   };
 
-  const baseSessionCost = hourlyRate * (sessionDuration / 60);
+  // Fetch pricing tiers when group booking is enabled
+  useEffect(() => {
+    if (allowPrivateGroups && bookingType === 'group') {
+      setIsLoadingTiers(true);
+      getCoachPricingTiersPublic(coachId)
+        .then((result) => {
+          if (result.success && result.tiers) {
+            setPricingTiers(result.tiers);
+          }
+        })
+        .catch((err) => {
+          console.error('Failed to load pricing tiers:', err);
+        })
+        .finally(() => {
+          setIsLoadingTiers(false);
+        });
+    }
+  }, [coachId, allowPrivateGroups, bookingType]);
+
+  // Calculate pricing based on booking type
+  const calculatedPricing = useMemo(() => {
+    if (bookingType === 'individual') {
+      // Use shared pricing utility for individual bookings
+      const pricing = calculateBookingPricing(hourlyRate, sessionDuration, platformFeePercentage);
+      return {
+        baseCost: pricing.clientPays,
+        displayCost: pricing.clientPays,
+        pricePerPerson: null,
+        totalParticipants: 1,
+      };
+    } else {
+      // Group booking: calculate based on participant count and pricing tiers
+      const totalParticipants = participantUsernames.length + 1; // +1 for organizer
+      
+      if (totalParticipants < 2) {
+        // Not enough participants yet
+        return {
+          baseCost: 0,
+          displayCost: 0,
+          pricePerPerson: null,
+          totalParticipants: totalParticipants,
+        };
+      }
+
+      // Find applicable tier
+      const tierResult = pricingTiers.find((tier) => {
+        return (
+          totalParticipants >= tier.minParticipants &&
+          (tier.maxParticipants === null || totalParticipants <= tier.maxParticipants)
+        );
+      });
+
+      if (!tierResult) {
+        // No tier found - show error or default
+        return {
+          baseCost: 0,
+          displayCost: 0,
+          pricePerPerson: null,
+          totalParticipants: totalParticipants,
+          error: 'No pricing tier available for this group size',
+        };
+      }
+
+      const pricePerPerson = parseFloat(tierResult.pricePerPerson);
+      const groupTotals = calculateGroupTotals(pricePerPerson, totalParticipants, platformFeePercentage);
+
+      return {
+        baseCost: groupTotals.totalGrossCents / 100,
+        displayCost: groupTotals.totalGrossCents / 100,
+        pricePerPerson: pricePerPerson,
+        totalParticipants: totalParticipants,
+        groupTotals,
+      };
+    }
+  }, [bookingType, hourlyRate, sessionDuration, platformFeePercentage, participantUsernames.length, pricingTiers]);
+
+  const baseSessionCost = calculatedPricing.displayCost;
 
   const handleSubmit = async () => {
     if (!selectedSlot) {
@@ -225,29 +309,37 @@ export function BookingModal({
                     <div>
                       <div className="font-semibold text-gray-900">Selected Time</div>
                       <div className="text-sm text-gray-600">
-                        {selectedSlot.start.toLocaleDateString('en-US', {
-                          weekday: 'long',
-                          month: 'long',
-                          day: 'numeric',
-                        })}
+                        {formatDateOnly(selectedSlot.start, coachTimezone)}
                         {' at '}
-                        {selectedSlot.start.toLocaleTimeString('en-US', {
-                          hour: 'numeric',
-                          minute: '2-digit',
-                        })}
-                        {' - '}
-                        {selectedSlot.end.toLocaleTimeString('en-US', {
-                          hour: 'numeric',
-                          minute: '2-digit',
-                        })}
+                        {formatTimeRange(selectedSlot.start, selectedSlot.end, coachTimezone)}
                       </div>
                       <div className="text-sm text-gray-600 mt-1">
                         Duration: {sessionDuration} minutes
                       </div>
+                      {bookingType === 'group' && calculatedPricing.pricePerPerson && (
+                        <div className="text-sm text-gray-600 mt-1">
+                          {calculatedPricing.totalParticipants} participant{calculatedPricing.totalParticipants !== 1 ? 's' : ''} × ${calculatedPricing.pricePerPerson.toFixed(2)}/person
+                        </div>
+                      )}
                     </div>
                     <div className="text-right">
-                      <div className="text-2xl font-bold text-[#FF6B4A]">${baseSessionCost.toFixed(2)}</div>
-                      <div className="text-xs text-gray-600">Session cost</div>
+                      {isLoadingTiers && bookingType === 'group' ? (
+                        <div className="text-sm text-gray-500">Loading pricing...</div>
+                      ) : calculatedPricing.error ? (
+                        <div className="text-sm text-red-600">{calculatedPricing.error}</div>
+                      ) : (
+                        <>
+                          <div className="text-2xl font-bold text-[#FF6B4A]">${baseSessionCost.toFixed(2)}</div>
+                          <div className="text-xs text-gray-600">
+                            {bookingType === 'group' ? 'Total cost' : 'Session cost'}
+                          </div>
+                          {bookingType === 'group' && calculatedPricing.pricePerPerson && (
+                            <div className="text-xs text-gray-500 mt-1">
+                              ${calculatedPricing.pricePerPerson.toFixed(2)} per person
+                            </div>
+                          )}
+                        </>
+                      )}
                     </div>
                   </div>
                 </div>
@@ -411,12 +503,10 @@ export function BookingModal({
                   <h3 className="text-sm font-semibold text-gray-500 uppercase mb-2">Session Details</h3>
                   <div className="space-y-1 text-gray-900">
                     <div className="font-medium">
-                      {selectedSlot?.start.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })}
+                      {selectedSlot ? formatDateOnly(selectedSlot.start, coachTimezone) : ''}
                     </div>
                     <div className="text-sm">
-                      {selectedSlot?.start.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })}
-                      {' - '}
-                      {selectedSlot?.end.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })}
+                      {selectedSlot ? formatTimeRange(selectedSlot.start, selectedSlot.end, coachTimezone) : ''}
                       {' • '}
                       {sessionDuration} minutes
                     </div>
@@ -441,8 +531,25 @@ export function BookingModal({
 
                 <div className="border-t border-gray-200 pt-3">
                   <h3 className="text-sm font-semibold text-gray-500 uppercase mb-2">Estimated Cost</h3>
-                  <div className="text-2xl font-bold text-[#FF6B4A]">${baseSessionCost.toFixed(2)}</div>
-                  <div className="text-xs text-gray-600 mt-1">Plus platform fees (calculated at payment)</div>
+                  {isLoadingTiers && bookingType === 'group' ? (
+                    <div className="text-sm text-gray-500">Loading pricing...</div>
+                  ) : calculatedPricing.error ? (
+                    <div className="text-sm text-red-600">{calculatedPricing.error}</div>
+                  ) : (
+                    <>
+                      <div className="text-2xl font-bold text-[#FF6B4A]">${baseSessionCost.toFixed(2)}</div>
+                      {bookingType === 'group' && calculatedPricing.pricePerPerson && (
+                        <div className="text-xs text-gray-600 mt-1">
+                          {calculatedPricing.totalParticipants} × ${calculatedPricing.pricePerPerson.toFixed(2)} per person
+                        </div>
+                      )}
+                      <div className="text-xs text-gray-600 mt-1">
+                        {bookingType === 'individual' 
+                          ? 'Plus platform fees (calculated at payment)'
+                          : 'Includes platform fees'}
+                      </div>
+                    </>
+                  )}
                 </div>
               </div>
 

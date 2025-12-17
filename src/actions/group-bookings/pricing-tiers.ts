@@ -117,3 +117,18 @@ export async function getApplicableTier(coachId: string, participantCount: numbe
   }
 }
 
+// Public action to get pricing tiers for a coach (for clients to view)
+export async function getCoachPricingTiersPublic(coachId: string) {
+  try {
+    const tiers = await db.query.groupPricingTier.findMany({
+      where: eq(groupPricingTier.coachId, coachId),
+      orderBy: [asc(groupPricingTier.minParticipants)],
+    });
+
+    return { success: true, tiers };
+  } catch (error) {
+    console.error('Get public pricing tiers error:', error);
+    return { success: false, error: 'Failed to fetch pricing tiers', tiers: [] };
+  }
+}
+

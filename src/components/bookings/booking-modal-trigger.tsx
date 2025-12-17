@@ -13,6 +13,7 @@ interface BookingModalTriggerProps {
   existingBookings: Array<{ scheduledStartAt: Date; scheduledEndAt: Date }>;
   preferredLocations: Array<{ name: string; address: string; notes?: string }>;
   allowPrivateGroups?: boolean;
+  coachTimezone?: string;
   buttonText?: string;
   buttonClass?: string;
 }
@@ -27,6 +28,7 @@ export function BookingModalTrigger({
   existingBookings,
   preferredLocations,
   allowPrivateGroups = false,
+  coachTimezone,
   buttonText,
   buttonClass,
 }: BookingModalTriggerProps) {
@@ -55,6 +57,7 @@ export function BookingModalTrigger({
           existingBookings={existingBookings}
           preferredLocations={preferredLocations}
           allowPrivateGroups={allowPrivateGroups}
+          coachTimezone={coachTimezone}
           onClose={() => setIsOpen(false)}
         />
       )}
