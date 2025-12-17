@@ -111,7 +111,7 @@ export function calculateCoachEarnings(
 }
 
 export function calculateGroupTotals(
-  pricePerPerson: number,
+  coachRatePerPerson: number,
   participants: number,
   customPlatformFee?: number
 ): {
@@ -121,19 +121,34 @@ export function calculateGroupTotals(
   stripeFeeCents: number;
   coachPayoutCents: number;
 } {
-  const { stripeFeeCents, platformFeeCents, coachPayoutCents } = calculateCoachEarnings(
-    pricePerPerson,
-    customPlatformFee
-  );
+  const config = { ...DEFAULT_CONFIG };
+  if (customPlatformFee !== undefined) {
+    config.platformFeePercentage = customPlatformFee;
+  }
 
-  const totalGrossCents = Math.round(pricePerPerson * 100 * participants);
+  const P = config.platformFeePercentage / 100;
+  const S = config.stripePercentage / 100;
+  const F = config.stripeFixedCents / 100;
+
+  const clientPaysPerPerson = (coachRatePerPerson + F * (1 - P)) / ((1 - S) * (1 - P));
+
+  const stripeFeePerPerson = clientPaysPerPerson * S + F;
+  const netAfterStripePerPerson = clientPaysPerPerson - stripeFeePerPerson;
+  const platformFeePerPerson = netAfterStripePerPerson * P;
+  const coachPayoutPerPerson = netAfterStripePerPerson - platformFeePerPerson;
+
+  // Multiply by number of participants
+  const totalGrossCents = Math.round(clientPaysPerPerson * 100 * participants);
+  const stripeFeeCents = Math.round(stripeFeePerPerson * 100 * participants);
+  const platformFeeCents = Math.round(platformFeePerPerson * 100 * participants);
+  const coachPayoutCents = Math.round(coachPayoutPerPerson * 100 * participants);
 
   return {
-    pricePerPerson,
+    pricePerPerson: Number(clientPaysPerPerson.toFixed(2)),
     totalGrossCents,
-    platformFeeCents: platformFeeCents * participants,
-    stripeFeeCents: stripeFeeCents * participants,
-    coachPayoutCents: coachPayoutCents * participants,
+    platformFeeCents,
+    stripeFeeCents,
+    coachPayoutCents,
   };
 }
 

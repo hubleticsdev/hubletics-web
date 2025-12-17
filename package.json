@@ -22,7 +22,7 @@
     "db:push": "drizzle-kit push",
     "db:studio": "drizzle-kit studio",
     "db:drop": "drizzle-kit drop",
-    "stripe:listen": "stripe listen --forward-to localhost:3000/api/v1/webhooks/stripe"
+    "stripe:listen": "stripe listen --forward-to localhost:3000/api/webhooks/stripe"
   },
   "dependencies": {
     "@neondatabase/serverless": "^1.0.2",

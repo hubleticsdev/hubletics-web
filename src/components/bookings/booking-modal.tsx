@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation';
 import { createBooking } from '@/actions/bookings/create';
 import { createPrivateGroupBooking } from '@/actions/group-bookings/create-private-group';
 import { getCoachPricingTiersPublic, getApplicableTier } from '@/actions/group-bookings/pricing-tiers';
-import { calculateBookingPricing, calculateGroupTotals } from '@/lib/pricing';
+import { calculateBookingPricing, calculateGroupTotals, calculateCoachEarnings } from '@/lib/pricing';
 import { formatDateOnly, formatTimeRange, DEFAULT_TIMEZONE } from '@/lib/utils/date';
 import { BookingCalendar } from './booking-calendar';
 import { ParticipantSelector } from '../group-bookings/participant-selector';
@@ -166,15 +166,43 @@ export function BookingModal({
         };
       }
 
-      const pricePerPerson = parseFloat(tierResult.pricePerPerson);
-      const groupTotals = calculateGroupTotals(pricePerPerson, totalParticipants, platformFeePercentage);
+      const coachRatePerPerson = parseFloat(tierResult.pricePerPerson);
+      const groupTotals = calculateGroupTotals(coachRatePerPerson, totalParticipants, platformFeePercentage);
+
+      // Calculate per-person breakdown
+      const config = { platformFeePercentage, stripePercentage: 2.9, stripeFixedCents: 30 };
+      const P = config.platformFeePercentage / 100;
+      const S = config.stripePercentage / 100;
+      const F = config.stripeFixedCents / 100;
+      
+      const clientPaysPerPerson = (coachRatePerPerson + F * (1 - P)) / ((1 - S) * (1 - P));
+      const stripeFeePerPerson = clientPaysPerPerson * S + F;
+      const netAfterStripePerPerson = clientPaysPerPerson - stripeFeePerPerson;
+      const platformFeePerPerson = netAfterStripePerPerson * P;
+      const coachPayoutPerPerson = netAfterStripePerPerson - platformFeePerPerson;
 
       return {
         baseCost: groupTotals.totalGrossCents / 100,
         displayCost: groupTotals.totalGrossCents / 100,
-        pricePerPerson: pricePerPerson,
+        pricePerPerson: groupTotals.pricePerPerson,
         totalParticipants: totalParticipants,
         groupTotals,
+        tierInfo: {
+          minParticipants: tierResult.minParticipants,
+          maxParticipants: tierResult.maxParticipants,
+        },
+        breakdown: {
+          coachRatePerPerson: coachRatePerPerson,
+          pricePerPerson: groupTotals.pricePerPerson,
+          totalParticipants: totalParticipants,
+          totalGross: groupTotals.totalGrossCents / 100,
+          stripeFeePerPerson: Number(stripeFeePerPerson.toFixed(2)),
+          platformFeePerPerson: Number(platformFeePerPerson.toFixed(2)),
+          coachPayoutPerPerson: Number(coachPayoutPerPerson.toFixed(2)),
+          totalStripeFee: groupTotals.stripeFeeCents / 100,
+          totalPlatformFee: groupTotals.platformFeeCents / 100,
+          totalCoachPayout: groupTotals.coachPayoutCents / 100,
+        },
       };
     }
   }, [bookingType, hourlyRate, selectedDuration, platformFeePercentage, participantUsernames.length, pricingTiers]);
@@ -362,9 +390,9 @@ export function BookingModal({
                       <div className="text-sm text-gray-600 mt-1">
                         Duration: {selectedDuration} minutes
                       </div>
-                      {bookingType === 'group' && calculatedPricing.pricePerPerson && (
+                      {bookingType === 'group' && calculatedPricing.breakdown && calculatedPricing.breakdown.pricePerPerson !== undefined && (
                         <div className="text-sm text-gray-600 mt-1">
-                          {calculatedPricing.totalParticipants} participant{calculatedPricing.totalParticipants !== 1 ? 's' : ''} × ${calculatedPricing.pricePerPerson.toFixed(2)}/person
+                          {calculatedPricing.totalParticipants} participant{calculatedPricing.totalParticipants !== 1 ? 's' : ''} × ${calculatedPricing.breakdown.pricePerPerson.toFixed(2)}/person
                         </div>
                       )}
                     </div>
@@ -373,20 +401,36 @@ export function BookingModal({
                         <div className="text-sm text-gray-500">Loading pricing...</div>
                       ) : calculatedPricing.error ? (
                         <div className="text-sm text-red-600">{calculatedPricing.error}</div>
+                      ) : bookingType === 'group' && calculatedPricing.totalParticipants < 2 ? (
+                        <div className="text-sm text-gray-500 italic">
+                          Add participants to see pricing
+                        </div>
                       ) : (
                         <>
                           <div className="text-2xl font-bold text-[#FF6B4A]">${baseSessionCost.toFixed(2)}</div>
                           <div className="text-xs text-gray-600">
-                            {bookingType === 'group' ? 'Total cost' : 'Session cost'}
+                            {bookingType === 'group' ? 'You pay for everyone' : 'Session cost'}
                           </div>
-                          {bookingType === 'group' && calculatedPricing.pricePerPerson && (
+                          {bookingType === 'group' && calculatedPricing.breakdown && calculatedPricing.breakdown.pricePerPerson !== undefined && (
+                            <>
+                              <div className="text-xs text-gray-500 mt-1">
+                                {calculatedPricing.totalParticipants} × ${calculatedPricing.breakdown.pricePerPerson.toFixed(2)} per person
+                              </div>
+                              {calculatedPricing.tierInfo && (
+                                <div className="text-xs text-gray-400 mt-0.5">
+                                  Tier: {calculatedPricing.tierInfo.minParticipants}
+                                  {calculatedPricing.tierInfo.maxParticipants 
+                                    ? `-${calculatedPricing.tierInfo.maxParticipants}` 
+                                    : '+'} participants
+                                </div>
+                              )}
+                            </>
+                          )}
+                          {bookingType === 'individual' && (
                             <div className="text-xs text-gray-500 mt-1">
-                              ${calculatedPricing.pricePerPerson.toFixed(2)} per person
+                              Includes platform and processing fees
                             </div>
                           )}
-                          <div className="text-xs text-gray-500 mt-1">
-                            Includes platform and processing fees
-                          </div>
                         </>
                       )}
                     </div>
@@ -584,15 +628,75 @@ export function BookingModal({
                     <div className="text-sm text-gray-500">Loading pricing...</div>
                   ) : calculatedPricing.error ? (
                     <div className="text-sm text-red-600">{calculatedPricing.error}</div>
+                  ) : bookingType === 'group' && calculatedPricing.totalParticipants < 2 ? (
+                    <div className="text-sm text-gray-500 italic">
+                      Add at least one participant to see pricing
+                    </div>
                   ) : (
                     <>
                       <div className="text-2xl font-bold text-[#FF6B4A]">${baseSessionCost.toFixed(2)}</div>
-                      {bookingType === 'group' && calculatedPricing.pricePerPerson && (
-                        <div className="text-xs text-gray-600 mt-1">
-                          {calculatedPricing.totalParticipants} × ${calculatedPricing.pricePerPerson.toFixed(2)} per person
-                        </div>
+                      {bookingType === 'group' && calculatedPricing.breakdown && calculatedPricing.breakdown.pricePerPerson !== undefined && (
+                        <>
+                          <div className="text-xs text-gray-600 mt-1 font-medium">
+                            You pay for {calculatedPricing.totalParticipants} participant{calculatedPricing.totalParticipants !== 1 ? 's' : ''}
+                          </div>
+                          <div className="text-xs text-gray-500 mt-0.5">
+                            {calculatedPricing.totalParticipants} × ${calculatedPricing.breakdown.pricePerPerson.toFixed(2)} per person
+                          </div>
+                          {calculatedPricing.tierInfo && (
+                            <div className="text-xs text-gray-500 mt-1">
+                              Pricing tier: {calculatedPricing.tierInfo.minParticipants}
+                              {calculatedPricing.tierInfo.maxParticipants 
+                                ? `-${calculatedPricing.tierInfo.maxParticipants}` 
+                                : '+'} participants
+                            </div>
+                          )}
+                          <details className="text-xs text-gray-600 mt-2">
+                            <summary className="cursor-pointer hover:text-gray-700 mb-1">View breakdown</summary>
+                            <div className="mt-2 space-y-1 bg-gray-50 p-2 rounded">
+                              <div className="text-xs font-medium text-gray-700 mb-1">Per Person Breakdown:</div>
+                              <div className="flex justify-between">
+                                <span>Coach&apos;s rate per person:</span>
+                                <span className="font-medium">${calculatedPricing.breakdown.coachRatePerPerson.toFixed(2)}</span>
+                              </div>
+                              <div className="flex justify-between text-red-600">
+                                <span>Stripe fee (added):</span>
+                                <span>+${calculatedPricing.breakdown.stripeFeePerPerson.toFixed(2)}</span>
+                              </div>
+                              <div className="flex justify-between text-red-600">
+                                <span>Platform fee (added):</span>
+                                <span>+${calculatedPricing.breakdown.platformFeePerPerson.toFixed(2)}</span>
+                              </div>
+                              <div className="flex justify-between border-t border-gray-300 pt-1 font-semibold text-gray-900">
+                                <span>You pay per person:</span>
+                                <span>${calculatedPricing.breakdown.pricePerPerson.toFixed(2)}</span>
+                              </div>
+                              <div className="border-t border-gray-300 pt-1 mt-1">
+                                <div className="text-xs font-medium text-gray-700 mb-1">Your Total Payment (for {calculatedPricing.totalParticipants} people):</div>
+                                <div className="flex justify-between font-semibold text-gray-900">
+                                  <span>You pay:</span>
+                                  <span>${calculatedPricing.breakdown.totalGross.toFixed(2)}</span>
+                                </div>
+                                <div className="text-xs text-gray-500 pl-2 border-l-2 border-gray-200 ml-1 mt-1">
+                                  <div className="flex justify-between">
+                                    <span>Coach receives total:</span>
+                                    <span>${calculatedPricing.breakdown.totalCoachPayout.toFixed(2)}</span>
+                                  </div>
+                                  <div className="flex justify-between text-red-600">
+                                    <span>Total Stripe fees:</span>
+                                    <span>${calculatedPricing.breakdown.totalStripeFee.toFixed(2)}</span>
+                                  </div>
+                                  <div className="flex justify-between text-red-600">
+                                    <span>Total platform fees:</span>
+                                    <span>${calculatedPricing.breakdown.totalPlatformFee.toFixed(2)}</span>
+                                  </div>
+                                </div>
+                              </div>
+                            </div>
+                          </details>
+                        </>
                       )}
-                      {bookingType === 'individual' && calculatedPricing.breakdown && (
+                      {bookingType === 'individual' && calculatedPricing.breakdown && calculatedPricing.breakdown.coachRate !== undefined && (
                         <details className="text-xs text-gray-600 mt-2">
                           <summary className="cursor-pointer hover:text-gray-700 mb-1">View breakdown</summary>
                           <div className="mt-2 space-y-1 bg-gray-50 p-2 rounded">
@@ -614,11 +718,6 @@ export function BookingModal({
                             </div>
                           </div>
                         </details>
-                      )}
-                      {bookingType === 'group' && (
-                        <div className="text-xs text-gray-600 mt-1">
-                          Includes platform fees
-                        </div>
                       )}
                     </>
                   )}
