@@ -22,9 +22,11 @@ export async function joinPublicLesson(lessonId: string) {
     const lesson = await db.query.booking.findFirst({
       where: and(
         eq(booking.id, lessonId),
-        eq(booking.capacityStatus, 'open'),
-        eq(booking.groupType, 'public')
+        eq(booking.bookingType, 'public_group')
       ),
+      with: {
+        publicGroupDetails: true,
+      },
     });
 
     if (!lesson) {
@@ -54,8 +56,12 @@ export async function joinPublicLesson(lessonId: string) {
       return { success: false, error: 'Coach has not completed Stripe setup' };
     }
 
-    if (!lesson.maxParticipants || !lesson.pricePerPerson) {
+    if (!lesson.publicGroupDetails || !lesson.publicGroupDetails.maxParticipants || !lesson.publicGroupDetails.pricePerPerson) {
       return { success: false, error: 'Invalid lesson configuration' };
+    }
+
+    if (lesson.publicGroupDetails.capacityStatus !== 'open') {
+      return { success: false, error: 'Lesson is no longer available' };
     }
 
     const existingParticipant = await db.query.bookingParticipant.findFirst({
@@ -76,11 +82,11 @@ export async function joinPublicLesson(lessonId: string) {
       ),
     });
 
-    if (currentParticipants.length >= lesson.maxParticipants) {
+    if (currentParticipants.length >= lesson.publicGroupDetails.maxParticipants) {
       return { success: false, error: 'This lesson is now full' };
     }
 
-    const pricePerPerson = parseFloat(lesson.pricePerPerson);
+    const pricePerPerson = parseFloat(lesson.publicGroupDetails.pricePerPerson);
 
     const paymentIntent = await createBookingPaymentIntent(
       pricePerPerson,

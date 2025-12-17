@@ -1,7 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
-import { booking } from '@/lib/db/schema';
-import { eq } from 'drizzle-orm';
+import { booking, individualBookingDetails, privateGroupBookingDetails } from '@/lib/db/schema';
+import { eq, and, or } from 'drizzle-orm';
+import type { BookingWithDetails } from '@/lib/booking-type-guards';
+import { isIndividualBooking, isPrivateGroupBooking } from '@/lib/booking-type-guards';
 import { sendEmail } from '@/lib/email/resend';
 import {
   getBookingCancelledDueToPaymentEmailTemplate,
@@ -27,41 +29,96 @@ export async function GET(request: NextRequest) {
       errors: [] as string[],
     };
 
-    const awaitingPaymentBookings = await db.query.booking.findMany({
-      where: eq(booking.paymentStatus, 'awaiting_client_payment'),
+    // Fetch individual and private group bookings with payment status
+    const allBookings = await db.query.booking.findMany({
+      where: or(
+        eq(booking.bookingType, 'individual'),
+        eq(booking.bookingType, 'private_group')
+      ),
       with: {
-        client: {
-          columns: {
-            name: true,
-            email: true,
-            timezone: true,
-          },
-        },
         coach: {
           columns: {
             name: true,
           },
         },
+        individualDetails: {
+          with: {
+            client: {
+              columns: {
+                name: true,
+                email: true,
+                timezone: true,
+              },
+            },
+          },
+        },
+        privateGroupDetails: {
+          with: {
+            organizer: {
+              columns: {
+                name: true,
+                email: true,
+                timezone: true,
+              },
+            },
+          },
+        },
       },
+    });
+
+    // Filter to only bookings with awaiting_client_payment status
+    const awaitingPaymentBookings = allBookings.filter(b => {
+      const bookingWithDetails = b as BookingWithDetails;
+      if (isIndividualBooking(bookingWithDetails)) {
+        return bookingWithDetails.individualDetails.paymentStatus === 'awaiting_client_payment';
+      } else if (isPrivateGroupBooking(bookingWithDetails)) {
+        return bookingWithDetails.privateGroupDetails.paymentStatus === 'awaiting_client_payment';
+      }
+      return false;
     });
 
     for (const bookingRecord of awaitingPaymentBookings) {
       try {
-        if (!bookingRecord.paymentDueAt) {
-          console.warn(`Booking ${bookingRecord.id} has no paymentDueAt`);
+        const bookingWithDetails = bookingRecord as BookingWithDetails;
+        let paymentDueAt: Date | null = null;
+        let client: { name: string; email: string; timezone: string | null } | null = null;
+        let expectedGrossCents: number = 0;
+        let reminderSentAt: Date | null = null;
+        
+        if (isIndividualBooking(bookingWithDetails)) {
+          paymentDueAt = bookingWithDetails.individualDetails.paymentDueAt;
+          reminderSentAt = bookingWithDetails.individualDetails.paymentFinalReminderSentAt;
+          // Access client relation from query result
+          const details = bookingRecord.individualDetails as typeof bookingRecord.individualDetails & {
+            client?: { name: string; email: string; timezone: string | null } | null;
+          };
+          client = (details as any).client ?? null;
+          expectedGrossCents = bookingWithDetails.individualDetails.clientPaysCents;
+        } else if (isPrivateGroupBooking(bookingWithDetails)) {
+          paymentDueAt = bookingWithDetails.privateGroupDetails.paymentDueAt;
+          reminderSentAt = bookingWithDetails.privateGroupDetails.paymentFinalReminderSentAt;
+          // Access organizer relation from query result
+          const details = bookingRecord.privateGroupDetails as typeof bookingRecord.privateGroupDetails & {
+            organizer?: { name: string; email: string; timezone: string | null } | null;
+          };
+          client = (details as any).organizer ?? null;
+          expectedGrossCents = bookingWithDetails.privateGroupDetails.totalGrossCents;
+        }
+
+        if (!paymentDueAt || !client) {
+          console.warn(`Booking ${bookingRecord.id} has no paymentDueAt or client`);
           continue;
         }
 
-        const paymentDueAt = new Date(bookingRecord.paymentDueAt);
         const hoursUntilDue = (paymentDueAt.getTime() - now.getTime()) / (1000 * 60 * 60);
         const minutesUntilDue = (paymentDueAt.getTime() - now.getTime()) / (1000 * 60);
 
         if (now > paymentDueAt) {
+          // Cancel booking
           await db
             .update(booking)
             .set({
               approvalStatus: 'cancelled',
-              paymentStatus: 'failed',
               cancelledBy: null,
               cancelledAt: now,
               cancellationReason: 'Payment not received within 24 hours',
@@ -69,20 +126,37 @@ export async function GET(request: NextRequest) {
             })
             .where(eq(booking.id, bookingRecord.id));
 
+          // Update payment status in detail table
+          if (isIndividualBooking(bookingWithDetails)) {
+            await db
+              .update(individualBookingDetails)
+              .set({
+                paymentStatus: 'failed',
+              })
+              .where(eq(individualBookingDetails.bookingId, bookingRecord.id));
+          } else if (isPrivateGroupBooking(bookingWithDetails)) {
+            await db
+              .update(privateGroupBookingDetails)
+              .set({
+                paymentStatus: 'failed',
+              })
+              .where(eq(privateGroupBookingDetails.bookingId, bookingRecord.id));
+          }
+
           const startDate = new Date(bookingRecord.scheduledStartAt);
-          const clientTimezone = bookingRecord.client.timezone || 'America/Chicago';
+          const clientTimezone = client.timezone || 'America/Chicago';
           const lessonDate = formatDateOnly(startDate, clientTimezone);
           const lessonTime = formatTimeOnly(startDate, clientTimezone);
 
           const emailTemplate = getBookingCancelledDueToPaymentEmailTemplate(
-            bookingRecord.client.name,
+            client.name,
             bookingRecord.coach.name,
             lessonDate,
             lessonTime
           );
 
           await sendEmail({
-            to: bookingRecord.client.email,
+            to: client.email,
             subject: emailTemplate.subject,
             html: emailTemplate.html,
             text: emailTemplate.text,
@@ -93,9 +167,10 @@ export async function GET(request: NextRequest) {
           continue;
         }
 
-        if (minutesUntilDue <= 30 && minutesUntilDue > 25 && !bookingRecord.paymentFinalReminderSentAt) {
+        // Check for 30-minute reminder
+        if (minutesUntilDue <= 30 && minutesUntilDue > 25 && !reminderSentAt) {
           const startDate = new Date(bookingRecord.scheduledStartAt);
-          const clientTimezone = bookingRecord.client.timezone || 'America/Chicago';
+          const clientTimezone = client.timezone || 'America/Chicago';
           const lessonDate = formatDateOnly(startDate, clientTimezone);
           const lessonTime = formatTimeOnly(startDate, clientTimezone);
           const paymentDeadline = paymentDueAt.toLocaleString('en-US', {
@@ -105,28 +180,37 @@ export async function GET(request: NextRequest) {
           });
 
           const emailTemplate = getPaymentReminder30MinutesEmailTemplate(
-            bookingRecord.client.name,
+            client.name,
             bookingRecord.coach.name,
             lessonDate,
             lessonTime,
-            bookingRecord.expectedGrossCents ? (bookingRecord.expectedGrossCents / 100).toFixed(2) : '0.00',
+            (expectedGrossCents / 100).toFixed(2),
             paymentDeadline
           );
 
           await sendEmail({
-            to: bookingRecord.client.email,
+            to: client.email,
             subject: emailTemplate.subject,
             html: emailTemplate.html,
             text: emailTemplate.text,
           });
 
-          await db
-            .update(booking)
-            .set({
-              paymentFinalReminderSentAt: now,
-              updatedAt: now,
-            })
-            .where(eq(booking.id, bookingRecord.id));
+          // Update paymentFinalReminderSentAt in detail table
+          if (isIndividualBooking(bookingWithDetails)) {
+            await db
+              .update(individualBookingDetails)
+              .set({
+                paymentFinalReminderSentAt: now,
+              })
+              .where(eq(individualBookingDetails.bookingId, bookingRecord.id));
+          } else if (isPrivateGroupBooking(bookingWithDetails)) {
+            await db
+              .update(privateGroupBookingDetails)
+              .set({
+                paymentFinalReminderSentAt: now,
+              })
+              .where(eq(privateGroupBookingDetails.bookingId, bookingRecord.id));
+          }
 
           console.log(`[CRON] Sent 30m payment reminder for booking ${bookingRecord.id}`);
           results.reminders30m++;

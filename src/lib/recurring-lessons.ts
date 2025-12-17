@@ -1,5 +1,5 @@
 import { db } from '@/lib/db';
-import { booking, recurringGroupLesson } from '@/lib/db/schema';
+import { booking, recurringGroupLesson, publicGroupLessonDetails } from '@/lib/db/schema';
 import { eq } from 'drizzle-orm';
 import { calculateGroupTotals } from '@/lib/pricing';
 import crypto from 'crypto';
@@ -67,41 +67,47 @@ export async function generateBookingsFromRecurringTemplate(
       scheduledEndAt.setMinutes(scheduledEndAt.getMinutes() + typedTemplate.duration);
 
       const pricePerPerson = parseFloat(typedTemplate.pricePerPerson);
-      const totals = calculateGroupTotals(pricePerPerson, typedTemplate.maxParticipants, platformFeePercentage);
-
-      bookingsToCreate.push({
-        id: crypto.randomUUID(),
-        clientId: typedTemplate.coachId,
+      
+      const bookingId = crypto.randomUUID();
+      
+      // Create base booking
+      const baseBooking = {
+        id: bookingId,
         coachId: typedTemplate.coachId,
+        bookingType: 'public_group' as const,
         scheduledStartAt,
         scheduledEndAt,
         duration: typedTemplate.duration,
         location: typedTemplate.location,
-        clientMessage: typedTemplate.description || typedTemplate.title,
-        coachRate: pricePerPerson.toString(),
-        pricePerPerson: pricePerPerson.toString(),
-        expectedGrossCents: totals.totalGrossCents,
-        platformFeeCents: totals.platformFeeCents,
-        stripeFeeCents: totals.stripeFeeCents,
-        coachPayoutCents: totals.coachPayoutCents,
         approvalStatus: 'accepted' as const,
-        paymentStatus: 'not_required' as const,
         fulfillmentStatus: 'scheduled' as const,
-        capacityStatus: 'open' as const,
-        isGroupBooking: true,
-        groupType: 'public' as const,
-        organizerId: typedTemplate.coachId,
+      };
+      
+      // Create public group lesson details
+      const publicGroupDetails = {
+        bookingId,
         maxParticipants: typedTemplate.maxParticipants,
         minParticipants: typedTemplate.minParticipants,
+        pricePerPerson: pricePerPerson.toString(),
+        capacityStatus: 'open' as const,
         currentParticipants: 0,
+        authorizedParticipants: 0,
+        capturedParticipants: 0,
+        clientMessage: typedTemplate.description || typedTemplate.title,
         recurringLessonId: recurringId,
-      });
+      };
+      
+      bookingsToCreate.push({ baseBooking, publicGroupDetails });
 
       currentDate.setDate(currentDate.getDate() + 7);
     }
 
     if (bookingsToCreate.length > 0) {
-      await db.insert(booking).values(bookingsToCreate);
+      // Insert bookings and details in transaction
+      for (const { baseBooking, publicGroupDetails } of bookingsToCreate) {
+        await db.insert(booking).values(baseBooking);
+        await db.insert(publicGroupLessonDetails).values(publicGroupDetails);
+      }
       console.log(`[RECURRING_LESSONS] Generated ${bookingsToCreate.length} bookings for recurring lesson ${recurringId}`);
     }
 

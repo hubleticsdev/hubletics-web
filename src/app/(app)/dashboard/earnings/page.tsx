@@ -244,8 +244,8 @@ export default async function CoachEarningsPage() {
                       {booking.duration} min
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
-                      <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${statusBadgeClass(booking.status)}`}>
-                        {formatUiBookingStatus(booking.status)}
+                      <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${statusBadgeClass(booking.status as UiBookingStatus)}`}>
+                        {formatUiBookingStatus(booking.status as UiBookingStatus)}
                       </span>
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">

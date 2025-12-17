@@ -2,7 +2,7 @@
 
 import { requireRole } from '@/lib/auth/session';
 import { db } from '@/lib/db';
-import { booking } from '@/lib/db/schema';
+import { booking, individualBookingDetails } from '@/lib/db/schema';
 import { eq, and } from 'drizzle-orm';
 
 export type AthleteSpendSummary = {
@@ -16,16 +16,21 @@ export async function getAthleteSpendSummary(): Promise<AthleteSpendSummary> {
 
   const completedBookings = await db.query.booking.findMany({
     where: and(
-      eq(booking.clientId, athleteId),
-      eq(booking.fulfillmentStatus, 'completed')
+      eq(booking.bookingType, 'individual'),
+      eq(booking.fulfillmentStatus, 'completed'),
+      eq(individualBookingDetails.clientId, athleteId)
     ),
-    columns: {
-      expectedGrossCents: true,
+    with: {
+      individualDetails: {
+        columns: {
+          clientPaysCents: true,
+        },
+      },
     },
   });
 
   const totalSpent = completedBookings.reduce(
-    (sum, b) => sum + (b.expectedGrossCents || 0),
+    (sum, b) => sum + (b.individualDetails?.clientPaysCents || 0),
     0
   );
 

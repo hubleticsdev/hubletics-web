@@ -5,7 +5,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/u
 import { Button } from '@/components/ui/button';
 import { loadStripe } from '@stripe/stripe-js';
 import { Elements, PaymentElement, useStripe, useElements } from '@stripe/react-stripe-js';
-import { createPaymentForBooking, confirmBookingPayment } from '@/actions/bookings/pay';
+import { createPaymentForBooking, confirmBookingPayment, createPaymentForPrivateGroupBooking, confirmPrivateGroupBookingPayment } from '@/actions/bookings/pay';
 import { toast } from 'sonner';
 import { Loader2, Clock, CreditCard } from 'lucide-react';
 
@@ -18,17 +18,20 @@ interface PaymentModalProps {
   coachName: string;
   amount: number;
   paymentDueAt: Date;
+  bookingType?: 'individual' | 'private_group';
   onSuccess: () => void;
 }
 
 function PaymentForm({
   bookingId,
   amount,
+  bookingType = 'individual',
   onSuccess,
   onCancel,
 }: {
   bookingId: string;
   amount: number;
+  bookingType?: 'individual' | 'private_group';
   onSuccess: () => void;
   onCancel: () => void;
 }) {
@@ -64,13 +67,17 @@ function PaymentForm({
         return;
       }
 
-      const result = await confirmBookingPayment(bookingId);
+      const confirmPayment = bookingType === 'private_group'
+        ? confirmPrivateGroupBookingPayment
+        : confirmBookingPayment;
 
-      if (result.success) {
+      const result = await confirmPayment(bookingId);
+
+      if (result && result.success) {
         toast.success('Payment successful! Your lesson is confirmed.');
         onSuccess();
       } else {
-        toast.error(result.error || 'Failed to confirm booking');
+        toast.error(result?.error || 'Failed to confirm booking');
         setProcessing(false);
       }
     } catch (error) {
@@ -117,6 +124,7 @@ export function PaymentModal({
   coachName,
   amount,
   paymentDueAt,
+  bookingType = 'individual',
   onSuccess,
 }: PaymentModalProps) {
   const [clientSecret, setClientSecret] = useState<string | null>(null);
@@ -125,7 +133,11 @@ export function PaymentModal({
 
   useEffect(() => {
     if (isOpen && !clientSecret) {
-      createPaymentForBooking(bookingId).then((result) => {
+      const createPayment = bookingType === 'private_group'
+        ? createPaymentForPrivateGroupBooking
+        : createPaymentForBooking;
+
+      createPayment(bookingId).then((result) => {
         if (result.success && result.clientSecret) {
           setClientSecret(result.clientSecret);
         } else {
@@ -135,7 +147,7 @@ export function PaymentModal({
         setLoading(false);
       });
     }
-  }, [isOpen, bookingId, clientSecret, onClose]);
+  }, [isOpen, bookingId, clientSecret, onClose, bookingType]);
 
   useEffect(() => {
     if (!isOpen) return;
@@ -204,7 +216,7 @@ export function PaymentModal({
                 },
               }}
             >
-              <PaymentForm bookingId={bookingId} amount={amount} onSuccess={onSuccess} onCancel={onClose} />
+              <PaymentForm bookingId={bookingId} amount={amount} bookingType={bookingType} onSuccess={onSuccess} onCancel={onClose} />
             </Elements>
           ) : (
             <p className="text-center text-red-600">Failed to load payment form</p>

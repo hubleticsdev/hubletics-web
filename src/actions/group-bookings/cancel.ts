@@ -2,7 +2,7 @@
 
 import { getSession } from '@/lib/auth/session';
 import { db } from '@/lib/db';
-import { booking, bookingParticipant } from '@/lib/db/schema';
+import { booking, bookingParticipant, publicGroupLessonDetails, privateGroupBookingDetails } from '@/lib/db/schema';
 import { eq, and, ne } from 'drizzle-orm';
 import { refundBookingPayment } from '@/lib/stripe';
 import { revalidatePath } from 'next/cache';
@@ -32,9 +32,12 @@ export async function leavePublicLesson(lessonId: string) {
 
     const lesson = await db.query.booking.findFirst({
       where: eq(booking.id, lessonId),
+      with: {
+        publicGroupDetails: true,
+      },
     });
 
-    if (!lesson || lesson.groupType !== 'public') {
+    if (!lesson || lesson.bookingType !== 'public_group') {
       return { success: false, error: 'Lesson not found or not a public group lesson' };
     }
 
@@ -73,17 +76,17 @@ export async function leavePublicLesson(lessonId: string) {
         eq(bookingParticipant.userId, session.user.id)
       ));
 
-    if (lesson.currentParticipants && lesson.currentParticipants > 0) {
+    if (lesson.publicGroupDetails && lesson.publicGroupDetails.currentParticipants > 0) {
       await db
-        .update(booking)
+        .update(publicGroupLessonDetails)
         .set({
-          currentParticipants: lesson.currentParticipants - 1,
+          currentParticipants: lesson.publicGroupDetails.currentParticipants - 1,
           capturedParticipants:
-            participantCaptured && lesson.capturedParticipants && lesson.capturedParticipants > 0
-              ? lesson.capturedParticipants - 1
-              : lesson.capturedParticipants,
+            participantCaptured && lesson.publicGroupDetails.capturedParticipants > 0
+              ? lesson.publicGroupDetails.capturedParticipants - 1
+              : lesson.publicGroupDetails.capturedParticipants,
         })
-        .where(eq(booking.id, lessonId));
+        .where(eq(publicGroupLessonDetails.bookingId, lessonId));
     }
 
     console.log(`User ${session.user.id} left public lesson ${lessonId}`);
@@ -109,10 +112,10 @@ export async function cancelPrivateGroupBooking(bookingId: string) {
     const bookingRecord = await db.query.booking.findFirst({
       where: and(
         eq(booking.id, bookingId),
-        eq(booking.organizerId, session.user.id),
-        eq(booking.groupType, 'private')
+        eq(booking.bookingType, 'private_group')
       ),
       with: {
+        privateGroupDetails: true,
         coach: {
           columns: {
             name: true,
@@ -121,7 +124,8 @@ export async function cancelPrivateGroupBooking(bookingId: string) {
       },
     });
 
-    if (!bookingRecord) {
+    // Check if user is the organizer
+    if (!bookingRecord || bookingRecord.privateGroupDetails?.organizerId !== session.user.id) {
       return { success: false, error: 'Booking not found or you are not the organizer' };
     }
 
@@ -146,16 +150,16 @@ export async function cancelPrivateGroupBooking(bookingId: string) {
     });
 
     const oldApprovalStatus = bookingRecord.approvalStatus;
-    const oldPaymentStatus = bookingRecord.paymentStatus;
-    const newPaymentStatus = bookingRecord.paymentStatus === 'captured' ? 'refunded' : bookingRecord.paymentStatus;
+    const oldPaymentStatus = bookingRecord.privateGroupDetails?.paymentStatus;
+    const newPaymentStatus = bookingRecord.privateGroupDetails?.paymentStatus === 'captured' ? 'refunded' : bookingRecord.privateGroupDetails?.paymentStatus;
 
-    if (bookingRecord.primaryStripePaymentIntentId && bookingRecord.paymentStatus === 'captured') {
-      await refundBookingPayment(bookingRecord.primaryStripePaymentIntentId);
+    if (bookingRecord.privateGroupDetails?.stripePaymentIntentId && bookingRecord.privateGroupDetails.paymentStatus === 'captured') {
+      await refundBookingPayment(bookingRecord.privateGroupDetails.stripePaymentIntentId);
 
       await recordPaymentEvent({
         bookingId,
-        stripePaymentIntentId: bookingRecord.primaryStripePaymentIntentId,
-        amountCents: bookingRecord.expectedGrossCents ?? 0,
+        stripePaymentIntentId: bookingRecord.privateGroupDetails.stripePaymentIntentId,
+        amountCents: bookingRecord.privateGroupDetails.totalGrossCents ?? 0,
         status: 'refunded',
       });
     }
@@ -164,12 +168,20 @@ export async function cancelPrivateGroupBooking(bookingId: string) {
       .update(booking)
       .set({
         approvalStatus: 'cancelled',
-        paymentStatus: newPaymentStatus,
         cancelledBy: session.user.id,
         cancelledAt: new Date(),
         updatedAt: new Date(),
       })
       .where(eq(booking.id, bookingId));
+
+    if (bookingRecord.privateGroupDetails) {
+      await db
+        .update(privateGroupBookingDetails)
+        .set({
+          paymentStatus: newPaymentStatus as any,
+        })
+        .where(eq(privateGroupBookingDetails.bookingId, bookingId));
+    }
 
     // Update all participant statuses to cancelled
     await db
@@ -263,13 +275,16 @@ export async function coachCancelGroupLesson(lessonId: string) {
     const lesson = await db.query.booking.findFirst({
       where: and(
         eq(booking.id, lessonId),
-        eq(booking.coachId, session.user.id),
-        eq(booking.isGroupBooking, true)
+        eq(booking.coachId, session.user.id)
       ),
+      with: {
+        privateGroupDetails: true,
+        publicGroupDetails: true,
+      },
     });
 
-    if (!lesson) {
-      return { success: false, error: 'Lesson not found or you are not the coach' };
+    if (!lesson || (lesson.bookingType !== 'private_group' && lesson.bookingType !== 'public_group')) {
+      return { success: false, error: 'Lesson not found or not a group lesson' };
     }
 
     const participants = await db.query.bookingParticipant.findMany({
@@ -280,7 +295,9 @@ export async function coachCancelGroupLesson(lessonId: string) {
     });
 
     const oldApprovalStatus = lesson.approvalStatus;
-    const oldPaymentStatus = lesson.paymentStatus;
+    const oldPaymentStatus = lesson.bookingType === 'private_group' 
+      ? lesson.privateGroupDetails?.paymentStatus 
+      : null; // Public groups don't have booking-level payment status
 
     for (const participant of participants) {
       if (participant.stripePaymentIntentId) {
@@ -310,14 +327,15 @@ export async function coachCancelGroupLesson(lessonId: string) {
       }
     }
 
-    if (lesson.groupType === 'private' && lesson.primaryStripePaymentIntentId && lesson.paymentStatus === 'captured') {
+    // Handle private group main payment
+    if (lesson.bookingType === 'private_group' && lesson.privateGroupDetails?.stripePaymentIntentId && lesson.privateGroupDetails.paymentStatus === 'captured') {
       try {
-        await refundBookingPayment(lesson.primaryStripePaymentIntentId);
+        await refundBookingPayment(lesson.privateGroupDetails.stripePaymentIntentId);
 
         await recordPaymentEvent({
           bookingId: lessonId,
-          stripePaymentIntentId: lesson.primaryStripePaymentIntentId,
-          amountCents: lesson.expectedGrossCents ?? 0,
+          stripePaymentIntentId: lesson.privateGroupDetails.stripePaymentIntentId,
+          amountCents: lesson.privateGroupDetails.totalGrossCents ?? 0,
           status: 'refunded',
         });
       } catch (error) {
@@ -329,12 +347,21 @@ export async function coachCancelGroupLesson(lessonId: string) {
       .update(booking)
       .set({
         approvalStatus: 'cancelled',
-        paymentStatus: 'refunded',
         cancelledBy: session.user.id,
         cancelledAt: new Date(),
         updatedAt: new Date(),
       })
       .where(eq(booking.id, lessonId));
+
+    // Update payment status in detail table
+    if (lesson.bookingType === 'private_group' && lesson.privateGroupDetails) {
+      await db
+        .update(privateGroupBookingDetails)
+        .set({
+          paymentStatus: 'refunded',
+        })
+        .where(eq(privateGroupBookingDetails.bookingId, lessonId));
+    }
 
     await db
       .update(bookingParticipant)
@@ -353,7 +380,7 @@ export async function coachCancelGroupLesson(lessonId: string) {
       reason: 'Coach cancelled lesson',
     });
 
-    if (oldPaymentStatus !== 'refunded') {
+    if (oldPaymentStatus && oldPaymentStatus !== 'refunded') {
       await recordStateTransition({
         bookingId: lessonId,
         field: 'paymentStatus',

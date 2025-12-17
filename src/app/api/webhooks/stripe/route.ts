@@ -1,13 +1,15 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { stripe } from '@/lib/stripe';
 import { db } from '@/lib/db';
-import { coachProfile, idempotencyKey, booking, bookingParticipant } from '@/lib/db/schema';
-import { eq, and, gt, sql } from 'drizzle-orm';
+import { coachProfile, idempotencyKey, booking, bookingParticipant, individualBookingDetails, privateGroupBookingDetails, publicGroupLessonDetails } from '@/lib/db/schema';
+import { eq, and, gt, sql, or } from 'drizzle-orm';
 import Stripe from 'stripe';
 import { stripeWebhookSchema, safeValidateInput } from '@/lib/validations';
 import { revalidatePath } from 'next/cache';
 import { recordPaymentEvent } from '@/lib/payment-audit';
 import { recordStateTransition } from '@/lib/booking-audit';
+import { getPaymentIntentId } from '@/lib/booking-payment-helpers';
+import type { BookingWithDetails } from '@/lib/booking-type-guards';
 
 export async function POST(request: NextRequest) {
   const body = await request.text();
@@ -95,25 +97,53 @@ export async function POST(request: NextRequest) {
         const paymentIntent = event.data.object as Stripe.PaymentIntent;
         console.log(`Payment intent succeeded: ${paymentIntent.id}`);
 
-        const bookingRecord = await db.query.booking.findFirst({
-          where: eq(booking.primaryStripePaymentIntentId, paymentIntent.id),
+        // Find booking by payment intent ID in detail tables
+        const individualDetail = await db.query.individualBookingDetails.findFirst({
+          where: eq(individualBookingDetails.stripePaymentIntentId, paymentIntent.id),
+          with: {
+            booking: true,
+          },
         });
 
-        if (bookingRecord) {
-          const oldPaymentStatus = bookingRecord.paymentStatus;
+        const privateGroupDetail = !individualDetail ? await db.query.privateGroupBookingDetails.findFirst({
+          where: eq(privateGroupBookingDetails.stripePaymentIntentId, paymentIntent.id),
+          with: {
+            booking: true,
+          },
+        }) : null;
 
-          await db
-            .update(booking)
-            .set({
-              paymentStatus: 'captured',
-              updatedAt: new Date(),
-            })
-            .where(eq(booking.id, bookingRecord.id));
+        const bookingRecord = individualDetail?.booking || privateGroupDetail?.booking;
+        const detailRecord = individualDetail || privateGroupDetail;
+
+        if (bookingRecord && detailRecord) {
+          const oldPaymentStatus = (detailRecord as any).paymentStatus;
+
+          // Update payment status in detail table
+          if (individualDetail) {
+            await db
+              .update(individualBookingDetails)
+              .set({
+                paymentStatus: 'captured',
+              })
+              .where(eq(individualBookingDetails.bookingId, bookingRecord.id));
+          } else if (privateGroupDetail) {
+            await db
+              .update(privateGroupBookingDetails)
+              .set({
+                paymentStatus: 'captured',
+              })
+              .where(eq(privateGroupBookingDetails.bookingId, bookingRecord.id));
+          }
+
+          // Get amount from detail record
+          const amountCents = individualDetail 
+            ? individualDetail.clientPaysCents 
+            : privateGroupDetail?.totalGrossCents ?? 0;
 
           await recordPaymentEvent({
             bookingId: bookingRecord.id,
             stripePaymentIntentId: paymentIntent.id,
-            amountCents: bookingRecord.expectedGrossCents ?? 0,
+            amountCents,
             status: 'captured',
           });
 
@@ -152,10 +182,18 @@ export async function POST(request: NextRequest) {
               })
               .where(eq(bookingParticipant.id, participantRecord.id));
 
+            // Update authorized participants count in public group details
+            await db
+              .update(publicGroupLessonDetails)
+              .set({
+                authorizedParticipants: sql`${publicGroupLessonDetails.authorizedParticipants} + 1`,
+              })
+              .where(eq(publicGroupLessonDetails.bookingId, participantRecord.bookingId));
+            
+            // Update booking timestamp
             await db
               .update(booking)
               .set({
-                authorizedParticipants: sql`${booking.authorizedParticipants} + 1`,
                 updatedAt: new Date(),
               })
               .where(eq(booking.id, participantRecord.bookingId));
@@ -199,21 +237,50 @@ export async function POST(request: NextRequest) {
         const paymentIntent = event.data.object as Stripe.PaymentIntent;
         console.log(`Payment intent failed: ${paymentIntent.id}`);
 
-        const bookingRecord = await db.query.booking.findFirst({
-          where: eq(booking.primaryStripePaymentIntentId, paymentIntent.id),
+        // Find booking by payment intent ID in detail tables
+        const individualDetail = await db.query.individualBookingDetails.findFirst({
+          where: eq(individualBookingDetails.stripePaymentIntentId, paymentIntent.id),
+          with: {
+            booking: true,
+          },
         });
+
+        const privateGroupDetail = !individualDetail ? await db.query.privateGroupBookingDetails.findFirst({
+          where: eq(privateGroupBookingDetails.stripePaymentIntentId, paymentIntent.id),
+          with: {
+            booking: true,
+          },
+        }) : null;
+
+        const bookingRecord = individualDetail?.booking || privateGroupDetail?.booking;
 
         if (bookingRecord) {
           await db
             .update(booking)
             .set({
               approvalStatus: 'cancelled',
-              paymentStatus: 'failed',
               cancellationReason: 'Payment failed',
               cancelledAt: new Date(),
               updatedAt: new Date(),
             })
             .where(eq(booking.id, bookingRecord.id));
+
+          // Update payment status in detail table
+          if (individualDetail) {
+            await db
+              .update(individualBookingDetails)
+              .set({
+                paymentStatus: 'failed',
+              })
+              .where(eq(individualBookingDetails.bookingId, bookingRecord.id));
+          } else if (privateGroupDetail) {
+            await db
+              .update(privateGroupBookingDetails)
+              .set({
+                paymentStatus: 'failed',
+              })
+              .where(eq(privateGroupBookingDetails.bookingId, bookingRecord.id));
+          }
 
           console.log(`Booking cancelled due to payment failure: ${bookingRecord.id}`);
         }
@@ -224,19 +291,40 @@ export async function POST(request: NextRequest) {
         const charge = event.data.object as Stripe.Charge;
         console.log(`Charge refunded: ${charge.id}, amount: $${charge.amount_refunded / 100}`);
 
-        // might need to store charge IDs for better refund tracking
-        const bookingRecord = await db.query.booking.findFirst({
-          where: eq(booking.primaryStripePaymentIntentId, charge.payment_intent as string),
+        // Find booking by payment intent ID in detail tables
+        const individualDetail = await db.query.individualBookingDetails.findFirst({
+          where: eq(individualBookingDetails.stripePaymentIntentId, charge.payment_intent as string),
+          with: {
+            booking: true,
+          },
         });
 
+        const privateGroupDetail = !individualDetail ? await db.query.privateGroupBookingDetails.findFirst({
+          where: eq(privateGroupBookingDetails.stripePaymentIntentId, charge.payment_intent as string),
+          with: {
+            booking: true,
+          },
+        }) : null;
+
+        const bookingRecord = individualDetail?.booking || privateGroupDetail?.booking;
+
         if (bookingRecord) {
-          await db
-            .update(booking)
-            .set({
-              paymentStatus: 'refunded',
-              updatedAt: new Date(),
-            })
-            .where(eq(booking.id, bookingRecord.id));
+          // Update payment status in detail table
+          if (individualDetail) {
+            await db
+              .update(individualBookingDetails)
+              .set({
+                paymentStatus: 'refunded',
+              })
+              .where(eq(individualBookingDetails.bookingId, bookingRecord.id));
+          } else if (privateGroupDetail) {
+            await db
+              .update(privateGroupBookingDetails)
+              .set({
+                paymentStatus: 'refunded',
+              })
+              .where(eq(privateGroupBookingDetails.bookingId, bookingRecord.id));
+          }
 
           console.log(`Refund recorded for booking: ${bookingRecord.id}`);
         }
@@ -247,17 +335,19 @@ export async function POST(request: NextRequest) {
         const transfer = event.data.object as Stripe.Transfer;
         console.log(`Transfer created: ${transfer.id}, amount: $${transfer.amount / 100}`);
 
-        const bookingRecord = await db.query.booking.findFirst({
-          where: and(
-            eq(booking.fulfillmentStatus, 'completed'),
-            eq(booking.primaryStripePaymentIntentId, transfer.source_transaction as string)
-          ),
+        // Find booking by payment intent ID in detail tables
+        const individualDetail = await db.query.individualBookingDetails.findFirst({
+          where: eq(individualBookingDetails.stripePaymentIntentId, transfer.source_transaction as string),
           with: {
-            coach: {
+            booking: {
               with: {
-                coachProfile: {
-                  columns: {
-                    stripeAccountId: true,
+                coach: {
+                  with: {
+                    coachProfile: {
+                      columns: {
+                        stripeAccountId: true,
+                      },
+                    },
                   },
                 },
               },
@@ -265,14 +355,44 @@ export async function POST(request: NextRequest) {
           },
         });
 
-        if (bookingRecord?.coach?.coachProfile?.stripeAccountId === transfer.destination) {
-          await db
-            .update(booking)
-            .set({
-              stripeTransferId: transfer.id,
-              updatedAt: new Date(),
-            })
-            .where(eq(booking.id, bookingRecord.id));
+        const privateGroupDetail = !individualDetail ? await db.query.privateGroupBookingDetails.findFirst({
+          where: eq(privateGroupBookingDetails.stripePaymentIntentId, transfer.source_transaction as string),
+          with: {
+            booking: {
+              with: {
+                coach: {
+                  with: {
+                    coachProfile: {
+                      columns: {
+                        stripeAccountId: true,
+                      },
+                    },
+                  },
+                },
+              },
+            },
+          },
+        }) : null;
+
+        const bookingRecord = individualDetail?.booking || privateGroupDetail?.booking;
+
+        if (bookingRecord && bookingRecord.fulfillmentStatus === 'completed' && bookingRecord.coach?.coachProfile?.stripeAccountId === transfer.destination) {
+          // Update transfer ID in detail table
+          if (individualDetail) {
+            await db
+              .update(individualBookingDetails)
+              .set({
+                stripeTransferId: transfer.id,
+              })
+              .where(eq(individualBookingDetails.bookingId, bookingRecord.id));
+          } else if (privateGroupDetail) {
+            await db
+              .update(privateGroupBookingDetails)
+              .set({
+                stripeTransferId: transfer.id,
+              })
+              .where(eq(privateGroupBookingDetails.bookingId, bookingRecord.id));
+          }
 
           console.log(`Transfer recorded for booking: ${bookingRecord.id}`);
         }
@@ -283,21 +403,50 @@ export async function POST(request: NextRequest) {
         const transfer = event.data.object as Stripe.Transfer;
         console.log(`Transfer reversed: ${transfer.id}, amount: $${transfer.amount_reversed / 100}`);
 
-        const bookingRecord = await db.query.booking.findFirst({
-          where: eq(booking.stripeTransferId, transfer.id),
+        // Find booking by transfer ID in detail tables
+        const individualDetail = await db.query.individualBookingDetails.findFirst({
+          where: eq(individualBookingDetails.stripeTransferId, transfer.id),
+          with: {
+            booking: true,
+          },
         });
+
+        const privateGroupDetail = !individualDetail ? await db.query.privateGroupBookingDetails.findFirst({
+          where: eq(privateGroupBookingDetails.stripeTransferId, transfer.id),
+          with: {
+            booking: true,
+          },
+        }) : null;
+
+        const bookingRecord = individualDetail?.booking || privateGroupDetail?.booking;
 
         if (bookingRecord) {
           await db
             .update(booking)
             .set({
               approvalStatus: 'cancelled',
-              paymentStatus: 'refunded',
               fulfillmentStatus: 'disputed',
               cancellationReason: 'Transfer reversed - refund processed',
               updatedAt: new Date(),
             })
             .where(eq(booking.id, bookingRecord.id));
+
+          // Update payment status in detail table
+          if (individualDetail) {
+            await db
+              .update(individualBookingDetails)
+              .set({
+                paymentStatus: 'refunded',
+              })
+              .where(eq(individualBookingDetails.bookingId, bookingRecord.id));
+          } else if (privateGroupDetail) {
+            await db
+              .update(privateGroupBookingDetails)
+              .set({
+                paymentStatus: 'refunded',
+              })
+              .where(eq(privateGroupBookingDetails.bookingId, bookingRecord.id));
+          }
 
           console.log(`Transfer reversal recorded for booking: ${bookingRecord.id}`);
         }

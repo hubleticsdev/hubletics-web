@@ -2,7 +2,7 @@
 
 import { getSession } from '@/lib/auth/session';
 import { db } from '@/lib/db';
-import { booking, recurringGroupLesson, coachProfile } from '@/lib/db/schema';
+import { booking, publicGroupLessonDetails, recurringGroupLesson, coachProfile } from '@/lib/db/schema';
 import { eq, and, gte, lte, or } from 'drizzle-orm';
 import { revalidatePath } from 'next/cache';
 import { calculateGroupTotals } from '@/lib/pricing';
@@ -88,7 +88,7 @@ export async function createPublicGroupLesson(input: PublicLessonInput) {
         or(
           eq(booking.approvalStatus, 'pending_review'),
           eq(booking.approvalStatus, 'accepted'),
-          eq(booking.capacityStatus, 'open')
+          // capacityStatus is in publicGroupDetails
         )
       ),
     });
@@ -101,32 +101,30 @@ export async function createPublicGroupLesson(input: PublicLessonInput) {
     const totals = calculateGroupTotals(input.pricePerPerson, input.maxParticipants, userPlatformFee);
 
     const bookingId = crypto.randomUUID();
-    
+
+    // Create base booking record (auto-approved since coach created it)
     await db.insert(booking).values({
       id: bookingId,
-      clientId: session.user.id,
       coachId: session.user.id,
       scheduledStartAt: input.scheduledStartAt,
       scheduledEndAt: input.scheduledEndAt,
       duration: input.duration,
       location: input.location,
-      clientMessage: input.description || null,
-      coachRate: input.pricePerPerson.toString(),
-      pricePerPerson: input.pricePerPerson.toString(),
-      expectedGrossCents: totals.totalGrossCents,
-      platformFeeCents: totals.platformFeeCents,
-      stripeFeeCents: totals.stripeFeeCents,
-      coachPayoutCents: totals.coachPayoutCents,
-      approvalStatus: 'accepted',
-      paymentStatus: 'not_required',
+      bookingType: 'public_group',
+      approvalStatus: 'accepted', // Auto-approved since coach created it
       fulfillmentStatus: 'scheduled',
-      capacityStatus: 'open',
-      isGroupBooking: true,
-      groupType: 'public',
-      organizerId: session.user.id,
+    });
+
+    // Create public group lesson details
+    await db.insert(publicGroupLessonDetails).values({
+      bookingId,
       maxParticipants: input.maxParticipants,
       minParticipants: input.minParticipants,
+      pricePerPerson: input.pricePerPerson.toString(),
+      capacityStatus: 'open',
       currentParticipants: 0,
+      authorizedParticipants: 0,
+      capturedParticipants: 0,
     });
 
     console.log(`Public group lesson created: ${bookingId}`);

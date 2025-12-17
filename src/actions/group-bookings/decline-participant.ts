@@ -23,7 +23,8 @@ export async function declineParticipant(bookingId: string, participantId: strin
     const bookingRecord = await db.query.booking.findFirst({
       where: and(
         eq(booking.id, bookingId),
-        eq(booking.coachId, session.user.id)
+        eq(booking.coachId, session.user.id),
+        eq(booking.bookingType, 'public_group')
       ),
       with: {
         coach: {
@@ -35,11 +36,7 @@ export async function declineParticipant(bookingId: string, participantId: strin
       },
     });
 
-    if (!bookingRecord) {
-      return { success: false, error: 'Booking not found or unauthorized' };
-    }
-
-    if (!bookingRecord.isGroupBooking || bookingRecord.groupType !== 'public') {
+    if (!bookingRecord || bookingRecord.bookingType !== 'public_group') {
       return { success: false, error: 'Not a public group lesson' };
     }
 

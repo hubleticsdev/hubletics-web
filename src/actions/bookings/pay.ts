@@ -2,7 +2,7 @@
 
 import { getSession } from '@/lib/auth/session';
 import { db } from '@/lib/db';
-import { booking, coachProfile, bookingParticipant } from '@/lib/db/schema';
+import { booking, individualBookingDetails, privateGroupBookingDetails, coachProfile, bookingParticipant } from '@/lib/db/schema';
 import { eq, and } from 'drizzle-orm';
 import { createBookingPaymentIntent, captureBookingPayment } from '@/lib/stripe';
 import { validateInput, uuidSchema } from '@/lib/validations';
@@ -22,16 +22,20 @@ export async function createPaymentForBooking(bookingId: string) {
     const bookingRecord = await db.query.booking.findFirst({
       where: and(
         eq(booking.id, validatedBookingId),
-        eq(booking.clientId, session.user.id),
-        eq(booking.paymentStatus, 'awaiting_client_payment')
+        eq(booking.bookingType, 'individual'),
+        eq(individualBookingDetails.clientId, session.user.id),
+        eq(individualBookingDetails.paymentStatus, 'awaiting_client_payment')
       ),
+      with: {
+        individualDetails: true,
+      },
     });
 
-    if (!bookingRecord) {
+    if (!bookingRecord || !bookingRecord.individualDetails) {
       return { success: false, error: 'Booking not found or not awaiting payment' };
     }
 
-    if (bookingRecord.paymentDueAt && new Date() > new Date(bookingRecord.paymentDueAt)) {
+    if (bookingRecord.individualDetails.paymentDueAt && new Date() > new Date(bookingRecord.individualDetails.paymentDueAt)) {
       return { success: false, error: 'Payment deadline has passed. This booking will be cancelled.' };
     }
 
@@ -47,7 +51,7 @@ export async function createPaymentForBooking(bookingId: string) {
     }
 
     const paymentIntent = await createBookingPaymentIntent(
-      bookingRecord.expectedGrossCents ? bookingRecord.expectedGrossCents / 100 : 0,
+      bookingRecord.individualDetails.clientPaysCents / 100,
       coach.stripeAccountId,
       {
         bookingId: bookingRecord.id,
@@ -57,18 +61,17 @@ export async function createPaymentForBooking(bookingId: string) {
     );
 
     await db
-      .update(booking)
+      .update(individualBookingDetails)
       .set({
-        primaryStripePaymentIntentId: paymentIntent.id,
-        updatedAt: new Date(),
+        stripePaymentIntentId: paymentIntent.id,
       })
-      .where(eq(booking.id, validatedBookingId));
+      .where(eq(individualBookingDetails.bookingId, validatedBookingId));
 
     // Record payment audit event
     await recordPaymentEvent({
       bookingId: bookingRecord.id,
       stripePaymentIntentId: paymentIntent.id,
-      amountCents: bookingRecord.expectedGrossCents ?? 0,
+      amountCents: bookingRecord.individualDetails.clientPaysCents,
       status: 'created',
       captureMethod: 'manual',
     });
@@ -86,6 +89,89 @@ export async function createPaymentForBooking(bookingId: string) {
   }
 }
 
+export async function createPaymentForPrivateGroupBooking(bookingId: string) {
+  try {
+    const validatedBookingId = validateInput(uuidSchema, bookingId);
+
+    const session = await getSession();
+
+    if (!session || session.user.role !== 'client') {
+      return { success: false, error: 'Unauthorized' };
+    }
+
+    const bookingRecord = await db.query.booking.findFirst({
+      where: and(
+        eq(booking.id, validatedBookingId),
+        eq(booking.bookingType, 'private_group'),
+        eq(privateGroupBookingDetails.organizerId, session.user.id),
+        eq(privateGroupBookingDetails.paymentStatus, 'awaiting_client_payment')
+      ),
+      with: {
+        coach: {
+          with: {
+            coachProfile: {
+              columns: {
+                stripeAccountId: true,
+              },
+            },
+          },
+        },
+        privateGroupDetails: true,
+      },
+    });
+
+    if (!bookingRecord || !bookingRecord.privateGroupDetails) {
+      return { success: false, error: 'Booking not found or not awaiting payment' };
+    }
+
+    if (bookingRecord.privateGroupDetails.paymentDueAt && new Date() > new Date(bookingRecord.privateGroupDetails.paymentDueAt)) {
+      return { success: false, error: 'Payment deadline has passed. This booking will be cancelled.' };
+    }
+
+    const coachStripeAccountId = bookingRecord.coach.coachProfile?.stripeAccountId;
+    if (!coachStripeAccountId) {
+      return { success: false, error: 'Coach payment setup incomplete' };
+    }
+
+    const paymentIntent = await createBookingPaymentIntent(
+      bookingRecord.privateGroupDetails.totalGrossCents / 100,
+      coachStripeAccountId,
+      {
+        bookingId: bookingRecord.id,
+        clientId: session.user.id,
+        coachId: bookingRecord.coachId,
+      }
+    );
+
+    await db
+      .update(privateGroupBookingDetails)
+      .set({
+        stripePaymentIntentId: paymentIntent.id,
+      })
+      .where(eq(privateGroupBookingDetails.bookingId, validatedBookingId));
+
+    // Record payment audit event
+    await recordPaymentEvent({
+      bookingId: bookingRecord.id,
+      stripePaymentIntentId: paymentIntent.id,
+      amountCents: bookingRecord.privateGroupDetails.totalGrossCents,
+      status: 'created',
+      captureMethod: 'manual',
+    });
+
+    console.log(`PaymentIntent created for private group booking ${validatedBookingId}: ${paymentIntent.id}`);
+
+    return {
+      success: true,
+      clientSecret: paymentIntent.client_secret,
+      paymentIntentId: paymentIntent.id,
+    };
+  } catch (error) {
+    console.error('Create private group payment error:', error);
+    return { success: false, error: 'Failed to create payment' };
+  }
+}
+
 export async function confirmBookingPayment(bookingId: string) {
   try {
     const validatedBookingId = validateInput(uuidSchema, bookingId);
@@ -99,40 +185,48 @@ export async function confirmBookingPayment(bookingId: string) {
     const bookingRecord = await db.query.booking.findFirst({
       where: and(
         eq(booking.id, validatedBookingId),
-        eq(booking.clientId, session.user.id),
-        eq(booking.paymentStatus, 'awaiting_client_payment')
+        eq(booking.bookingType, 'individual'),
+        eq(individualBookingDetails.clientId, session.user.id),
+        eq(individualBookingDetails.paymentStatus, 'awaiting_client_payment')
       ),
+      with: {
+        individualDetails: true,
+      },
     });
 
-    if (!bookingRecord) {
+    if (!bookingRecord || !bookingRecord.individualDetails) {
       return { success: false, error: 'Booking not found' };
     }
 
-    if (!bookingRecord.primaryStripePaymentIntentId) {
+    if (!bookingRecord.individualDetails.stripePaymentIntentId) {
       return { success: false, error: 'No payment intent found' };
     }
 
-    await captureBookingPayment(bookingRecord.primaryStripePaymentIntentId);
+    await captureBookingPayment(bookingRecord.individualDetails.stripePaymentIntentId);
 
-    const oldPaymentStatus = bookingRecord.paymentStatus;
+    const oldPaymentStatus = bookingRecord.individualDetails.paymentStatus;
 
     await db
       .update(booking)
       .set({
-        paymentStatus: 'captured',
-        primaryStripePaymentIntentId: bookingRecord.primaryStripePaymentIntentId,
-        updatedAt: new Date(),
-        paymentDueAt: null,
         lockedUntil: null,
         fulfillmentStatus: 'scheduled',
       })
       .where(eq(booking.id, validatedBookingId));
 
+    await db
+      .update(individualBookingDetails)
+      .set({
+        paymentStatus: 'captured',
+        paymentDueAt: null,
+      })
+      .where(eq(individualBookingDetails.bookingId, validatedBookingId));
+
     // Record payment and state audit events
     await recordPaymentEvent({
       bookingId: bookingRecord.id,
-      stripePaymentIntentId: bookingRecord.primaryStripePaymentIntentId,
-      amountCents: bookingRecord.expectedGrossCents ?? 0,
+      stripePaymentIntentId: bookingRecord.individualDetails.stripePaymentIntentId,
+      amountCents: bookingRecord.individualDetails.clientPaysCents,
       status: 'captured',
     });
 
@@ -144,20 +238,88 @@ export async function confirmBookingPayment(bookingId: string) {
       changedBy: session.user.id,
     });
 
-    if (bookingRecord.isGroupBooking && bookingRecord.groupType === 'private') {
-      await db
-        .update(bookingParticipant)
-        .set({
-          paymentStatus: 'captured',
-          status: 'accepted',
-          capturedAt: new Date(),
-        })
-        .where(eq(bookingParticipant.bookingId, validatedBookingId));
-      
-      console.log(`Payment confirmed for private group booking ${validatedBookingId} - all participants marked as paid`);
-    } else {
-      console.log(`Payment confirmed for booking ${validatedBookingId}`);
+    console.log(`Payment confirmed for individual booking ${validatedBookingId}`);
+  } catch (error) {
+    console.error('Confirm payment error:', error);
+    return { success: false, error: 'Failed to confirm payment' };
+  }
+}
+
+export async function confirmPrivateGroupBookingPayment(bookingId: string) {
+  try {
+    const validatedBookingId = validateInput(uuidSchema, bookingId);
+
+    const session = await getSession();
+
+    if (!session || session.user.role !== 'client') {
+      return { success: false, error: 'Unauthorized' };
     }
+
+    const bookingRecord = await db.query.booking.findFirst({
+      where: and(
+        eq(booking.id, validatedBookingId),
+        eq(booking.bookingType, 'private_group'),
+        eq(privateGroupBookingDetails.organizerId, session.user.id),
+        eq(privateGroupBookingDetails.paymentStatus, 'awaiting_client_payment')
+      ),
+      with: {
+        privateGroupDetails: true,
+      },
+    });
+
+    if (!bookingRecord || !bookingRecord.privateGroupDetails) {
+      return { success: false, error: 'Booking not found' };
+    }
+
+    if (!bookingRecord.privateGroupDetails.stripePaymentIntentId) {
+      return { success: false, error: 'No payment intent found' };
+    }
+
+    await captureBookingPayment(bookingRecord.privateGroupDetails.stripePaymentIntentId);
+
+    const oldPaymentStatus = bookingRecord.privateGroupDetails.paymentStatus;
+
+    await db
+      .update(booking)
+      .set({
+        lockedUntil: null,
+        fulfillmentStatus: 'scheduled',
+      })
+      .where(eq(booking.id, validatedBookingId));
+
+    await db
+      .update(privateGroupBookingDetails)
+      .set({
+        paymentStatus: 'captured',
+        paymentDueAt: null,
+      })
+      .where(eq(privateGroupBookingDetails.bookingId, validatedBookingId));
+
+    // Update all participant statuses to 'accepted' (inherited from organizer's payment)
+    await db.update(bookingParticipant)
+      .set({
+        status: 'accepted',
+        paymentStatus: 'captured',
+      })
+      .where(eq(bookingParticipant.bookingId, validatedBookingId));
+
+    // Record payment and state audit events
+    await recordPaymentEvent({
+      bookingId: bookingRecord.id,
+      stripePaymentIntentId: bookingRecord.privateGroupDetails.stripePaymentIntentId,
+      amountCents: bookingRecord.privateGroupDetails.totalGrossCents,
+      status: 'captured',
+    });
+
+    await recordStateTransition({
+      bookingId: bookingRecord.id,
+      field: 'paymentStatus',
+      oldStatus: oldPaymentStatus,
+      newStatus: 'captured',
+      changedBy: session.user.id,
+    });
+
+    console.log(`Payment confirmed for private group booking ${validatedBookingId} - all participants marked as paid`);
 
     return { success: true };
   } catch (error) {

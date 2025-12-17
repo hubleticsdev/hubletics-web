@@ -2,7 +2,7 @@
 
 import { getSession } from '@/lib/auth/session';
 import { db } from '@/lib/db';
-import { review, booking, coachProfile } from '@/lib/db/schema';
+import { review, booking, coachProfile, individualBookingDetails, privateGroupBookingDetails, bookingParticipant } from '@/lib/db/schema';
 import { eq, and, sql } from 'drizzle-orm';
 import { z } from 'zod';
 import { validateInput } from '@/lib/validations';
@@ -31,13 +31,37 @@ export async function createReview(input: CreateReviewInput) {
     const bookingRecord = await db.query.booking.findFirst({
       where: and(
         eq(booking.id, validatedInput.bookingId),
-        eq(booking.clientId, session.user.id),
         eq(booking.fulfillmentStatus, 'completed')
       ),
+      with: {
+        individualDetails: true,
+        privateGroupDetails: true,
+      },
     });
 
     if (!bookingRecord) {
       return { success: false, error: 'Booking not found or not completed' };
+    }
+
+    // Check if user is the client/organizer/participant
+    const isClient = 
+      (bookingRecord.bookingType === 'individual' && bookingRecord.individualDetails?.clientId === session.user.id) ||
+      (bookingRecord.bookingType === 'private_group' && bookingRecord.privateGroupDetails?.organizerId === session.user.id);
+    
+    // For public groups, check if user is a participant
+    let isParticipant = false;
+    if (bookingRecord.bookingType === 'public_group') {
+      const participant = await db.query.bookingParticipant.findFirst({
+        where: and(
+          eq(bookingParticipant.bookingId, validatedInput.bookingId),
+          eq(bookingParticipant.userId, session.user.id)
+        ),
+      });
+      isParticipant = !!participant;
+    }
+
+    if (!isClient && !isParticipant) {
+      return { success: false, error: 'Unauthorized - you can only review bookings you participated in' };
     }
 
     const existingReview = await db.query.review.findFirst({

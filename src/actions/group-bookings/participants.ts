@@ -15,6 +15,9 @@ export async function getBookingParticipants(bookingId: string) {
 
     const bookingRecord = await db.query.booking.findFirst({
       where: eq(booking.id, bookingId),
+      with: {
+        privateGroupDetails: true,
+      },
     });
 
     if (!bookingRecord) {
@@ -62,7 +65,7 @@ export async function getBookingParticipants(bookingId: string) {
     return {
       success: true,
       participants: formattedParticipants,
-      isOrganizer: bookingRecord.organizerId === session.user.id,
+      isOrganizer: bookingRecord.bookingType === 'private_group' && bookingRecord.privateGroupDetails?.organizerId === session.user.id,
       isCoach,
     };
   } catch (error) {

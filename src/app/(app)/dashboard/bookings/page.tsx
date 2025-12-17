@@ -1,10 +1,7 @@
 import { getSession } from '@/lib/auth/session';
 import { redirect } from 'next/navigation';
-import { db } from '@/lib/db';
-import { booking } from '@/lib/db/schema';
-import { eq, desc } from 'drizzle-orm';
+import { getMyBookings } from '@/actions/bookings/queries';
 import { BookingsList } from '@/components/bookings/bookings-list';
-import { deriveUiBookingStatus } from '@/lib/booking-status';
 
 export default async function BookingsPage() {
   const session = await getSession();
@@ -12,58 +9,46 @@ export default async function BookingsPage() {
     redirect('/login');
   }
 
-  const bookings =
-    session.user.role === 'coach'
-      ? await db.query.booking.findMany({
-          where: eq(booking.coachId, session.user.id),
-          with: {
-            client: {
-              columns: {
-                id: true,
-                name: true,
-                email: true,
-                image: true,
-              },
-            },
-            review: {
-              columns: {
-                id: true,
-                rating: true,
-              },
-            },
-          },
-          orderBy: [desc(booking.scheduledStartAt)],
-        })
-      : await db.query.booking.findMany({
-          where: eq(booking.clientId, session.user.id),
-          with: {
-            coach: {
-              columns: {
-                id: true,
-                name: true,
-                email: true,
-                image: true,
-              },
-            },
-            review: {
-              columns: {
-                id: true,
-                rating: true,
-              },
-            },
-          },
-          orderBy: [desc(booking.scheduledStartAt)],
-        });
-
-  const bookingsWithStatus = bookings.map((b) => ({
-    ...b,
-    status: deriveUiBookingStatus({
-      approvalStatus: b.approvalStatus,
-      paymentStatus: b.paymentStatus,
-      fulfillmentStatus: b.fulfillmentStatus,
-      capacityStatus: b.capacityStatus,
-    }),
-  }));
+  const { bookings: bookingsData } = await getMyBookings();
+  
+  // getMyBookings already returns bookings with status, but we need to flatten detail fields
+  // for backward compatibility with BookingsList component
+  const bookingsWithStatus = bookingsData.map((b: any) => {
+    const flattened: any = {
+      ...b,
+      // Flatten detail table fields
+      expectedGrossCents: b.bookingType === 'individual' 
+        ? b.individualDetails?.clientPaysCents 
+        : b.bookingType === 'private_group'
+        ? b.privateGroupDetails?.totalGrossCents
+        : null,
+      coachPayoutCents: b.bookingType === 'individual'
+        ? b.individualDetails?.coachPayoutCents
+        : b.bookingType === 'private_group'
+        ? b.privateGroupDetails?.coachPayoutCents
+        : null,
+      platformFeeCents: b.bookingType === 'individual'
+        ? b.individualDetails?.platformFeeCents
+        : b.bookingType === 'private_group'
+        ? b.privateGroupDetails?.platformFeeCents
+        : null,
+      clientMessage: b.bookingType === 'individual'
+        ? b.individualDetails?.clientMessage
+        : b.bookingType === 'private_group'
+        ? b.privateGroupDetails?.clientMessage
+        : b.bookingType === 'public_group'
+        ? b.publicGroupDetails?.clientMessage
+        : null,
+      isGroupBooking: b.bookingType === 'private_group' || b.bookingType === 'public_group',
+      groupType: b.bookingType === 'private_group' ? 'private' : b.bookingType === 'public_group' ? 'public' : null,
+      maxParticipants: b.bookingType === 'public_group' ? b.publicGroupDetails?.maxParticipants : null,
+      currentParticipants: b.bookingType === 'public_group' ? b.publicGroupDetails?.currentParticipants : null,
+      pricePerPerson: b.bookingType === 'public_group' ? b.publicGroupDetails?.pricePerPerson : b.bookingType === 'private_group' ? b.privateGroupDetails?.pricePerPerson : null,
+      organizerId: b.bookingType === 'private_group' ? b.privateGroupDetails?.organizerId : null,
+      client: b.bookingType === 'individual' ? b.individualDetails?.client : b.bookingType === 'private_group' ? b.privateGroupDetails?.organizer : null,
+    };
+    return flattened;
+  });
 
   return (
     <div className="min-h-screen bg-gray-50 pt-20">

@@ -2,7 +2,7 @@
 
 import { getSession } from '@/lib/auth/session';
 import { db } from '@/lib/db';
-import { booking, bookingParticipant, coachProfile, user } from '@/lib/db/schema';
+import { booking, bookingParticipant, coachProfile, user, publicGroupLessonDetails } from '@/lib/db/schema';
 import { eq, and } from 'drizzle-orm';
 import { transferToCoach } from '@/lib/stripe';
 import { sendEmail } from '@/lib/email/resend';
@@ -25,8 +25,7 @@ export async function completePublicLesson(bookingId: string) {
       where: and(
         eq(booking.id, bookingId),
         eq(booking.coachId, session.user.id),
-        eq(booking.isGroupBooking, true),
-        eq(booking.groupType, 'public')
+        eq(booking.bookingType, 'public_group')
       ),
       with: {
         coach: {
@@ -122,11 +121,17 @@ export async function completePublicLesson(bookingId: string) {
       .set({
         fulfillmentStatus: 'completed',
         coachConfirmedAt: new Date(),
-        stripeTransferId: transfer.id,
-        coachPayoutCents,
         updatedAt: new Date(),
       })
       .where(eq(booking.id, bookingId));
+
+    // Update public group lesson details with transfer info
+    await db
+      .update(publicGroupLessonDetails)
+      .set({
+        stripeTransferId: transfer.id,
+      })
+      .where(eq(publicGroupLessonDetails.bookingId, bookingId));
 
     // Update all captured participants to completed
     await db

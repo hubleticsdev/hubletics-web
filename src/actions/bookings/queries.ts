@@ -2,20 +2,11 @@
 
 import { getSession } from '@/lib/auth/session';
 import { db } from '@/lib/db';
-import { booking, bookingParticipant } from '@/lib/db/schema';
+import { booking, individualBookingDetails, privateGroupBookingDetails, publicGroupLessonDetails, bookingParticipant } from '@/lib/db/schema';
 import { eq, and, or, gte, gt, inArray } from 'drizzle-orm';
-import { deriveUiBookingStatus, UiBookingStatus } from '@/lib/booking-status';
-
-type BookingRow = typeof booking.$inferSelect;
-
-function mapBookingStatus(b: BookingRow): UiBookingStatus {
-  return deriveUiBookingStatus({
-    approvalStatus: b.approvalStatus,
-    paymentStatus: b.paymentStatus,
-    fulfillmentStatus: b.fulfillmentStatus,
-    capacityStatus: b.capacityStatus,
-  });
-}
+import { deriveUiBookingStatusFromBooking, UiBookingStatus } from '@/lib/booking-status';
+import type { BookingWithDetails } from '@/lib/booking-type-guards';
+import { isIndividualBooking, isPrivateGroupBooking, isPublicGroupBooking } from '@/lib/booking-type-guards';
 
 /**
  * Get bookings for the current user
@@ -30,18 +21,16 @@ export async function getMyBookings(
       return { success: false, error: 'Unauthorized', bookings: [] };
     }
 
-    const conditions = [
-      or(
-        eq(booking.clientId, session.user.id),
-        eq(booking.coachId, session.user.id)
-      ),
-    ];
+    // Support all booking types
+    const conditions = [];
 
+    // Add user-specific filters
+    if (session.user.role === 'coach') {
+      conditions.push(eq(booking.coachId, session.user.id));
+    }
     if (status) {
       if (status === 'awaiting_coach') {
         conditions.push(eq(booking.approvalStatus, 'pending_review'));
-      } else if (status === 'awaiting_payment') {
-        conditions.push(eq(booking.paymentStatus, 'awaiting_client_payment'));
       } else if (status === 'confirmed') {
         conditions.push(eq(booking.approvalStatus, 'accepted'));
       } else if (status === 'declined') {
@@ -52,22 +41,13 @@ export async function getMyBookings(
         conditions.push(eq(booking.fulfillmentStatus, 'completed'));
       } else if (status === 'disputed') {
         conditions.push(eq(booking.fulfillmentStatus, 'disputed'));
-      } else if (status === 'open') {
-        conditions.push(eq(booking.capacityStatus, 'open'));
       }
+      // 'awaiting_payment' and 'open' will be filtered after loading details
     }
 
-    const bookings = await db.query.booking.findMany({
+    let bookings = await db.query.booking.findMany({
       where: and(...conditions),
       with: {
-        client: {
-          columns: {
-            id: true,
-            name: true,
-            email: true,
-            image: true,
-          },
-        },
         coach: {
           columns: {
             id: true,
@@ -76,19 +56,92 @@ export async function getMyBookings(
             image: true,
           },
         },
+        individualDetails: {
+          with: {
+            client: {
+              columns: {
+                id: true,
+                name: true,
+                email: true,
+                image: true,
+              },
+            },
+          },
+        },
+        privateGroupDetails: {
+          with: {
+            organizer: {
+              columns: {
+                id: true,
+                name: true,
+                email: true,
+                image: true,
+              },
+            },
+          },
+        },
+        publicGroupDetails: true,
       },
       orderBy: (bookings, { desc }) => [desc(bookings.createdAt)],
     });
 
-    const groupBookingIds = bookings.filter(b => b.isGroupBooking).map(b => b.id);
+    // Filter for clients
+    if (session.user.role === 'client') {
+      // Get public group bookings where user is a participant
+      const publicGroupBookingIds = bookings
+        .filter(b => b.bookingType === 'public_group')
+        .map(b => b.id);
+      
+      const userParticipantBookings = publicGroupBookingIds.length > 0
+        ? await db.query.bookingParticipant.findMany({
+            where: and(
+              inArray(bookingParticipant.bookingId, publicGroupBookingIds),
+              eq(bookingParticipant.userId, session.user.id)
+            ),
+            columns: { bookingId: true },
+          })
+        : [];
+      
+      const userPublicGroupIds = new Set(userParticipantBookings.map(p => p.bookingId));
+      
+      bookings = bookings.filter(booking => {
+        if (booking.bookingType === 'individual') {
+          return booking.individualDetails?.clientId === session.user.id;
+        } else if (booking.bookingType === 'private_group') {
+          return booking.privateGroupDetails?.organizerId === session.user.id;
+        } else if (booking.bookingType === 'public_group') {
+          return userPublicGroupIds.has(booking.id);
+        }
+        return false;
+      });
+    }
+    
+    // Apply status filtering after loading details (for statuses that depend on detail tables)
+    if (status === 'awaiting_payment') {
+      bookings = bookings.filter(booking => {
+        const paymentStatus = booking.bookingType === 'individual'
+          ? booking.individualDetails?.paymentStatus
+          : booking.bookingType === 'private_group'
+          ? booking.privateGroupDetails?.paymentStatus
+          : null;
+        return paymentStatus === 'awaiting_client_payment';
+      });
+    } else if (status === 'open') {
+      bookings = bookings.filter(booking => {
+        return booking.bookingType === 'public_group' 
+          && booking.publicGroupDetails?.capacityStatus === 'open';
+      });
+    }
+
+    // Count participants for group bookings
+    const groupBookingIds = bookings
+      .filter(b => b.bookingType === 'private_group' || b.bookingType === 'public_group')
+      .map(b => b.id);
     const participantCounts: Record<string, number> = {};
 
     if (groupBookingIds.length > 0) {
       const participants = await db.query.bookingParticipant.findMany({
-        where: and(
-          eq(bookingParticipant.paymentStatus, 'requires_payment_method'),
-          inArray(bookingParticipant.bookingId, groupBookingIds)
-        ),
+        where: inArray(bookingParticipant.bookingId, groupBookingIds),
         columns: {
           bookingId: true,
         },
@@ -101,8 +154,10 @@ export async function getMyBookings(
 
     const bookingsWithCounts = bookings.map(b => ({
       ...b,
-      status: mapBookingStatus(b),
-      pendingParticipantsCount: b.isGroupBooking ? (participantCounts[b.id] || 0) : undefined,
+      status: deriveUiBookingStatusFromBooking(b as BookingWithDetails),
+      pendingParticipantsCount: (b.bookingType === 'private_group' || b.bookingType === 'public_group')
+        ? (participantCounts[b.id] || 0)
+        : undefined,
     }));
 
     return { success: true, bookings: bookingsWithCounts };
@@ -123,43 +178,59 @@ export async function getPendingBookingRequests() {
       return { success: false, error: 'Unauthorized', bookings: [] };
     }
 
-    // Get individual pending bookings
-    const individualBookings = await db.query.booking.findMany({
+    // Get all pending booking requests for this coach
+    const pendingBookings = await db.query.booking.findMany({
       where: and(
         eq(booking.coachId, session.user.id),
-        eq(booking.approvalStatus, 'pending_review'),
-        eq(booking.isGroupBooking, false)
+        eq(booking.approvalStatus, 'pending_review')
       ),
       with: {
-        client: {
-          columns: {
-            id: true,
-            name: true,
-            email: true,
-            image: true,
+        individualDetails: {
+          with: {
+            client: {
+              columns: {
+                id: true,
+                name: true,
+                email: true,
+                image: true,
+              },
+            },
+          },
+        },
+        privateGroupDetails: {
+          with: {
+            organizer: {
+              columns: {
+                id: true,
+                name: true,
+                email: true,
+                image: true,
+              },
+            },
           },
         },
       },
       orderBy: (bookings, { asc }) => [asc(bookings.scheduledStartAt)],
     });
 
-    // Get group bookings
-    const groupBookingsBase = await db.query.booking.findMany({
+    // Get public group lesson participant requests
+    const publicGroupBookings = await db.query.booking.findMany({
       where: and(
         eq(booking.coachId, session.user.id),
-        eq(booking.isGroupBooking, true),
-        eq(booking.groupType, 'public'),
-        eq(booking.capacityStatus, 'open')
+        eq(booking.bookingType, 'public_group'),
+        eq(booking.approvalStatus, 'accepted')
       ),
+      with: {
+        publicGroupDetails: true,
+      },
       orderBy: (bookings, { asc }) => [asc(bookings.scheduledStartAt)],
     });
 
-    // Get pending and paid participants for these group bookings
-    // Pending = payment not completed, Paid = payment completed but coach hasn't accepted yet
-    const groupBookingIds = groupBookingsBase.map(b => b.id);
-    const participants = groupBookingIds.length > 0 ? await db.query.bookingParticipant.findMany({
+    // Get pending participants for public group bookings
+    const publicGroupBookingIds = publicGroupBookings.map(b => b.id);
+    const pendingParticipants = publicGroupBookingIds.length > 0 ? await db.query.bookingParticipant.findMany({
       where: and(
-        inArray(bookingParticipant.bookingId, groupBookingIds),
+        inArray(bookingParticipant.bookingId, publicGroupBookingIds),
         or(
           eq(bookingParticipant.status, 'awaiting_payment'),
           eq(bookingParticipant.status, 'awaiting_coach')
@@ -174,39 +245,68 @@ export async function getPendingBookingRequests() {
             image: true,
           },
         },
+        booking: {
+          with: {
+            publicGroupDetails: true,
+          },
+        },
       },
     }) : [];
 
-    const participantsByBooking = participants.reduce((acc, participant) => {
+    // Group participants by booking
+    const participantsByBooking = pendingParticipants.reduce((acc, participant) => {
       if (!acc[participant.bookingId]) {
         acc[participant.bookingId] = [];
       }
       acc[participant.bookingId].push(participant);
       return acc;
-    }, {} as Record<string, typeof participants>);
+    }, {} as Record<string, typeof pendingParticipants>);
 
-    const groupBookings = groupBookingsBase
-      .map(booking => ({
-        ...booking,
-        participants: participantsByBooking[booking.id] || [],
-      }))
-      .filter(booking => booking.participants.length > 0);
-
-    // Combine and format the results
+    // Combine all booking requests and flatten detail fields for backward compatibility
     const combinedBookings = [
-      ...individualBookings.map(b => ({
-        ...b,
-        status: mapBookingStatus(b),
-      })),
-      ...groupBookings
-        .filter(booking => booking.participants.length > 0)
-        .map(booking => ({
-          ...booking,
-          status: mapBookingStatus(booking as any),
-          hasPendingParticipants: true,
-          pendingParticipantsCount: booking.participants.length,
-          pendingParticipants: booking.participants,
-        })),
+      ...pendingBookings.map(b => {
+        const bookingWithDetails = b as BookingWithDetails;
+        let clientMessage: string | null = null;
+        let clientData: { id: string; name: string; email: string; image: string | null } | undefined = undefined;
+
+        if (isIndividualBooking(bookingWithDetails)) {
+          clientMessage = bookingWithDetails.individualDetails.clientMessage ?? null;
+          const details = b.individualDetails as typeof b.individualDetails & {
+            client?: { id: string; name: string; email: string; image: string | null } | null;
+          };
+          clientData = (details as any).client ?? undefined;
+        } else if (isPrivateGroupBooking(bookingWithDetails)) {
+          clientMessage = bookingWithDetails.privateGroupDetails.clientMessage ?? null;
+          const details = b.privateGroupDetails as typeof b.privateGroupDetails & {
+            organizer?: { id: string; name: string; email: string; image: string | null } | null;
+          };
+          clientData = (details as any).organizer ?? undefined;
+        }
+
+        return {
+          ...b,
+          status: deriveUiBookingStatusFromBooking(bookingWithDetails),
+          clientMessage,
+          client: clientData,
+        };
+      }),
+      ...publicGroupBookings
+        .filter(booking => participantsByBooking[booking.id]?.length > 0)
+        .map(booking => {
+          const bookingWithDetails = booking as BookingWithDetails;
+          return {
+            ...booking,
+            status: deriveUiBookingStatusFromBooking(bookingWithDetails),
+            hasPendingParticipants: true,
+            pendingParticipantsCount: participantsByBooking[booking.id]?.length || 0,
+            pendingParticipants: participantsByBooking[booking.id] || [],
+            // Flatten public group detail fields
+            currentParticipants: booking.publicGroupDetails?.currentParticipants ?? 0,
+            maxParticipants: booking.publicGroupDetails?.maxParticipants ?? 0,
+            pricePerPerson: booking.publicGroupDetails?.pricePerPerson ?? null,
+            clientMessage: booking.publicGroupDetails?.clientMessage ?? null,
+          };
+        }),
     ];
 
     return { success: true, bookings: combinedBookings };
@@ -228,27 +328,21 @@ export async function getUpcomingBookings() {
     }
 
     const now = new Date();
+    const conditions = [
+      eq(booking.approvalStatus, 'accepted'),
+      eq(booking.fulfillmentStatus, 'scheduled'),
+      gte(booking.scheduledStartAt, now)
+    ];
 
-    // Get individual accepted bookings
-    const individualBookings = await db.query.booking.findMany({
-      where: and(
-        or(
-          eq(booking.clientId, session.user.id),
-          eq(booking.coachId, session.user.id)
-        ),
-        eq(booking.approvalStatus, 'accepted'),
-        eq(booking.fulfillmentStatus, 'scheduled'),
-        gte(booking.scheduledStartAt, now)
-      ),
+    // Add user-specific filters
+    if (session.user.role === 'coach') {
+      conditions.push(eq(booking.coachId, session.user.id));
+    }
+    // For clients, we'll filter after the query to avoid complex conditional joins
+
+    let bookings = await db.query.booking.findMany({
+      where: and(...conditions),
       with: {
-        client: {
-          columns: {
-            id: true,
-            name: true,
-            email: true,
-            image: true,
-          },
-        },
         coach: {
           columns: {
             id: true,
@@ -257,91 +351,103 @@ export async function getUpcomingBookings() {
             image: true,
           },
         },
+        individualDetails: {
+          with: {
+            client: {
+              columns: {
+                id: true,
+                name: true,
+                email: true,
+                image: true,
+              },
+            },
+          },
+        },
+        privateGroupDetails: {
+          with: {
+            organizer: {
+              columns: {
+                id: true,
+                name: true,
+                email: true,
+                image: true,
+              },
+            },
+          },
+        },
+        publicGroupDetails: true,
       },
       orderBy: (bookings, { asc }) => [asc(bookings.scheduledStartAt)],
     });
 
-    // For coaches: Get their group bookings that have accepted participants (status = 'accepted')
-    // For clients: Get group bookings where they are confirmed participants (paymentStatus = 'paid')
-    let groupBookings: any[] = [];
-
-    if (session.user.role === 'coach') {
-      // Coaches see their own group bookings that have accepted participants (currentParticipants > 0)
-      groupBookings = await db.query.booking.findMany({
-        where: and(
-          eq(booking.coachId, session.user.id),
-          eq(booking.isGroupBooking, true),
-          gt(booking.currentParticipants, 0),
-          gte(booking.scheduledStartAt, now)
-        ),
-        with: {
-          client: {
-            columns: {
-              id: true,
-              name: true,
-              email: true,
-              image: true,
-            },
-          },
-          coach: {
-            columns: {
-              id: true,
-              name: true,
-              email: true,
-              image: true,
-            },
-          },
-        },
-        orderBy: (bookings, { asc }) => [asc(bookings.scheduledStartAt)],
+    // Filter for clients (can't do this in SQL due to conditional joins)
+    if (session.user.role === 'client') {
+      // Get public group bookings where user is a participant
+      const publicGroupBookingIds = bookings
+        .filter(b => b.bookingType === 'public_group')
+        .map(b => b.id);
+      
+      const userParticipantBookings = publicGroupBookingIds.length > 0
+        ? await db.query.bookingParticipant.findMany({
+            where: and(
+              inArray(bookingParticipant.bookingId, publicGroupBookingIds),
+              eq(bookingParticipant.userId, session.user.id)
+            ),
+            columns: { bookingId: true },
+          })
+        : [];
+      
+      const userPublicGroupIds = new Set(userParticipantBookings.map(p => p.bookingId));
+      
+      bookings = bookings.filter(booking => {
+        if (booking.bookingType === 'individual') {
+          return booking.individualDetails?.clientId === session.user.id;
+        } else if (booking.bookingType === 'private_group') {
+          return booking.privateGroupDetails?.organizerId === session.user.id;
+        } else if (booking.bookingType === 'public_group') {
+          return userPublicGroupIds.has(booking.id);
+        }
+        return false;
       });
-    } else {
-      // Clients see group bookings where they are confirmed participants
-      const groupBookingIds = await db
-        .select({ bookingId: bookingParticipant.bookingId })
-        .from(bookingParticipant)
-        .where(and(
-          eq(bookingParticipant.userId, session.user.id),
-          eq(bookingParticipant.paymentStatus, 'captured')
-        ));
-
-      const userGroupBookingIds = groupBookingIds.map(row => row.bookingId);
-
-      groupBookings = userGroupBookingIds.length > 0 ? await db.query.booking.findMany({
-        where: and(
-          eq(booking.isGroupBooking, true),
-          gte(booking.scheduledStartAt, now),
-          inArray(booking.id, userGroupBookingIds)
-        ),
-        with: {
-          client: {
-            columns: {
-              id: true,
-              name: true,
-              email: true,
-              image: true,
-            },
-          },
-          coach: {
-            columns: {
-              id: true,
-              name: true,
-              email: true,
-              image: true,
-            },
-          },
-        },
-        orderBy: (bookings, { asc }) => [asc(bookings.scheduledStartAt)],
-      }) : [];
     }
+    
+    // Format results and flatten detail table fields for backward compatibility
+    const formattedBookings = bookings.map(b => {
+      const bookingWithDetails = b as BookingWithDetails;
+      let expectedGrossCents: number | null = null;
+      let clientMessage: string | null = null;
+      let client: { id: string; name: string; email: string; image: string | null } | null = null;
 
-    const userGroupBookings = groupBookings;
+      if (isIndividualBooking(bookingWithDetails)) {
+        expectedGrossCents = bookingWithDetails.individualDetails.clientPaysCents;
+        clientMessage = bookingWithDetails.individualDetails.clientMessage ?? null;
+        // Access client relation from query result
+        const details = b.individualDetails as typeof b.individualDetails & {
+          client?: { id: string; name: string; email: string; image: string | null } | null;
+        };
+        client = (details as any).client ?? null;
+      } else if (isPrivateGroupBooking(bookingWithDetails)) {
+        expectedGrossCents = bookingWithDetails.privateGroupDetails.totalGrossCents;
+        clientMessage = bookingWithDetails.privateGroupDetails.clientMessage ?? null;
+        // Access organizer relation from query result
+        const details = b.privateGroupDetails as typeof b.privateGroupDetails & {
+          organizer?: { id: string; name: string; email: string; image: string | null } | null;
+        };
+        client = (details as any).organizer ?? null;
+      } else if (isPublicGroupBooking(bookingWithDetails)) {
+        clientMessage = bookingWithDetails.publicGroupDetails.clientMessage ?? null;
+      }
 
-    const combinedBookings = [...individualBookings, ...userGroupBookings].map((b) => ({
-      ...b,
-      status: mapBookingStatus(b),
-    }));
+      return {
+        ...b,
+        status: deriveUiBookingStatusFromBooking(bookingWithDetails),
+        expectedGrossCents,
+        clientMessage,
+        client,
+      };
+    });
 
-    return { success: true, bookings: combinedBookings };
+    return { success: true, bookings: formattedBookings };
   } catch (error) {
     console.error('Get upcoming bookings error:', error);
     return { success: false, error: 'Failed to fetch upcoming bookings', bookings: [] };
@@ -359,23 +465,10 @@ export async function getBookingById(bookingId: string) {
       return { success: false, error: 'Unauthorized', booking: null };
     }
 
+    // First, get the booking with all details
     const bookingRecord = await db.query.booking.findFirst({
-      where: and(
-        eq(booking.id, bookingId),
-        or(
-          eq(booking.clientId, session.user.id),
-          eq(booking.coachId, session.user.id)
-        )
-      ),
+      where: eq(booking.id, bookingId),
       with: {
-        client: {
-          columns: {
-            id: true,
-            name: true,
-            email: true,
-            image: true,
-          },
-        },
         coach: {
           columns: {
             id: true,
@@ -384,6 +477,31 @@ export async function getBookingById(bookingId: string) {
             image: true,
           },
         },
+        individualDetails: {
+          with: {
+            client: {
+              columns: {
+                id: true,
+                name: true,
+                email: true,
+                image: true,
+              },
+            },
+          },
+        },
+        privateGroupDetails: {
+          with: {
+            organizer: {
+              columns: {
+                id: true,
+                name: true,
+                email: true,
+                image: true,
+              },
+            },
+          },
+        },
+        publicGroupDetails: true,
       },
     });
 
@@ -391,11 +509,33 @@ export async function getBookingById(bookingId: string) {
       return { success: false, error: 'Booking not found', booking: null };
     }
 
+    // Check access permissions
+    const isCoach = bookingRecord.coachId === session.user.id;
+    const isClient = 
+      (bookingRecord.bookingType === 'individual' && bookingRecord.individualDetails?.clientId === session.user.id) ||
+      (bookingRecord.bookingType === 'private_group' && bookingRecord.privateGroupDetails?.organizerId === session.user.id);
+    
+    // For public groups, check if user is a participant
+    let isParticipant = false;
+    if (bookingRecord.bookingType === 'public_group') {
+      const participant = await db.query.bookingParticipant.findFirst({
+        where: and(
+          eq(bookingParticipant.bookingId, bookingId),
+          eq(bookingParticipant.userId, session.user.id)
+        ),
+      });
+      isParticipant = !!participant;
+    }
+
+    if (!isCoach && !isClient && !isParticipant) {
+      return { success: false, error: 'Unauthorized', booking: null };
+    }
+
     return {
       success: true,
       booking: {
         ...bookingRecord,
-        status: mapBookingStatus(bookingRecord),
+        status: deriveUiBookingStatusFromBooking(bookingRecord as BookingWithDetails),
       },
     };
   } catch (error) {

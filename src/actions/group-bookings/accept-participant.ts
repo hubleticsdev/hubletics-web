@@ -2,7 +2,7 @@
 
 import { getSession } from '@/lib/auth/session';
 import { db } from '@/lib/db';
-import { booking, bookingParticipant } from '@/lib/db/schema';
+import { booking, bookingParticipant, publicGroupLessonDetails } from '@/lib/db/schema';
 import { eq, and, sql } from 'drizzle-orm';
 import { stripe } from '@/lib/stripe';
 import { sendEmail } from '@/lib/email/resend';
@@ -23,7 +23,8 @@ export async function acceptParticipant(bookingId: string, participantId: string
     const bookingRecord = await db.query.booking.findFirst({
       where: and(
         eq(booking.id, bookingId),
-        eq(booking.coachId, session.user.id)
+        eq(booking.coachId, session.user.id),
+        eq(booking.bookingType, 'public_group')
       ),
       with: {
         coach: {
@@ -32,14 +33,11 @@ export async function acceptParticipant(bookingId: string, participantId: string
             email: true,
           },
         },
+        publicGroupDetails: true,
       },
     });
 
-    if (!bookingRecord) {
-      return { success: false, error: 'Booking not found or unauthorized' };
-    }
-
-    if (!bookingRecord.isGroupBooking || bookingRecord.groupType !== 'public') {
+    if (!bookingRecord || bookingRecord.bookingType !== 'public_group') {
       return { success: false, error: 'Not a public group lesson' };
     }
 
@@ -110,14 +108,16 @@ export async function acceptParticipant(bookingId: string, participantId: string
       })
       .where(eq(bookingParticipant.id, participantId));
 
-    await db
-      .update(booking)
-      .set({
-        currentParticipants: sql`${booking.currentParticipants} + 1`,
-        capturedParticipants: sql`${booking.capturedParticipants} + 1`,
-        updatedAt: new Date(),
-      })
-      .where(eq(booking.id, bookingId));
+    // Update public group lesson details counters
+    if (bookingRecord.publicGroupDetails) {
+      await db
+        .update(publicGroupLessonDetails)
+        .set({
+          currentParticipants: sql`${publicGroupLessonDetails.currentParticipants} + 1`,
+          capturedParticipants: sql`${publicGroupLessonDetails.capturedParticipants} + 1`,
+        })
+        .where(eq(publicGroupLessonDetails.bookingId, bookingId));
+    }
 
     // Record audit events
     await recordPaymentEvent({
@@ -146,8 +146,9 @@ export async function acceptParticipant(bookingId: string, participantId: string
       changedBy: session.user.id,
     });
 
-    const updatedBooking = await db.query.booking.findFirst({
-      where: eq(booking.id, bookingId),
+    // Check if lesson is now full
+    const updatedDetails = await db.query.publicGroupLessonDetails.findFirst({
+      where: eq(publicGroupLessonDetails.bookingId, bookingId),
       columns: {
         currentParticipants: true,
         maxParticipants: true,
@@ -155,19 +156,17 @@ export async function acceptParticipant(bookingId: string, participantId: string
     });
 
     if (
-      updatedBooking &&
-      updatedBooking.currentParticipants !== null &&
-      updatedBooking.currentParticipants >= (updatedBooking.maxParticipants || 0)
+      updatedDetails &&
+      updatedDetails.currentParticipants >= updatedDetails.maxParticipants
     ) {
       await db
-        .update(booking)
+        .update(publicGroupLessonDetails)
         .set({
           capacityStatus: 'full',
-          updatedAt: new Date(),
         })
-        .where(eq(booking.id, bookingId));
+        .where(eq(publicGroupLessonDetails.bookingId, bookingId));
 
-      console.log(`[ACCEPT_PARTICIPANT] Lesson ${bookingId} is now full (${updatedBooking.currentParticipants}/${updatedBooking.maxParticipants})`);
+      console.log(`[ACCEPT_PARTICIPANT] Lesson ${bookingId} is now full (${updatedDetails.currentParticipants}/${updatedDetails.maxParticipants})`);
     }
 
     const startDate = new Date(bookingRecord.scheduledStartAt);
@@ -187,7 +186,7 @@ export async function acceptParticipant(bookingId: string, participantId: string
 
     const emailTemplate = getGroupLessonAcceptedEmailTemplate(
       participantUser.name,
-      bookingRecord.clientMessage || 'Group Lesson',
+      'Group Lesson',
       lessonDate,
       lessonTime,
       bookingRecord.coach?.name || 'Coach',

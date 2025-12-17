@@ -30,7 +30,7 @@ type DisputedBooking = {
     name: string;
     email: string;
     image: string | null;
-  };
+  } | null;
   coach: {
     id: string;
     name: string;
@@ -139,7 +139,7 @@ export function DisputesList({ bookings }: DisputesListProps) {
                 </div>
                 <div>
                   <h3 className="text-lg font-semibold text-gray-900">
-                    {booking.coach.name} & {booking.client.name}
+                    {booking.coach.name} & {booking.client?.name ?? 'Unknown Client'}
                   </h3>
                   <p className="text-sm text-gray-600">
                     Disputed on {new Date(booking.createdAt).toLocaleDateString()}
@@ -229,7 +229,7 @@ export function DisputesList({ bookings }: DisputesListProps) {
             <div className="space-y-4">
               <div className="p-4 bg-gray-50 rounded-lg">
                 <p className="text-sm font-medium text-gray-900 mb-2">
-                  {selectedBooking.coach.name} & {selectedBooking.client.name}
+                  {selectedBooking.coach.name} & {selectedBooking.client?.name ?? 'Unknown'}
                 </p>
                 <p className="text-xs text-gray-600">
                   Client Paid: ${formatDollars(selectedBooking.expectedGrossCents)}
@@ -328,7 +328,7 @@ export function DisputesList({ bookings }: DisputesListProps) {
             <div className="space-y-4">
               <div className="p-4 bg-gray-50 rounded-lg">
                 <p className="text-sm font-medium text-gray-900 mb-2">
-                  {selectedBooking.coach.name} & {selectedBooking.client.name}
+                  {selectedBooking.coach.name} & {selectedBooking.client?.name ?? 'Unknown'}
                 </p>
                 <p className="text-xs text-gray-600">
                   {new Date(selectedBooking.scheduledStartAt).toLocaleDateString()}

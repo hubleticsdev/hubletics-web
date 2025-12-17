@@ -2,7 +2,7 @@
 
 import { getSession } from '@/lib/auth/session';
 import { db } from '@/lib/db';
-import { booking, bookingParticipant, coachProfile, user } from '@/lib/db/schema';
+import { booking, privateGroupBookingDetails, bookingParticipant, coachProfile, user } from '@/lib/db/schema';
 import { eq, and, gte, lte, or, inArray } from 'drizzle-orm';
 import { calculateGroupTotals } from '@/lib/pricing';
 import { getApplicableTier } from './pricing-tiers';
@@ -101,7 +101,7 @@ export async function createPrivateGroupBooking(input: PrivateGroupBookingInput)
         or(
           eq(booking.approvalStatus, 'pending_review'),
           eq(booking.approvalStatus, 'accepted'),
-          eq(booking.capacityStatus, 'open')
+          // capacityStatus is only for public groups, not private groups
         )
       ),
     });
@@ -134,32 +134,31 @@ export async function createPrivateGroupBooking(input: PrivateGroupBookingInput)
       }
     }
 
+    // Create base booking record
     await db.insert(booking).values({
       id: bookingId,
-      clientId: session.user.id,
       coachId: input.coachId,
       scheduledStartAt: input.scheduledStartAt,
       scheduledEndAt: input.scheduledEndAt,
       duration: input.duration,
       location: input.location,
-      clientMessage: input.clientMessage || null,
-      coachRate: pricePerPerson.toString(),
-      pricePerPerson: pricePerPerson.toString(),
-      expectedGrossCents: groupTotals.totalGrossCents,
-      platformFeeCents: groupTotals.platformFeeCents,
-      stripeFeeCents: groupTotals.stripeFeeCents,
-      coachPayoutCents: groupTotals.coachPayoutCents,
+      bookingType: 'private_group',
       approvalStatus: 'pending_review',
-      paymentStatus: 'not_required',
       fulfillmentStatus: 'scheduled',
-      isGroupBooking: true,
-      groupType: 'private',
-      organizerId: session.user.id,
-      maxParticipants: totalParticipants,
-      minParticipants: totalParticipants,
-      currentParticipants: totalParticipants,
       idempotencyKey,
       lockedUntil: new Date(Date.now() + 5 * 60 * 1000),
+    });
+
+    // Create private group booking details
+    await db.insert(privateGroupBookingDetails).values({
+      bookingId,
+      organizerId: session.user.id,
+      totalParticipants,
+      pricePerPerson: pricePerPerson.toString(),
+      totalGrossCents: groupTotals.totalGrossCents,
+      platformFeeCents: groupTotals.platformFeeCents,
+      coachPayoutCents: groupTotals.coachPayoutCents,
+      paymentStatus: 'not_required',
     });
 
     await db.insert(bookingParticipant).values([

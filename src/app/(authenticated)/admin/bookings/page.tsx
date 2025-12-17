@@ -5,7 +5,8 @@ import { desc } from 'drizzle-orm';
 import Image from 'next/image';
 import { Pagination } from '@/components/ui/pagination';
 import { getPaginationOptions, createPaginationResult, getOffset } from '@/lib/pagination';
-import { deriveUiBookingStatus, formatUiBookingStatus } from '@/lib/booking-status';
+import { deriveUiBookingStatusFromBooking, formatUiBookingStatus } from '@/lib/booking-status';
+import type { BookingWithDetails } from '@/lib/booking-type-guards';
 import { formatDateWithTimezone } from '@/lib/utils/date';
 
 export const dynamic = 'force-dynamic';
@@ -32,12 +33,28 @@ export default async function AdminBookingsPage({ searchParams }: AdminBookingsP
 
   const rawBookings = await db.query.booking.findMany({
     with: {
-      client: {
-        columns: {
-          id: true,
-          name: true,
-          email: true,
-          image: true,
+      individualDetails: {
+        with: {
+          client: {
+            columns: {
+              id: true,
+              name: true,
+              email: true,
+              image: true,
+            },
+          },
+        },
+      },
+      privateGroupDetails: {
+        with: {
+          organizer: {
+            columns: {
+              id: true,
+              name: true,
+              email: true,
+              image: true,
+            },
+          },
         },
       },
       coach: {
@@ -54,15 +71,30 @@ export default async function AdminBookingsPage({ searchParams }: AdminBookingsP
     offset,
   });
 
-  const bookings = rawBookings.map((b) => ({
-    ...b,
-    status: deriveUiBookingStatus({
-      approvalStatus: b.approvalStatus,
-      paymentStatus: b.paymentStatus,
-      fulfillmentStatus: b.fulfillmentStatus,
-      capacityStatus: b.capacityStatus,
-    }),
-  }));
+  const bookings = rawBookings.map((b) => {
+    const bookingWithDetails = b as BookingWithDetails;
+    // Get client from detail tables
+    const client = b.bookingType === 'individual' 
+      ? b.individualDetails?.client 
+      : b.bookingType === 'private_group'
+      ? b.privateGroupDetails?.organizer
+      : null;
+    
+    // Get expectedGrossCents from detail tables
+    let expectedGrossCents: number | null = null;
+    if (b.bookingType === 'individual' && b.individualDetails) {
+      expectedGrossCents = b.individualDetails.clientPaysCents;
+    } else if (b.bookingType === 'private_group' && b.privateGroupDetails) {
+      expectedGrossCents = b.privateGroupDetails.totalGrossCents;
+    }
+    
+    return {
+      ...b,
+      client: client as { id: string; name: string; email: string; image: string | null } | null,
+      expectedGrossCents: expectedGrossCents as number | null,
+      status: deriveUiBookingStatusFromBooking(bookingWithDetails),
+    } as typeof b & { client: typeof client; expectedGrossCents: typeof expectedGrossCents; status: ReturnType<typeof deriveUiBookingStatusFromBooking> };
+  });
 
   const formatDollars = (cents?: number | null) =>
     cents !== undefined && cents !== null ? (cents / 100).toFixed(2) : '0.00';
@@ -118,19 +150,23 @@ export default async function AdminBookingsPage({ searchParams }: AdminBookingsP
                   <div className="flex-1">
                     <div className="flex items-center gap-6 mb-3">
                       <div className="flex items-center gap-3">
-                        <div className="w-10 h-10 rounded-full overflow-hidden bg-gray-200">
-                          <Image
-                            src={booking.client.image || '/placeholder-avatar.png'}
-                            alt={booking.client.name}
-                            width={40}
-                            height={40}
-                            className="object-cover"
-                          />
-                        </div>
-                        <div>
-                          <p className="text-sm font-medium text-gray-900">{booking.client.name}</p>
-                          <p className="text-xs text-gray-500">Client</p>
-                        </div>
+                        {booking.client && (
+                          <>
+                            <div className="w-10 h-10 rounded-full overflow-hidden bg-gray-200">
+                              <Image
+                                src={booking.client.image || '/placeholder-avatar.png'}
+                                alt={booking.client.name}
+                                width={40}
+                                height={40}
+                                className="object-cover"
+                              />
+                            </div>
+                            <div>
+                              <p className="text-sm font-medium text-gray-900">{booking.client.name}</p>
+                              <p className="text-xs text-gray-500">Client</p>
+                            </div>
+                          </>
+                        )}
                       </div>
 
                       <div className="text-gray-400">→</div>

@@ -1,8 +1,10 @@
 'use server';
 
 import { db } from '@/lib/db';
-import { booking } from '@/lib/db/schema';
+import { booking, individualBookingDetails, privateGroupBookingDetails, publicGroupLessonDetails } from '@/lib/db/schema';
 import { eq } from 'drizzle-orm';
+import type { BookingWithDetails } from '@/lib/booking-type-guards';
+import { isIndividualBooking, isPrivateGroupBooking, isPublicGroupBooking } from '@/lib/booking-type-guards';
 import { Resend } from 'resend';
 import { incrementCoachLessonsCompleted } from '@/lib/coach-stats';
 import { stripe } from '@/lib/stripe';
@@ -19,14 +21,6 @@ export async function getDisputedBookings(page = 1, limit = 25) {
     const bookings = await db.query.booking.findMany({
       where: eq(booking.fulfillmentStatus, 'disputed'),
       with: {
-        client: {
-          columns: {
-            id: true,
-            name: true,
-            email: true,
-            image: true,
-          },
-        },
         coach: {
           columns: {
             id: true,
@@ -35,15 +29,78 @@ export async function getDisputedBookings(page = 1, limit = 25) {
             image: true,
           },
         },
+        individualDetails: {
+          with: {
+            client: {
+              columns: {
+                id: true,
+                name: true,
+                email: true,
+                image: true,
+              },
+            },
+          },
+        },
+        privateGroupDetails: {
+          with: {
+            organizer: {
+              columns: {
+                id: true,
+                name: true,
+                email: true,
+                image: true,
+              },
+            },
+          },
+        },
+        publicGroupDetails: true,
       },
       orderBy: (bookings, { desc }) => [desc(bookings.createdAt)],
       limit,
       offset,
     });
 
+    // Flatten detail table fields for backward compatibility
+    const flattenedBookings = bookings.map(b => {
+      const bookingWithDetails = b as BookingWithDetails;
+      let expectedGrossCents: number | null = null;
+      let coachPayoutCents: number | null = null;
+      let platformFeeCents: number | null = null;
+      let client: { id: string; name: string; email: string; image: string | null } | null = null;
+
+      if (isIndividualBooking(bookingWithDetails)) {
+        expectedGrossCents = bookingWithDetails.individualDetails.clientPaysCents;
+        coachPayoutCents = bookingWithDetails.individualDetails.coachPayoutCents;
+        platformFeeCents = bookingWithDetails.individualDetails.platformFeeCents;
+        // Access client relation from query result
+        const details = b.individualDetails as typeof b.individualDetails & {
+          client?: { id: string; name: string; email: string; image: string | null } | null;
+        };
+        client = (details as any).client ?? null;
+      } else if (isPrivateGroupBooking(bookingWithDetails)) {
+        expectedGrossCents = bookingWithDetails.privateGroupDetails.totalGrossCents;
+        coachPayoutCents = bookingWithDetails.privateGroupDetails.coachPayoutCents;
+        platformFeeCents = bookingWithDetails.privateGroupDetails.platformFeeCents;
+        // Access organizer relation from query result
+        const details = b.privateGroupDetails as typeof b.privateGroupDetails & {
+          organizer?: { id: string; name: string; email: string; image: string | null } | null;
+        };
+        client = (details as any).organizer ?? null;
+      }
+      // Public groups don't have booking-level amounts (participants pay individually)
+
+      return {
+        ...b,
+        expectedGrossCents,
+        coachPayoutCents,
+        platformFeeCents,
+        client,
+      };
+    });
+
     return {
       success: true,
-      bookings,
+      bookings: flattenedBookings,
       pagination: {
         page,
         limit,
@@ -69,7 +126,7 @@ export async function processRefund(
     const bookingRecord = await db.query.booking.findFirst({
       where: eq(booking.id, bookingId),
       with: {
-        client: {
+        coach: {
           columns: {
             id: true,
             name: true,
@@ -77,12 +134,16 @@ export async function processRefund(
             timezone: true,
           },
         },
-        coach: {
-          columns: {
-            id: true,
-            name: true,
-            email: true,
-            timezone: true,
+        individualDetails: {
+          with: {
+            client: {
+              columns: {
+                id: true,
+                name: true,
+                email: true,
+                timezone: true,
+              },
+            },
           },
         },
       },
@@ -92,13 +153,13 @@ export async function processRefund(
       return { success: false, error: 'Booking not found' };
     }
 
-    if (!bookingRecord.primaryStripePaymentIntentId) {
+    if (!bookingRecord.individualDetails?.stripePaymentIntentId) {
       return { success: false, error: 'No payment found for this booking' };
     }
 
     // Fetch the PaymentIntent to get the charge ID
     const paymentIntent = await stripe.paymentIntents.retrieve(
-      bookingRecord.primaryStripePaymentIntentId
+bookingRecord.individualDetails.stripePaymentIntentId
     );
 
     if (paymentIntent.status !== 'succeeded') {
@@ -107,7 +168,7 @@ export async function processRefund(
 
     // Get the charge from the payment intent
     const charges = await stripe.charges.list({
-      payment_intent: bookingRecord.primaryStripePaymentIntentId,
+      payment_intent: bookingRecord.individualDetails.stripePaymentIntentId,
       limit: 1,
     });
 
@@ -117,7 +178,7 @@ export async function processRefund(
 
     const charge = charges.data[0];
 
-    const clientPaidCents = bookingRecord.expectedGrossCents || 0;
+    const clientPaidCents = bookingRecord.individualDetails?.clientPaysCents || 0;
     const refundAmountCents =
       refundType === 'full' ? clientPaidCents : Math.round((partialAmount || 0) * 100);
 
@@ -137,52 +198,59 @@ export async function processRefund(
       .update(booking)
       .set({
         approvalStatus: 'cancelled',
-        paymentStatus: 'refunded',
         fulfillmentStatus: 'disputed',
         cancellationReason: reason || 'Refund processed by admin',
         updatedAt: new Date(),
       })
       .where(eq(booking.id, bookingId));
 
+    // Update payment status in details table
+    await db
+      .update(individualBookingDetails)
+      .set({
+        paymentStatus: 'refunded',
+      })
+      .where(eq(individualBookingDetails.bookingId, bookingId));
+
     await resend.emails.send({
       from: 'Hubletics <noreply@hubletics.com>',
-      to: bookingRecord.client.email,
+      to: bookingRecord.individualDetails?.client.email,
       subject: `Refund Processed - ${bookingRecord.coach.name}`,
       html: `
         <h2>Refund Processed</h2>
-        <p>Hi ${bookingRecord.client.name},</p>
+        <p>Hi ${bookingRecord.individualDetails?.client.name},</p>
         <p>Your refund of <strong>$${(refundAmountCents / 100).toFixed(2)}</strong> has been processed.</p>
         <p><strong>Booking Details:</strong></p>
         <ul>
           <li>Coach: ${bookingRecord.coach.name}</li>
-          <li>Date: ${formatDateOnly(new Date(bookingRecord.scheduledStartAt), bookingRecord.client.timezone || 'America/Chicago')}
+          <li>Date: ${formatDateOnly(new Date(bookingRecord.scheduledStartAt), bookingRecord.individualDetails?.client.timezone || 'America/Chicago')}
           <li>Original Amount: $${(clientPaidCents / 100).toFixed(2)}</li>
           <li>Refund Amount: $${(refundAmountCents / 100).toFixed(2)}</li>
         </ul>
         ${reason ? `<p><strong>Reason:</strong> ${reason}</p>` : ''}
         <p>The refund should appear in your account within 5-10 business days.</p>
       `,
-      text: `Hi ${bookingRecord.client.name}, Your refund of $${(refundAmountCents / 100).toFixed(2)} has been processed for your booking with ${bookingRecord.coach.name}. The refund should appear in your account within 5-10 business days.`,
+      text: `Hi ${bookingRecord.individualDetails?.client.name}, Your refund of $${(refundAmountCents / 100).toFixed(2)} has been processed for your booking with ${bookingRecord.coach.name}. The refund should appear in your account within 5-10 business days.`,
     });
 
     await resend.emails.send({
       from: 'Hubletics <noreply@hubletics.com>',
       to: bookingRecord.coach.email,
-      subject: `Booking Refunded - ${bookingRecord.client.name}`,
+      subject: `Booking Refunded - ${bookingRecord.individualDetails?.client.name}`,
       html: `
         <h2>Booking Refunded</h2>
         <p>Hi ${bookingRecord.coach.name},</p>
-        <p>A refund of <strong>$${(refundAmountCents / 100).toFixed(2)}</strong> has been issued to ${bookingRecord.client.name}.</p>
+        <p>A refund of <strong>$${(refundAmountCents / 100).toFixed(2)}</strong> has been issued to ${bookingRecord.individualDetails?.client.name}.</p>
         <p><strong>Booking Details:</strong></p>
         <ul>
-          <li>Client: ${bookingRecord.client.name}</li>
-          <li>Date: ${formatDateOnly(new Date(bookingRecord.scheduledStartAt), bookingRecord.client.timezone || 'America/Chicago')}
+          <li>Client: ${bookingRecord.individualDetails?.client.name}</li>
+          <li>Date: ${formatDateOnly(new Date(bookingRecord.scheduledStartAt), bookingRecord.individualDetails?.client.timezone || 'America/Chicago')}
           <li>Refund Amount: $${(refundAmountCents / 100).toFixed(2)}</li>
         </ul>
         ${reason ? `<p><strong>Reason:</strong> ${reason}</p>` : ''}
         <p>The funds will be reversed from your account accordingly.</p>
       `,
-      text: `Hi ${bookingRecord.coach.name}, A refund of $${(refundAmountCents / 100).toFixed(2)} has been issued to ${bookingRecord.client.name} for your booking on ${formatDateOnly(new Date(bookingRecord.scheduledStartAt), bookingRecord.coach.timezone || 'America/Chicago')}.`,
+      text: `Hi ${bookingRecord.coach.name}, A refund of $${(refundAmountCents / 100).toFixed(2)} has been issued to ${bookingRecord.individualDetails?.client.name} for your booking on ${formatDateOnly(new Date(bookingRecord.scheduledStartAt), bookingRecord.coach.timezone || 'America/Chicago')}.`,
     });
 
     return {
@@ -233,7 +301,7 @@ export async function initiateDispute(bookingId: string, reason: string, initiat
     const bookingRecord = await db.query.booking.findFirst({
       where: eq(booking.id, bookingId),
       with: {
-        client: {
+        coach: {
           columns: {
             id: true,
             name: true,
@@ -241,12 +309,16 @@ export async function initiateDispute(bookingId: string, reason: string, initiat
             timezone: true,
           },
         },
-        coach: {
-          columns: {
-            id: true,
-            name: true,
-            email: true,
-            timezone: true,
+        individualDetails: {
+          with: {
+            client: {
+              columns: {
+                id: true,
+                name: true,
+                email: true,
+                timezone: true,
+              },
+            },
           },
         },
       },
@@ -265,30 +337,30 @@ export async function initiateDispute(bookingId: string, reason: string, initiat
       })
       .where(eq(booking.id, bookingId));
 
-    const clientPaidCents = bookingRecord.expectedGrossCents || 0;
+    const clientPaidCents = bookingRecord.individualDetails?.clientPaysCents || 0;
 
     await resend.emails.send({
       from: 'Hubletics <noreply@hubletics.com>',
       to: 'hubleticsdev@gmail.com',
-      subject: `New Dispute - ${bookingRecord.coach.name} & ${bookingRecord.client.name}`,
+      subject: `New Dispute - ${bookingRecord.coach.name} & ${bookingRecord.individualDetails?.client.name}`,
       html: `
         <h2>New Booking Dispute</h2>
-        <p><strong>Initiated By:</strong> ${initiatedBy === 'client' ? bookingRecord.client.name : bookingRecord.coach.name}</p>
+        <p><strong>Initiated By:</strong> ${initiatedBy === 'client' ? bookingRecord.individualDetails?.client.name : bookingRecord.coach.name}</p>
         <p><strong>Booking Details:</strong></p>
         <ul>
           <li>Coach: ${bookingRecord.coach.name}</li>
-          <li>Client: ${bookingRecord.client.name}</li>
-          <li>Date: ${formatDateOnly(new Date(bookingRecord.scheduledStartAt), bookingRecord.client.timezone || 'America/Chicago')}
+          <li>Client: ${bookingRecord.individualDetails?.client.name}</li>
+          <li>Date: ${formatDateOnly(new Date(bookingRecord.scheduledStartAt), bookingRecord.individualDetails?.client.timezone || 'America/Chicago')}
           <li>Amount: $${(clientPaidCents / 100).toFixed(2)}</li>
         </ul>
         <p><strong>Reason:</strong> ${reason}</p>
         <p><a href="${process.env.NEXT_PUBLIC_URL}/admin/disputes">View in Admin Panel</a></p>
       `,
-      text: `New dispute initiated by ${initiatedBy} for booking between ${bookingRecord.coach.name} and ${bookingRecord.client.name}. Reason: ${reason}`,
+      text: `New dispute initiated by ${initiatedBy} for booking between ${bookingRecord.coach.name} and ${bookingRecord.individualDetails?.client.name}. Reason: ${reason}`,
     });
 
     // Notify the other party
-    const otherParty = initiatedBy === 'client' ? bookingRecord.coach : bookingRecord.client;
+    const otherParty = initiatedBy === 'client' ? bookingRecord.coach : bookingRecord.individualDetails?.client;
     await resend.emails.send({
       from: 'Hubletics <noreply@hubletics.com>',
       to: otherParty.email,

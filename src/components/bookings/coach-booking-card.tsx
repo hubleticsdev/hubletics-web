@@ -18,18 +18,20 @@ interface BookingCardProps {
       address: string;
       notes?: string;
     };
-    clientMessage?: string | null;
-    expectedGrossCents?: number | null;
-    coachPayoutCents?: number | null;
-    stripeFeeCents?: number | null;
-    platformFeeCents?: number | null;
     status: UiBookingStatus;
-    client?: {
-      id?: string;
-      name: string;
-      email?: string;
-      image?: string | null;
-    };
+    individualDetails?: {
+      clientMessage?: string | null;
+      clientPaysCents: number;
+      coachPayoutCents: number;
+      platformFeeCents: number;
+      stripeFeeCents?: number;
+      client: {
+        id: string;
+        name: string;
+        email: string;
+        image?: string | null;
+      };
+    } | null;
   };
   timezone?: string;
   onUpdate?: () => void;
@@ -41,13 +43,20 @@ export function CoachBookingCard({ booking, timezone = 'America/Chicago', onUpda
   const [error, setError] = useState<string | null>(null);
   const [declineReason, setDeclineReason] = useState('');
 
-  if (!booking.client) {
+  if (!booking.individualDetails?.client) {
     return (
       <div className="bg-red-50 border border-red-200 rounded-xl p-6">
         <p className="text-red-800">Error: Booking missing client information</p>
       </div>
     );
   }
+
+  const client = booking.individualDetails.client;
+  const clientMessage = booking.individualDetails.clientMessage;
+  const expectedGrossCents = booking.individualDetails.clientPaysCents;
+  const coachPayoutCents = booking.individualDetails.coachPayoutCents;
+  const platformFeeCents = booking.individualDetails.platformFeeCents;
+  const stripeFeeCents = booking.individualDetails.stripeFeeCents ?? 0;
 
   const startDate = new Date(booking.scheduledStartAt);
   const endDate = booking.scheduledEndAt ? new Date(booking.scheduledEndAt) : null;
@@ -89,10 +98,10 @@ export function CoachBookingCard({ booking, timezone = 'America/Chicago', onUpda
   const formatDollars = (cents?: number | null) =>
     cents !== undefined && cents !== null ? (cents / 100).toFixed(2) : '0.00';
 
-  const clientPaid = formatDollars(booking.expectedGrossCents);
-  const coachPayout = formatDollars(booking.coachPayoutCents);
-  const stripeFee = formatDollars(booking.stripeFeeCents);
-  const platformFee = formatDollars(booking.platformFeeCents);
+  const clientPaid = formatDollars(expectedGrossCents);
+  const coachPayout = formatDollars(coachPayoutCents);
+  const stripeFee = formatDollars(stripeFeeCents);
+  const platformFee = formatDollars(platformFeeCents);
   const statusClass = (() => {
     switch (booking.status) {
       case 'awaiting_coach':
@@ -127,17 +136,17 @@ export function CoachBookingCard({ booking, timezone = 'America/Chicago', onUpda
 
       <div className="flex items-center gap-4 mb-4 pb-4 border-b border-gray-200">
         <div className="relative w-12 h-12 rounded-full overflow-hidden bg-gray-200 shrink-0">
-          {booking.client.image ? (
-            <Image src={booking.client.image} alt={booking.client.name} fill className="object-cover" />
+          {client.image ? (
+            <Image src={client.image} alt={client.name} fill className="object-cover" />
           ) : (
             <div className="w-full h-full flex items-center justify-center text-gray-400 text-xl font-bold">
-              {booking.client.name.charAt(0).toUpperCase()}
+              {client.name.charAt(0).toUpperCase()}
             </div>
           )}
         </div>
         <div>
-          <div className="font-semibold text-gray-900">{booking.client.name}</div>
-          <div className="text-sm text-gray-600">{booking.client.email}</div>
+          <div className="font-semibold text-gray-900">{client.name}</div>
+          <div className="text-sm text-gray-600">{client.email}</div>
         </div>
       </div>
 
@@ -196,7 +205,7 @@ export function CoachBookingCard({ booking, timezone = 'America/Chicago', onUpda
           </div>
         )}
 
-        {booking.clientMessage && (
+        {clientMessage && (
           <div className="flex items-start gap-3">
             <svg className="w-5 h-5 text-[#FF6B4A] mt-0.5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path
@@ -207,13 +216,13 @@ export function CoachBookingCard({ booking, timezone = 'America/Chicago', onUpda
               />
             </svg>
             <div>
-              <div className="font-medium text-gray-900 mb-1">Message from {booking.client.name}:</div>
-              <div className="text-sm text-gray-700 bg-gray-50 p-3 rounded-lg">{booking.clientMessage}</div>
+              <div className="font-medium text-gray-900 mb-1">Message from {client.name}:</div>
+              <div className="text-sm text-gray-700 bg-gray-50 p-3 rounded-lg">{clientMessage}</div>
             </div>
           </div>
         )}
 
-        {booking.coachPayoutCents !== undefined && booking.coachPayoutCents !== null && (
+        {coachPayoutCents !== undefined && coachPayoutCents !== null && (
           <div className="flex items-start gap-3 pt-2">
           <svg className="w-5 h-5 text-[#FF6B4A] mt-1 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path

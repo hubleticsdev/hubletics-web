@@ -3,7 +3,7 @@
 import crypto from 'crypto';
 import { getSession } from '@/lib/auth/session';
 import { db } from '@/lib/db';
-import { booking, coachProfile } from '@/lib/db/schema';
+import { booking, individualBookingDetails, coachProfile } from '@/lib/db/schema';
 import { eq, and, or, gte, lte, sql } from 'drizzle-orm';
 import { calculateBookingPricing } from '@/lib/pricing';
 import { sendEmail } from '@/lib/email/resend';
@@ -78,16 +78,33 @@ export async function createBooking(input: CreateBookingInput) {
         ),
         or(
           sql`${booking.approvalStatus} IN ('pending_review', 'accepted')`,
-          sql`${booking.paymentStatus} = 'awaiting_client_payment'`,
-          sql`${booking.capacityStatus} = 'open'`,
           sql`${booking.lockedUntil} > ${now}`
         )
       ),
+      with: {
+        individualDetails: {
+          columns: { paymentStatus: true }
+        },
+        publicGroupDetails: {
+          columns: { capacityStatus: true }
+        }
+      },
       columns: {
         id: true,
         lockedUntil: true,
       },
     });
+
+    // Any results from the conflicts query are blocking (they match our WHERE conditions)
+    const blockingConflicts = conflicts;
+
+    if (blockingConflicts.length > 0) {
+      console.log(`[CONFLICT] Time slot conflict for coach ${validatedInput.coachId}:`, blockingConflicts);
+      return {
+        success: false,
+        error: 'This time slot is no longer available. Please select a different time.',
+      };
+    }
 
     if (conflicts.length > 0) {
       console.log(`[CONFLICT] Time slot conflict for coach ${validatedInput.coachId}:`, conflicts);
@@ -131,26 +148,33 @@ export async function createBooking(input: CreateBookingInput) {
     const pricing = calculateBookingPricing(coachRateNum, duration, platformFee);
 
     const bookingId = crypto.randomUUID();
-    
+
+    // Create base booking record
     await db.insert(booking).values({
       id: bookingId,
-      clientId: session.user.id,
       coachId: validatedInput.coachId,
       scheduledStartAt: validatedInput.scheduledStartAt,
       scheduledEndAt: validatedInput.scheduledEndAt,
       duration,
       location: validatedInput.location,
-      clientMessage: validatedInput.clientMessage ? sanitizeText(validatedInput.clientMessage) : validatedInput.clientMessage,
-      coachRate: pricing.coachDesiredRate.toString(),
-      expectedGrossCents: pricing.clientPaysCents,
-      platformFeeCents: pricing.platformFeeCents,
-      stripeFeeCents: pricing.stripeFeeCents,
-      coachPayoutCents: pricing.coachPayoutCents,
+      bookingType: 'individual',
       approvalStatus: 'pending_review',
-      paymentStatus: 'not_required',
       fulfillmentStatus: 'scheduled',
       idempotencyKey,
       lockedUntil: new Date(Date.now() + 5 * 60 * 1000),
+    });
+
+    // Create individual booking details
+    await db.insert(individualBookingDetails).values({
+      bookingId,
+      clientId: session.user.id,
+      conversationId: null, // Will be set when conversation is created
+      clientMessage: validatedInput.clientMessage ? sanitizeText(validatedInput.clientMessage) : null,
+      coachRate: pricing.coachDesiredRate.toString(),
+      clientPaysCents: pricing.clientPaysCents,
+      platformFeeCents: pricing.platformFeeCents,
+      coachPayoutCents: pricing.coachPayoutCents,
+      paymentStatus: 'not_required',
     });
 
     console.log(`Booking created (deferred payment): ${bookingId}`);

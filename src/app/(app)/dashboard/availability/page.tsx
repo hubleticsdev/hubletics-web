@@ -27,11 +27,26 @@ export default async function AvailabilityPage() {
       gte(booking.scheduledStartAt, now)
     ),
     with: {
-      client: {
-        columns: {
-          id: true,
-          name: true,
-          image: true,
+      individualDetails: {
+        with: {
+          client: {
+            columns: {
+              id: true,
+              name: true,
+              image: true,
+            },
+          },
+        },
+      },
+      privateGroupDetails: {
+        with: {
+          organizer: {
+            columns: {
+              id: true,
+              name: true,
+              image: true,
+            },
+          },
         },
       },
     },
@@ -57,13 +72,20 @@ export default async function AvailabilityPage() {
           weeklyAvailability={normalizedAvailability}
           blockedDates={profile.blockedDates || []}
           sessionDuration={profile.sessionDuration}
-          upcomingBookings={upcomingBookings.map((b) => ({
-            id: b.id,
-            scheduledStartAt: b.scheduledStartAt,
-            scheduledEndAt: b.scheduledEndAt,
-            clientName: b.client.name,
-            clientImage: b.client.image,
-          }))}
+          upcomingBookings={          upcomingBookings.map((b) => {
+            const client = b.bookingType === 'individual' 
+              ? b.individualDetails?.client 
+              : b.bookingType === 'private_group'
+              ? b.privateGroupDetails?.organizer
+              : null;
+            return {
+              id: b.id,
+              scheduledStartAt: b.scheduledStartAt,
+              scheduledEndAt: b.scheduledEndAt,
+              clientName: client?.name ?? 'Unknown',
+              clientImage: client?.image ?? null,
+            };
+          })}
         />
       </div>
     </div>

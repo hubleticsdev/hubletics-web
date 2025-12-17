@@ -423,7 +423,16 @@ function InterestsSection({ sportsInterested }: { sportsInterested: string[] }) 
 function NextSessionCard({ booking }: { booking: UpcomingBooking }) {
   const start = new Date(booking.scheduledStartAt);
   const end = new Date(booking.scheduledEndAt);
-  const amount = booking.expectedGrossCents ? booking.expectedGrossCents / 100 : 0;
+  // Calculate amount from detail tables
+  let amount = 0;
+  if (booking.bookingType === 'individual' && booking.individualDetails) {
+    amount = booking.individualDetails.clientPaysCents / 100;
+  } else if (booking.bookingType === 'private_group' && booking.privateGroupDetails) {
+    amount = booking.privateGroupDetails.totalGrossCents / 100;
+  } else if (booking.bookingType === 'public_group' && booking.publicGroupDetails) {
+    // For public groups, use price per person
+    amount = parseFloat(booking.publicGroupDetails.pricePerPerson);
+  }
   const coachName = booking.coach?.name ?? 'Your coach';
   const locationName = booking.location?.name ?? 'Location to be confirmed';
   const durationLabel = Number.isFinite(booking.duration) ? `${booking.duration} min` : '—';
@@ -451,12 +460,20 @@ function NextSessionCard({ booking }: { booking: UpcomingBooking }) {
           </span>
         </div>
       </div>
-      {booking.clientMessage && (
-        <div className="mt-4 rounded-2xl border border-slate-100 bg-slate-50/90 p-4 text-sm text-slate-600">
-          <p className="font-semibold text-slate-900">Note from your coach</p>
-          <p className="mt-1 text-sm leading-relaxed">{booking.clientMessage}</p>
-        </div>
-      )}
+      {(() => {
+        const clientMessage = 
+          booking.bookingType === 'individual' ? booking.individualDetails?.clientMessage :
+          booking.bookingType === 'private_group' ? booking.privateGroupDetails?.clientMessage :
+          booking.bookingType === 'public_group' ? booking.publicGroupDetails?.clientMessage :
+          null;
+        
+        return clientMessage ? (
+          <div className="mt-4 rounded-2xl border border-slate-100 bg-slate-50/90 p-4 text-sm text-slate-600">
+            <p className="font-semibold text-slate-900">Note from your coach</p>
+            <p className="mt-1 text-sm leading-relaxed">{clientMessage}</p>
+          </div>
+        ) : null;
+      })()}
     </div>
   );
 }

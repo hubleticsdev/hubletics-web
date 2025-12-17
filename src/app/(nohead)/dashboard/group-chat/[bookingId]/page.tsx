@@ -32,7 +32,7 @@ export default async function GroupChatPage({
     },
   });
 
-  if (!bookingRecord || !bookingRecord.isGroupBooking) {
+  if (!bookingRecord || (bookingRecord.bookingType !== 'private_group' && bookingRecord.bookingType !== 'public_group')) {
     notFound();
   }
 

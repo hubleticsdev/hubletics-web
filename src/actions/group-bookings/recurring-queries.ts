@@ -2,7 +2,7 @@
 
 import { requireRole } from '@/lib/auth/session';
 import { db } from '@/lib/db';
-import { recurringGroupLesson, booking } from '@/lib/db/schema';
+import { recurringGroupLesson, booking, publicGroupLessonDetails } from '@/lib/db/schema';
 import { eq, and, desc } from 'drizzle-orm';
 
 export async function getMyRecurringLessons() {
@@ -43,18 +43,16 @@ export async function getRecurringLessonWithBookings(recurringId: string) {
       return { success: false, error: 'Recurring lesson not found', lesson: null, bookings: [] };
     }
 
-    const bookings = await db.query.booking.findMany({
-      where: eq(booking.recurringLessonId, recurringId),
+    // Fetch public group bookings and filter by recurringLessonId from details
+    const allBookings = await db.query.booking.findMany({
+      where: eq(booking.bookingType, 'public_group'),
       with: {
-        client: {
-          columns: {
-            name: true,
-            email: true,
-          },
-        },
+        publicGroupDetails: true,
       },
       orderBy: desc(booking.scheduledStartAt),
     });
+
+    const bookings = allBookings.filter(b => b.publicGroupDetails?.recurringLessonId === recurringId);
 
     return { success: true, lesson, bookings };
   } catch (error) {

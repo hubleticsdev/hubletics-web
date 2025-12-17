@@ -11,29 +11,26 @@ export async function getPublicGroupLessons(coachId: string) {
     const lessons = await db.query.booking.findMany({
       where: and(
         eq(booking.coachId, coachId),
-        eq(booking.isGroupBooking, true),
-        eq(booking.groupType, 'public'),
-        eq(booking.capacityStatus, 'open'),
+        eq(booking.bookingType, 'public_group'),
         gte(booking.scheduledStartAt, now)
       ),
+      with: {
+        publicGroupDetails: true,
+      },
       orderBy: (booking, { asc }) => [asc(booking.scheduledStartAt)],
     });
 
-    const lessonsWithCounts = await Promise.all(
-      lessons.map(async (lesson) => {
-        const allParticipants = await db.query.bookingParticipant.findMany({
-          where: eq(bookingParticipant.bookingId, lesson.id),
-        });
-
-        const paidParticipants = allParticipants.filter(p => p.paymentStatus === 'captured');
-
-        return {
-          ...lesson,
-          currentParticipants: allParticipants.length,
-          paidParticipants: paidParticipants.length,
-        };
-      })
-    );
+    const lessonsWithCounts = lessons
+      .filter(lesson => lesson.publicGroupDetails?.capacityStatus === 'open')
+      .map(lesson => ({
+        ...lesson,
+        maxParticipants: lesson.publicGroupDetails?.maxParticipants ?? 0,
+        minParticipants: lesson.publicGroupDetails?.minParticipants ?? 0,
+        pricePerPerson: lesson.publicGroupDetails?.pricePerPerson ?? '0',
+        clientMessage: null, // Public lessons don't have clientMessage
+        currentParticipants: lesson.publicGroupDetails?.currentParticipants ?? 0,
+        paidParticipants: lesson.publicGroupDetails?.capturedParticipants ?? 0,
+      }));
 
     return { success: true, lessons: lessonsWithCounts };
   } catch (error) {

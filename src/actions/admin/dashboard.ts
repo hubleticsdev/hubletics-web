@@ -2,7 +2,7 @@
 
 import { requireRole } from '@/lib/auth/session';
 import { db } from '@/lib/db';
-import { booking, user } from '@/lib/db/schema';
+import { booking, individualBookingDetails, user } from '@/lib/db/schema';
 import { eq, and, gte, isNull, sql } from 'drizzle-orm';
 
 export type AdminDashboardMetrics = {
@@ -30,12 +30,14 @@ export async function getAdminDashboardMetrics(): Promise<AdminDashboardMetrics>
 
   const monthlyRevenueResult = await db
     .select({
-      total: sql<number>`COALESCE(SUM(${booking.platformFeeCents}) / 100.0, 0)`
+      total: sql<number>`COALESCE(SUM(${individualBookingDetails.platformFeeCents}) / 100.0, 0)`
     })
     .from(booking)
+    .innerJoin(individualBookingDetails, eq(booking.id, individualBookingDetails.bookingId))
     .where(
       and(
         eq(booking.fulfillmentStatus, 'completed'),
+        eq(booking.bookingType, 'individual'),
         gte(booking.createdAt, startOfMonth)
       )
     );

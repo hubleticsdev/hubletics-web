@@ -1,40 +1,45 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
-import { booking, bookingParticipant, coachProfile } from '@/lib/db/schema';
-import { and, eq, lt, isNull, ne } from 'drizzle-orm';
-import { transferToCoach, stripe } from '@/lib/stripe';
+import { booking, bookingParticipant, coachProfile, individualBookingDetails, privateGroupBookingDetails, publicGroupLessonDetails } from '@/lib/db/schema';
+import { and, eq, lt, isNotNull, ne } from 'drizzle-orm';
+import { processCoachPayoutSafely } from '@/actions/bookings/manage';
 import { sendEmail } from '@/lib/email/resend';
 import { getAutoConfirmationClientEmailTemplate, getAutoConfirmationCoachEmailTemplate } from '@/lib/email/templates/payment-notifications';
 import { validateCronAuth } from '@/lib/cron/auth';
 import { incrementCoachLessonsCompleted } from '@/lib/coach-stats';
 import { formatDateOnly } from '@/lib/utils/date';
 import { recordStateTransition } from '@/lib/booking-audit';
-import { calculateCoachEarnings } from '@/lib/pricing';
+import { isIndividualBooking, isPrivateGroupBooking, isPublicGroupBooking } from '@/lib/booking-type-guards';
 
 export async function GET(request: NextRequest) {
   const authError = validateCronAuth(request);
   if (authError) return authError;
 
   try {
-
     const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
 
     console.log(`[CRON] Auto-confirm job started at ${new Date().toISOString()}`);
     console.log(`[CRON] Looking for bookings marked complete before: ${sevenDaysAgo.toISOString()}`);
 
-    const eligibleBookings = await db.query.booking.findMany({
+    // Find individual bookings that need auto-confirmation
+    const eligibleIndividualBookings = await db.query.booking.findMany({
       where: and(
+        eq(booking.bookingType, 'individual'),
         eq(booking.approvalStatus, 'accepted'),
         eq(booking.fulfillmentStatus, 'scheduled'),
-        lt(booking.coachConfirmedAt, sevenDaysAgo),
-        isNull(booking.clientConfirmedAt)
+        isNotNull(booking.coachConfirmedAt),
+        lt(booking.coachConfirmedAt, sevenDaysAgo)
       ),
       with: {
-        client: {
-          columns: {
-            name: true,
-            email: true,
-            timezone: true,
+        individualDetails: {
+          with: {
+            client: {
+              columns: {
+                name: true,
+                email: true,
+                timezone: true,
+              },
+            },
           },
         },
         coach: {
@@ -47,7 +52,50 @@ export async function GET(request: NextRequest) {
       },
     });
 
-    console.log(`[CRON] Found ${eligibleBookings.length} bookings to auto-confirm`);
+    // Filter to only those without client confirmation
+    const individualToAutoConfirm = eligibleIndividualBookings.filter(
+      b => !b.individualDetails?.clientConfirmedAt
+    );
+
+    // Find private group bookings that need auto-confirmation
+    const eligiblePrivateGroupBookings = await db.query.booking.findMany({
+      where: and(
+        eq(booking.bookingType, 'private_group'),
+        eq(booking.approvalStatus, 'accepted'),
+        eq(booking.fulfillmentStatus, 'scheduled'),
+        isNotNull(booking.coachConfirmedAt),
+        lt(booking.coachConfirmedAt, sevenDaysAgo)
+      ),
+      with: {
+        privateGroupDetails: {
+          with: {
+            organizer: {
+              columns: {
+                name: true,
+                email: true,
+                timezone: true,
+              },
+            },
+          },
+        },
+        coach: {
+          columns: {
+            name: true,
+            email: true,
+            timezone: true,
+          },
+        },
+      },
+    });
+
+    // Filter to only those without organizer confirmation
+    const privateGroupToAutoConfirm = eligiblePrivateGroupBookings.filter(
+      b => !b.privateGroupDetails?.organizerConfirmedAt
+    );
+
+    const eligibleBookings = [...individualToAutoConfirm, ...privateGroupToAutoConfirm];
+
+    console.log(`[CRON] Found ${eligibleBookings.length} bookings to auto-confirm (${individualToAutoConfirm.length} individual, ${privateGroupToAutoConfirm.length} private group)`);
 
     const results = {
       processed: 0,
@@ -60,12 +108,29 @@ export async function GET(request: NextRequest) {
       results.processed++;
       
       try {
-        console.log(`[CRON] Processing booking: ${bookingRecord.id}`);
+        console.log(`[CRON] Processing booking: ${bookingRecord.id} (${bookingRecord.bookingType})`);
 
+        // Auto-confirm in appropriate detail table
+        if (isIndividualBooking(bookingRecord)) {
+          await db
+            .update(individualBookingDetails)
+            .set({
+              clientConfirmedAt: new Date(),
+            })
+            .where(eq(individualBookingDetails.bookingId, bookingRecord.id));
+        } else if (isPrivateGroupBooking(bookingRecord)) {
+          await db
+            .update(privateGroupBookingDetails)
+            .set({
+              organizerConfirmedAt: new Date(),
+            })
+            .where(eq(privateGroupBookingDetails.bookingId, bookingRecord.id));
+        }
+
+        // Update booking fulfillment status
         await db
           .update(booking)
           .set({
-            clientConfirmedAt: new Date(),
             fulfillmentStatus: 'completed',
             updatedAt: new Date(),
           })
@@ -73,108 +138,85 @@ export async function GET(request: NextRequest) {
 
         await incrementCoachLessonsCompleted(bookingRecord.coachId);
 
-        if (bookingRecord.primaryStripePaymentIntentId) {
-          const paymentIntent = await stripe.paymentIntents.retrieve(
-            bookingRecord.primaryStripePaymentIntentId
-          );
-
-          if (paymentIntent.status !== 'succeeded') {
-            console.error(
-              `[CRON] Cannot transfer - PaymentIntent status is '${paymentIntent.status}' for booking ${bookingRecord.id}`
-            );
-            results.errors.push(`${bookingRecord.id}: Payment not succeeded (status: ${paymentIntent.status})`);
-            continue;
-          }
-
-          const charges = await stripe.charges.list({
-            payment_intent: bookingRecord.primaryStripePaymentIntentId,
-            limit: 1,
-          });
-          const charge = charges.data[0];
-          
-          if (charge?.disputed) {
-            console.error(
-              `[CRON] Cannot transfer - Payment disputed for booking ${bookingRecord.id}`
-            );
-            results.errors.push(`${bookingRecord.id}: Payment disputed`);
-            continue;
-          }
-
-          if (charge?.refunded) {
-            console.error(
-              `[CRON] Cannot transfer - Payment refunded for booking ${bookingRecord.id}`
-            );
-            results.errors.push(`${bookingRecord.id}: Payment refunded`);
-            continue;
-          }
-
-          const coach = await db.query.coachProfile.findFirst({
-            where: eq(coachProfile.userId, bookingRecord.coachId),
-            columns: {
-              stripeAccountId: true,
-            },
-          });
-
-          if (coach?.stripeAccountId) {
-            const coachPayoutAmount = bookingRecord.coachPayoutCents
-              ? bookingRecord.coachPayoutCents / 100
-              : 0;
-
-            const transfer = await transferToCoach(
-              coachPayoutAmount,
-              coach.stripeAccountId,
-              {
-                bookingId: bookingRecord.id,
-                paymentIntentId: bookingRecord.primaryStripePaymentIntentId,
-                coachId: bookingRecord.coachId,
-              }
-            );
-
-            console.log(`[CRON] Transfer to coach successful: ${transfer.id}`);
-
-            await db
-              .update(booking)
-              .set({
-                stripeTransferId: transfer.id,
-                updatedAt: new Date(),
-              })
-              .where(eq(booking.id, bookingRecord.id));
-          } else {
-            console.warn(`[CRON] Coach has no Stripe account for booking ${bookingRecord.id}`);
-            results.errors.push(`${bookingRecord.id}: Coach has no Stripe account`);
-            continue;
-          }
+        // Transfer funds to coach
+        const transferResult = await processCoachPayoutSafely(bookingRecord.id);
+        if (!transferResult.success) {
+          console.error(`[CRON] Transfer failed for booking ${bookingRecord.id}: ${transferResult.error}`);
+          results.errors.push(`${bookingRecord.id}: Transfer failed - ${transferResult.error}`);
         }
 
+        // Send emails
         const startDate = new Date(bookingRecord.scheduledStartAt);
+        
+        if (isIndividualBooking(bookingRecord) && bookingRecord.individualDetails) {
+          const clientTimezone = bookingRecord.individualDetails.client.timezone || 'America/Chicago';
+          const clientEmailTemplate = getAutoConfirmationClientEmailTemplate(
+            bookingRecord.individualDetails.client.name,
+            bookingRecord.coach.name,
+            formatDateOnly(startDate, clientTimezone)
+          );
 
-        const clientTimezone = bookingRecord.client.timezone || 'America/Chicago';
-        const clientEmailTemplate = getAutoConfirmationClientEmailTemplate(
-          bookingRecord.client.name,
-          bookingRecord.coach.name,
-          formatDateOnly(startDate, clientTimezone)
-        );
+          await sendEmail({
+            to: bookingRecord.individualDetails.client.email,
+            subject: clientEmailTemplate.subject,
+            html: clientEmailTemplate.html,
+            text: clientEmailTemplate.text,
+          });
 
-        await sendEmail({
-          to: bookingRecord.client.email,
-          subject: clientEmailTemplate.subject,
-          html: clientEmailTemplate.html,
-          text: clientEmailTemplate.text,
-        });
+          const coachTimezone = bookingRecord.coach.timezone || 'America/Chicago';
+          const coachPayoutCents = bookingRecord.individualDetails.coachPayoutCents;
+          const coachEmailTemplate = getAutoConfirmationCoachEmailTemplate(
+            bookingRecord.coach.name,
+            bookingRecord.individualDetails.client.name,
+            formatDateOnly(startDate, coachTimezone),
+            (coachPayoutCents / 100).toFixed(2)
+          );
 
-        const coachTimezone = bookingRecord.coach.timezone || 'America/Chicago';
-        const coachEmailTemplate = getAutoConfirmationCoachEmailTemplate(
-          bookingRecord.coach.name,
-          bookingRecord.client.name,
-          formatDateOnly(startDate, coachTimezone),
-          bookingRecord.coachPayoutCents ? (bookingRecord.coachPayoutCents / 100).toFixed(2) : '0.00'
-        );
+          await sendEmail({
+            to: bookingRecord.coach.email,
+            subject: coachEmailTemplate.subject,
+            html: coachEmailTemplate.html,
+            text: coachEmailTemplate.text,
+          });
+        } else if (isPrivateGroupBooking(bookingRecord) && bookingRecord.privateGroupDetails) {
+          const organizerTimezone = bookingRecord.privateGroupDetails.organizer.timezone || 'America/Chicago';
+          const organizerEmailTemplate = getAutoConfirmationClientEmailTemplate(
+            bookingRecord.privateGroupDetails.organizer.name,
+            bookingRecord.coach.name,
+            formatDateOnly(startDate, organizerTimezone)
+          );
 
-        await sendEmail({
-          to: bookingRecord.coach.email,
-          subject: coachEmailTemplate.subject,
-          html: coachEmailTemplate.html,
-          text: coachEmailTemplate.text,
+          await sendEmail({
+            to: bookingRecord.privateGroupDetails.organizer.email,
+            subject: organizerEmailTemplate.subject,
+            html: organizerEmailTemplate.html,
+            text: organizerEmailTemplate.text,
+          });
+
+          const coachTimezone = bookingRecord.coach.timezone || 'America/Chicago';
+          const coachPayoutCents = bookingRecord.privateGroupDetails.coachPayoutCents;
+          const coachEmailTemplate = getAutoConfirmationCoachEmailTemplate(
+            bookingRecord.coach.name,
+            bookingRecord.privateGroupDetails.organizer.name,
+            formatDateOnly(startDate, coachTimezone),
+            (coachPayoutCents / 100).toFixed(2)
+          );
+
+          await sendEmail({
+            to: bookingRecord.coach.email,
+            subject: coachEmailTemplate.subject,
+            html: coachEmailTemplate.html,
+            text: coachEmailTemplate.text,
+          });
+        }
+
+        // Record state transition
+        await recordStateTransition({
+          bookingId: bookingRecord.id,
+          field: 'fulfillmentStatus',
+          oldStatus: 'scheduled',
+          newStatus: 'completed',
+          reason: 'Auto-confirmed after 7 days',
         });
 
         console.log(`[CRON] Booking ${bookingRecord.id} auto-confirmed successfully`);
@@ -187,19 +229,18 @@ export async function GET(request: NextRequest) {
       }
     }
 
-
-    // auto-conplete 7+ day-old public group lessons
+    // Auto-complete 7+ day-old public group lessons (coach-only confirmation)
     const publicGroupCutoff = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
 
     const eligiblePublicGroups = await db.query.booking.findMany({
       where: and(
-        eq(booking.isGroupBooking, true),
-        eq(booking.groupType, 'public'),
+        eq(booking.bookingType, 'public_group'),
         eq(booking.approvalStatus, 'accepted'),
         ne(booking.fulfillmentStatus, 'completed'),
         lt(booking.scheduledEndAt, publicGroupCutoff)
       ),
       with: {
+        publicGroupDetails: true,
         coach: {
           columns: {
             name: true,
@@ -217,6 +258,13 @@ export async function GET(request: NextRequest) {
 
       try {
         console.log(`[CRON] Processing public group lesson: ${lesson.id}`);
+
+        if (!isPublicGroupBooking(lesson) || !lesson.publicGroupDetails) {
+          console.error(`[CRON] Invalid public group booking ${lesson.id}`);
+          results.errors.push(`${lesson.id}: Invalid booking structure`);
+          results.failed++;
+          continue;
+        }
 
         const capturedParticipants = await db.query.bookingParticipant.findMany({
           where: and(
@@ -257,51 +305,14 @@ export async function GET(request: NextRequest) {
           continue;
         }
 
-        const coach = await db.query.coachProfile.findFirst({
-          where: eq(coachProfile.userId, lesson.coachId),
-          columns: {
-            stripeAccountId: true,
-          },
-          with: {
-            user: {
-              columns: {
-                platformFeePercentage: true,
-              },
-            },
-          },
-        });
-
-        if (!coach?.stripeAccountId) {
-          console.warn(`[CRON] Coach has no Stripe account for public group ${lesson.id}`);
-          results.errors.push(`${lesson.id}: Coach has no Stripe account`);
+        // Transfer funds to coach
+        const transferResult = await processCoachPayoutSafely(lesson.id);
+        if (!transferResult.success) {
+          console.error(`[CRON] Transfer failed for public group ${lesson.id}: ${transferResult.error}`);
+          results.errors.push(`${lesson.id}: Transfer failed - ${transferResult.error}`);
           results.failed++;
           continue;
         }
-
-        const platformFeePercentage = coach.user?.platformFeePercentage
-          ? parseFloat(coach.user.platformFeePercentage as unknown as string)
-          : 15;
-
-        let totalCoachPayoutCents = 0;
-        for (const participant of capturedParticipants) {
-          const amountDollars = (participant.amountCents ?? 0) / 100;
-          const earnings = calculateCoachEarnings(amountDollars, platformFeePercentage);
-          totalCoachPayoutCents += earnings.coachPayoutCents;
-        }
-
-        const coachPayoutCents = totalCoachPayoutCents;
-
-        const transfer = await transferToCoach(
-          coachPayoutCents / 100,
-          coach.stripeAccountId,
-          {
-            bookingId: lesson.id,
-            paymentIntentId: `auto_aggregate_${capturedParticipants.length}_participants`,
-            coachId: lesson.coachId,
-          }
-        );
-
-        console.log(`[CRON] Aggregate transfer ${transfer.id}: $${coachPayoutCents / 100} for ${capturedParticipants.length} participants`);
 
         const oldFulfillmentStatus = lesson.fulfillmentStatus;
 
@@ -310,8 +321,6 @@ export async function GET(request: NextRequest) {
           .set({
             fulfillmentStatus: 'completed',
             coachConfirmedAt: new Date(),
-            stripeTransferId: transfer.id,
-            coachPayoutCents,
             updatedAt: new Date(),
           })
           .where(eq(booking.id, lesson.id));
@@ -371,11 +380,10 @@ export async function GET(request: NextRequest) {
               <p>Hi ${lesson.coach.name},</p>
               <p>Your group lesson on <strong>${lessonDateForCoach}</strong> has been automatically completed.</p>
               <p><strong>Participants:</strong> ${capturedParticipants.length}</p>
-              <p><strong>Payout:</strong> $${(coachPayoutCents / 100).toFixed(2)}</p>
               <p>The payment has been transferred to your connected Stripe account.</p>
             </div>
           `,
-          text: `Hi ${lesson.coach.name}, your group lesson on ${lessonDateForCoach} has been automatically completed. ${capturedParticipants.length} participants, payout: $${(coachPayoutCents / 100).toFixed(2)}.`,
+          text: `Hi ${lesson.coach.name}, your group lesson on ${lessonDateForCoach} has been automatically completed. ${capturedParticipants.length} participants.`,
         });
 
         console.log(`[CRON] Public group lesson ${lesson.id} auto-completed successfully`);

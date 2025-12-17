@@ -10,6 +10,7 @@ import { PaymentModal } from './payment-modal';
 interface AthleteBookingCardProps {
   booking: {
     id: string;
+    bookingType: 'individual' | 'private_group' | 'public_group';
     scheduledStartAt: Date;
     scheduledEndAt: Date;
     duration: number;
@@ -18,17 +19,24 @@ interface AthleteBookingCardProps {
       address: string;
       notes?: string;
     };
-    expectedGrossCents?: number | null;
     status: UiBookingStatus;
     coachConfirmedAt?: Date | null;
-    clientConfirmedAt?: Date | null;
-    paymentDueAt?: Date | null;
     coach: {
       id: string;
       name: string;
       email: string;
       image: string | null;
     };
+    individualDetails?: {
+      clientPaysCents: number;
+      paymentDueAt?: Date | null;
+      clientConfirmedAt?: Date | null;
+    } | null;
+    privateGroupDetails?: {
+      totalGrossCents: number;
+      paymentDueAt?: Date | null;
+    } | null;
+    pendingParticipantsCount?: number;
   };
   timezone?: string;
   onUpdate?: () => void;
@@ -43,7 +51,20 @@ export function AthleteBookingCard({ booking, timezone = 'America/Chicago', onUp
   const startDate = new Date(booking.scheduledStartAt);
   const endDate = new Date(booking.scheduledEndAt);
   const isPast = startDate < new Date();
-  const amount = booking.expectedGrossCents ? (booking.expectedGrossCents / 100).toFixed(2) : '0.00';
+
+  // Calculate amount based on booking type
+  let amount = '0.00';
+  let paymentDueAt: Date | null | undefined = null;
+
+  if (booking.bookingType === 'individual' && booking.individualDetails) {
+    amount = (booking.individualDetails.clientPaysCents / 100).toFixed(2);
+    paymentDueAt = booking.individualDetails.paymentDueAt;
+  } else if (booking.bookingType === 'private_group' && booking.privateGroupDetails) {
+    amount = (booking.privateGroupDetails.totalGrossCents / 100).toFixed(2);
+    paymentDueAt = booking.privateGroupDetails.paymentDueAt;
+  }
+
+  const clientConfirmedAt = booking.individualDetails?.clientConfirmedAt;
 
   const handleConfirmComplete = async () => {
     setIsProcessing(true);
@@ -192,7 +213,7 @@ export function AthleteBookingCard({ booking, timezone = 'America/Chicago', onUp
       </div>
 
       {/* Actions */}
-      {booking.status === 'confirmed' && booking.coachConfirmedAt && !booking.clientConfirmedAt && (
+      {booking.status === 'confirmed' && booking.coachConfirmedAt && !clientConfirmedAt && (
         <div className="pt-4 border-t border-gray-200">
           <div className="p-3 bg-blue-50 border border-blue-200 rounded-lg mb-3">
             <p className="text-sm text-blue-800">
@@ -221,7 +242,7 @@ export function AthleteBookingCard({ booking, timezone = 'America/Chicago', onUp
         </div>
       )}
 
-      {booking.status === 'awaiting_payment' && booking.paymentDueAt && !isPast && (
+      {booking.status === 'awaiting_payment' && paymentDueAt && !isPast && (
         <div className="pt-4 border-t border-gray-200 space-y-3">
           <button
             onClick={() => setPaymentModalOpen(true)}
@@ -234,7 +255,7 @@ export function AthleteBookingCard({ booking, timezone = 'America/Chicago', onUp
             <svg className="h-3 w-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
             </svg>
-            Payment due: {formatDateWithTimezone(new Date(booking.paymentDueAt!), timezone)}
+            Payment due: {formatDateWithTimezone(new Date(paymentDueAt!), timezone)}
           </div>
         </div>
       )}
@@ -284,18 +305,21 @@ export function AthleteBookingCard({ booking, timezone = 'America/Chicago', onUp
         </form>
       )}
 
-      <PaymentModal
-        isOpen={paymentModalOpen}
-        onClose={() => setPaymentModalOpen(false)}
-        bookingId={booking.id}
-        coachName={booking.coach.name}
-        amount={booking.expectedGrossCents ? booking.expectedGrossCents / 100 : 0}
-        paymentDueAt={booking.paymentDueAt ? new Date(booking.paymentDueAt) : new Date()}
-        onSuccess={() => {
-          setPaymentModalOpen(false);
-          onUpdate?.();
-        }}
-      />
+      {booking.bookingType !== 'public_group' && (
+        <PaymentModal
+          isOpen={paymentModalOpen}
+          onClose={() => setPaymentModalOpen(false)}
+          bookingId={booking.id}
+          coachName={booking.coach.name}
+          amount={parseFloat(amount)}
+          paymentDueAt={paymentDueAt ? new Date(paymentDueAt) : new Date()}
+          bookingType={booking.bookingType === 'private_group' ? 'private_group' : 'individual'}
+          onSuccess={() => {
+            setPaymentModalOpen(false);
+            onUpdate?.();
+          }}
+        />
+      )}
     </div>
   );
 }

@@ -19,7 +19,7 @@ export async function getOrCreateGroupConversation(bookingId: string) {
       where: eq(booking.id, bookingId),
     });
 
-    if (!bookingRecord || !bookingRecord.isGroupBooking) {
+    if (!bookingRecord || (bookingRecord.bookingType !== 'private_group' && bookingRecord.bookingType !== 'public_group')) {
       throw new Error('Booking not found or not a group booking');
     }
 
