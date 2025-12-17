@@ -29,8 +29,9 @@ export async function getOrCreateGroupConversation(bookingId: string) {
       where: eq(bookingParticipant.bookingId, bookingId),
     });
     const isParticipant = participants.some(p => p.userId === session.user.id);
+    const isAdmin = session.user.role === 'admin';
 
-    if (!isCoach && !isParticipant) {
+    if (!isCoach && !isParticipant && !isAdmin) {
       throw new Error('Unauthorized - not a member of this group');
     }
 
@@ -79,15 +80,18 @@ export async function getGroupConversationMessages(conversationId: string, limit
       throw new Error('Unauthorized');
     }
 
-    const participant = await db.query.groupConversationParticipant.findFirst({
-      where: and(
-        eq(groupConversationParticipant.conversationId, conversationId),
-        eq(groupConversationParticipant.userId, session.user.id)
-      ),
-    });
+    // Admins can access any group conversation
+    if (session.user.role !== 'admin') {
+      const participant = await db.query.groupConversationParticipant.findFirst({
+        where: and(
+          eq(groupConversationParticipant.conversationId, conversationId),
+          eq(groupConversationParticipant.userId, session.user.id)
+        ),
+      });
 
-    if (!participant) {
-      throw new Error('Unauthorized - not a member of this conversation');
+      if (!participant) {
+        throw new Error('Unauthorized - not a member of this conversation');
+      }
     }
 
     const messages = await db.query.groupMessage.findMany({
@@ -127,15 +131,18 @@ export async function sendGroupMessage(conversationId: string, content: string) 
     const moderationResult = checkMessageContent(validatedContent.trim());
     const shouldFlag = !moderationResult.isSafe;
 
-    const participant = await db.query.groupConversationParticipant.findFirst({
-      where: and(
-        eq(groupConversationParticipant.conversationId, validatedConversationId),
-        eq(groupConversationParticipant.userId, session.user.id)
-      ),
-    });
+    // Admins can send messages to any group conversation
+    if (session.user.role !== 'admin') {
+      const participant = await db.query.groupConversationParticipant.findFirst({
+        where: and(
+          eq(groupConversationParticipant.conversationId, validatedConversationId),
+          eq(groupConversationParticipant.userId, session.user.id)
+        ),
+      });
 
-    if (!participant) {
-      throw new Error('Unauthorized - not a member of this conversation');
+      if (!participant) {
+        throw new Error('Unauthorized - not a member of this conversation');
+      }
     }
 
     const [newMessage] = await db
@@ -264,15 +271,17 @@ export async function getGroupConversationParticipants(conversationId: string) {
       throw new Error('Unauthorized');
     }
 
-    const participant = await db.query.groupConversationParticipant.findFirst({
-      where: and(
-        eq(groupConversationParticipant.conversationId, conversationId),
-        eq(groupConversationParticipant.userId, session.user.id)
-      ),
-    });
+    if (session.user.role !== 'admin') {
+      const participant = await db.query.groupConversationParticipant.findFirst({
+        where: and(
+          eq(groupConversationParticipant.conversationId, conversationId),
+          eq(groupConversationParticipant.userId, session.user.id)
+        ),
+      });
 
-    if (!participant) {
-      throw new Error('Unauthorized');
+      if (!participant) {
+        throw new Error('Unauthorized');
+      }
     }
 
     const participants = await db.query.groupConversationParticipant.findMany({

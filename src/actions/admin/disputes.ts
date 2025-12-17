@@ -1,18 +1,22 @@
 'use server';
 
 import { db } from '@/lib/db';
-import { booking, individualBookingDetails, privateGroupBookingDetails, publicGroupLessonDetails } from '@/lib/db/schema';
-import { eq } from 'drizzle-orm';
+import { booking, individualBookingDetails, privateGroupBookingDetails, publicGroupLessonDetails, bookingParticipant } from '@/lib/db/schema';
+import { eq, and } from 'drizzle-orm';
 import type { BookingWithDetails } from '@/lib/booking-type-guards';
 import { isIndividualBooking, isPrivateGroupBooking, isPublicGroupBooking } from '@/lib/booking-type-guards';
+import { requireRole, requireAuth } from '@/lib/auth/session';
 import { Resend } from 'resend';
 import { incrementCoachLessonsCompleted } from '@/lib/coach-stats';
 import { stripe } from '@/lib/stripe';
 import { formatDateOnly } from '@/lib/utils/date';
+import { z } from 'zod';
+import { validateInput } from '@/lib/validations';
 
 const resend = new Resend(process.env.RESEND_API_KEY!);
 
 export async function getDisputedBookings(page = 1, limit = 25) {
+  await requireRole('admin');
   try {
     const offset = (page - 1) * limit;
 
@@ -116,15 +120,31 @@ export async function getDisputedBookings(page = 1, limit = 25) {
   }
 }
 
+const processRefundSchema = z.object({
+  bookingId: z.string().uuid(),
+  refundType: z.enum(['full', 'partial']),
+  partialAmount: z.number().positive().optional(),
+  reason: z.string().optional(),
+});
+
 export async function processRefund(
   bookingId: string,
   refundType: 'full' | 'partial',
   partialAmount?: number,
   reason?: string
 ) {
+  await requireRole('admin');
+
   try {
+    const validated = validateInput(processRefundSchema, {
+      bookingId,
+      refundType,
+      partialAmount,
+      reason,
+    });
+
     const bookingRecord = await db.query.booking.findFirst({
-      where: eq(booking.id, bookingId),
+      where: eq(booking.id, validated.bookingId),
       with: {
         coach: {
           columns: {
@@ -146,6 +166,19 @@ export async function processRefund(
             },
           },
         },
+        privateGroupDetails: {
+          with: {
+            organizer: {
+              columns: {
+                id: true,
+                name: true,
+                email: true,
+                timezone: true,
+              },
+            },
+          },
+        },
+        publicGroupDetails: true,
       },
     });
 
@@ -153,111 +186,365 @@ export async function processRefund(
       return { success: false, error: 'Booking not found' };
     }
 
-    if (!bookingRecord.individualDetails?.stripePaymentIntentId) {
-      return { success: false, error: 'No payment found for this booking' };
+    // Handle individual bookings
+    if (bookingRecord.bookingType === 'individual' && bookingRecord.individualDetails) {
+      const details = bookingRecord.individualDetails;
+      if (!details.stripePaymentIntentId) {
+        return { success: false, error: 'No payment found for this booking' };
+      }
+
+      const paymentIntent = await stripe.paymentIntents.retrieve(details.stripePaymentIntentId);
+
+      if (paymentIntent.status !== 'succeeded') {
+        return { success: false, error: 'Payment was not successful' };
+      }
+
+      const charges = await stripe.charges.list({
+        payment_intent: details.stripePaymentIntentId,
+        limit: 1,
+      });
+
+      if (charges.data.length === 0) {
+        return { success: false, error: 'No charge found for this payment' };
+      }
+
+      const charge = charges.data[0];
+      const clientPaidCents = details.clientPaysCents || 0;
+      const refundAmountCents =
+        validated.refundType === 'full' ? clientPaidCents : Math.round((validated.partialAmount || 0) * 100);
+
+      if (refundAmountCents <= 0 || refundAmountCents > clientPaidCents) {
+        return { success: false, error: 'Invalid refund amount' };
+      }
+
+      const refund = await stripe.refunds.create({
+        charge: charge.id,
+        amount: refundAmountCents,
+        reverse_transfer: true,
+        reason: 'requested_by_customer',
+      });
+
+      await db
+        .update(booking)
+        .set({
+          approvalStatus: 'cancelled',
+          fulfillmentStatus: 'disputed',
+          cancellationReason: validated.reason || 'Refund processed by admin',
+          updatedAt: new Date(),
+        })
+        .where(eq(booking.id, validated.bookingId));
+
+      await db
+        .update(individualBookingDetails)
+        .set({
+          paymentStatus: 'refunded',
+        })
+        .where(eq(individualBookingDetails.bookingId, validated.bookingId));
+
+      const client = details.client;
+      if (!client) {
+        return { success: false, error: 'Client not found' };
+      }
+
+      await resend.emails.send({
+        from: 'Hubletics <noreply@hubletics.com>',
+        to: client.email,
+        subject: `Refund Processed - ${bookingRecord.coach.name}`,
+        html: `
+          <h2>Refund Processed</h2>
+          <p>Hi ${client.name},</p>
+          <p>Your refund of <strong>$${(refundAmountCents / 100).toFixed(2)}</strong> has been processed.</p>
+          <p><strong>Booking Details:</strong></p>
+          <ul>
+            <li>Coach: ${bookingRecord.coach.name}</li>
+            <li>Date: ${formatDateOnly(new Date(bookingRecord.scheduledStartAt), client.timezone || 'America/Chicago')}</li>
+            <li>Original Amount: $${(clientPaidCents / 100).toFixed(2)}</li>
+            <li>Refund Amount: $${(refundAmountCents / 100).toFixed(2)}</li>
+          </ul>
+          ${validated.reason ? `<p><strong>Reason:</strong> ${validated.reason}</p>` : ''}
+          <p>The refund should appear in your account within 5-10 business days.</p>
+        `,
+        text: `Hi ${client.name}, Your refund of $${(refundAmountCents / 100).toFixed(2)} has been processed for your booking with ${bookingRecord.coach.name}. The refund should appear in your account within 5-10 business days.`,
+      });
+
+      await resend.emails.send({
+        from: 'Hubletics <noreply@hubletics.com>',
+        to: bookingRecord.coach.email,
+        subject: `Booking Refunded - ${client.name}`,
+        html: `
+          <h2>Booking Refunded</h2>
+          <p>Hi ${bookingRecord.coach.name},</p>
+          <p>A refund of <strong>$${(refundAmountCents / 100).toFixed(2)}</strong> has been issued to ${client.name}.</p>
+          <p><strong>Booking Details:</strong></p>
+          <ul>
+            <li>Client: ${client.name}</li>
+            <li>Date: ${formatDateOnly(new Date(bookingRecord.scheduledStartAt), bookingRecord.coach.timezone || 'America/Chicago')}</li>
+            <li>Refund Amount: $${(refundAmountCents / 100).toFixed(2)}</li>
+          </ul>
+          ${validated.reason ? `<p><strong>Reason:</strong> ${validated.reason}</p>` : ''}
+          <p>The funds will be reversed from your account accordingly.</p>
+        `,
+        text: `Hi ${bookingRecord.coach.name}, A refund of $${(refundAmountCents / 100).toFixed(2)} has been issued to ${client.name} for your booking on ${formatDateOnly(new Date(bookingRecord.scheduledStartAt), bookingRecord.coach.timezone || 'America/Chicago')}.`,
+      });
+
+      return {
+        success: true,
+        message: `Refund of $${(refundAmountCents / 100).toFixed(2)} processed successfully`,
+        refundId: refund.id,
+      };
     }
 
-    // Fetch the PaymentIntent to get the charge ID
-    const paymentIntent = await stripe.paymentIntents.retrieve(
-bookingRecord.individualDetails.stripePaymentIntentId
-    );
+    // Handle private group bookings
+    if (bookingRecord.bookingType === 'private_group' && bookingRecord.privateGroupDetails) {
+      if (!bookingRecord.privateGroupDetails.stripePaymentIntentId) {
+        return { success: false, error: 'No payment found for this booking' };
+      }
 
-    if (paymentIntent.status !== 'succeeded') {
-      return { success: false, error: 'Payment was not successful' };
+      const paymentIntent = await stripe.paymentIntents.retrieve(
+        bookingRecord.privateGroupDetails.stripePaymentIntentId
+      );
+
+      if (paymentIntent.status !== 'succeeded') {
+        return { success: false, error: 'Payment was not successful' };
+      }
+
+      const charges = await stripe.charges.list({
+        payment_intent: bookingRecord.privateGroupDetails.stripePaymentIntentId,
+        limit: 1,
+      });
+
+      if (charges.data.length === 0) {
+        return { success: false, error: 'No charge found for this payment' };
+      }
+
+      const charge = charges.data[0];
+      const totalPaidCents = bookingRecord.privateGroupDetails.totalGrossCents || 0;
+      const refundAmountCents =
+        validated.refundType === 'full' ? totalPaidCents : Math.round((validated.partialAmount || 0) * 100);
+
+      if (refundAmountCents <= 0 || refundAmountCents > totalPaidCents) {
+        return { success: false, error: 'Invalid refund amount' };
+      }
+
+      const refund = await stripe.refunds.create({
+        charge: charge.id,
+        amount: refundAmountCents,
+        reverse_transfer: true,
+        reason: 'requested_by_customer',
+      });
+
+      await db
+        .update(booking)
+        .set({
+          approvalStatus: 'cancelled',
+          fulfillmentStatus: 'disputed',
+          cancellationReason: validated.reason || 'Refund processed by admin',
+          updatedAt: new Date(),
+        })
+        .where(eq(booking.id, validated.bookingId));
+
+      await db
+        .update(privateGroupBookingDetails)
+        .set({
+          paymentStatus: 'refunded',
+        })
+        .where(eq(privateGroupBookingDetails.bookingId, validated.bookingId));
+
+      const organizer = bookingRecord.privateGroupDetails.organizer;
+      if (!organizer) {
+        return { success: false, error: 'Organizer not found' };
+      }
+      await resend.emails.send({
+        from: 'Hubletics <noreply@hubletics.com>',
+        to: organizer.email,
+        subject: `Refund Processed - ${bookingRecord.coach.name}`,
+        html: `
+          <h2>Refund Processed</h2>
+          <p>Hi ${organizer.name},</p>
+          <p>Your refund of <strong>$${(refundAmountCents / 100).toFixed(2)}</strong> has been processed for your private group booking.</p>
+          <p><strong>Booking Details:</strong></p>
+          <ul>
+            <li>Coach: ${bookingRecord.coach.name}</li>
+            <li>Date: ${formatDateOnly(new Date(bookingRecord.scheduledStartAt), organizer.timezone || 'America/Chicago')}</li>
+            <li>Original Amount: $${(totalPaidCents / 100).toFixed(2)}</li>
+            <li>Refund Amount: $${(refundAmountCents / 100).toFixed(2)}</li>
+          </ul>
+          ${validated.reason ? `<p><strong>Reason:</strong> ${validated.reason}</p>` : ''}
+          <p>The refund should appear in your account within 5-10 business days.</p>
+        `,
+        text: `Hi ${organizer.name}, Your refund of $${(refundAmountCents / 100).toFixed(2)} has been processed for your private group booking with ${bookingRecord.coach.name}. The refund should appear in your account within 5-10 business days.`,
+      });
+
+      await resend.emails.send({
+        from: 'Hubletics <noreply@hubletics.com>',
+        to: bookingRecord.coach.email,
+        subject: `Private Group Booking Refunded - ${organizer.name}`,
+        html: `
+          <h2>Private Group Booking Refunded</h2>
+          <p>Hi ${bookingRecord.coach.name},</p>
+          <p>A refund of <strong>$${(refundAmountCents / 100).toFixed(2)}</strong> has been issued to ${organizer.name}.</p>
+          <p><strong>Booking Details:</strong></p>
+          <ul>
+            <li>Organizer: ${organizer.name}</li>
+            <li>Date: ${formatDateOnly(new Date(bookingRecord.scheduledStartAt), bookingRecord.coach.timezone || 'America/Chicago')}</li>
+            <li>Refund Amount: $${(refundAmountCents / 100).toFixed(2)}</li>
+          </ul>
+          ${validated.reason ? `<p><strong>Reason:</strong> ${validated.reason}</p>` : ''}
+          <p>The funds will be reversed from your account accordingly.</p>
+        `,
+        text: `Hi ${bookingRecord.coach.name}, A refund of $${(refundAmountCents / 100).toFixed(2)} has been issued to ${organizer.name} for your private group booking on ${formatDateOnly(new Date(bookingRecord.scheduledStartAt), bookingRecord.coach.timezone || 'America/Chicago')}.`,
+      });
+
+      return {
+        success: true,
+        message: `Refund of $${(refundAmountCents / 100).toFixed(2)} processed successfully`,
+        refundId: refund.id,
+      };
     }
 
-    // Get the charge from the payment intent
-    const charges = await stripe.charges.list({
-      payment_intent: bookingRecord.individualDetails.stripePaymentIntentId,
-      limit: 1,
-    });
+    // Handle public group bookings, refund all captured participants
+    if (bookingRecord.bookingType === 'public_group') {
+      const capturedParticipants = await db.query.bookingParticipant.findMany({
+        where: and(
+          eq(bookingParticipant.bookingId, validated.bookingId),
+          eq(bookingParticipant.paymentStatus, 'captured')
+        ),
+        with: {
+          user: {
+            columns: {
+              id: true,
+              name: true,
+              email: true,
+              timezone: true,
+            },
+          },
+        },
+      });
 
-    if (charges.data.length === 0) {
-      return { success: false, error: 'No charge found for this payment' };
+      if (capturedParticipants.length === 0) {
+        return { success: false, error: 'No captured payments found for this booking' };
+      }
+
+      const totalPaidCents = capturedParticipants.reduce((sum, p) => sum + (p.amountCents || 0), 0);
+      const refundAmountCents =
+        validated.refundType === 'full' ? totalPaidCents : Math.round((validated.partialAmount || 0) * 100);
+
+      if (refundAmountCents <= 0 || refundAmountCents > totalPaidCents) {
+        return { success: false, error: 'Invalid refund amount' };
+      }
+
+      // Calculate per-participant refund
+      const refundPerParticipant = Math.floor(refundAmountCents / capturedParticipants.length);
+      const remainder = refundAmountCents % capturedParticipants.length;
+
+      let refundedCount = 0;
+      let totalRefunded = 0;
+
+      for (let i = 0; i < capturedParticipants.length; i++) {
+        const participant = capturedParticipants[i];
+        if (!participant.stripePaymentIntentId) continue;
+
+        const participantRefundAmount = refundPerParticipant + (i < remainder ? 1 : 0);
+
+        try {
+          const paymentIntent = await stripe.paymentIntents.retrieve(participant.stripePaymentIntentId);
+          if (paymentIntent.status !== 'succeeded') continue;
+
+          const charges = await stripe.charges.list({
+            payment_intent: participant.stripePaymentIntentId,
+            limit: 1,
+          });
+
+          if (charges.data.length === 0) continue;
+
+          const refund = await stripe.refunds.create({
+            charge: charges.data[0].id,
+            amount: participantRefundAmount,
+            reverse_transfer: true,
+            reason: 'requested_by_customer',
+          });
+
+          await db
+            .update(bookingParticipant)
+            .set({
+              paymentStatus: 'refunded',
+              refundedAt: new Date(),
+              refundAmount: (participantRefundAmount / 100).toString(),
+            })
+            .where(eq(bookingParticipant.id, participant.id));
+
+          refundedCount++;
+          totalRefunded += participantRefundAmount;
+
+          // Send email to participant
+          if (participant.user) {
+            await resend.emails.send({
+              from: 'Hubletics <noreply@hubletics.com>',
+              to: participant.user.email,
+              subject: `Refund Processed - ${bookingRecord.coach.name}`,
+            html: `
+              <h2>Refund Processed</h2>
+              <p>Hi ${participant.user.name},</p>
+              <p>Your refund of <strong>$${(participantRefundAmount / 100).toFixed(2)}</strong> has been processed for your public group lesson.</p>
+              <p><strong>Booking Details:</strong></p>
+              <ul>
+                <li>Coach: ${bookingRecord.coach.name}</li>
+                <li>Date: ${formatDateOnly(new Date(bookingRecord.scheduledStartAt), participant.user.timezone || 'America/Chicago')}</li>
+                <li>Original Amount: $${((participant.amountCents || 0) / 100).toFixed(2)}</li>
+                <li>Refund Amount: $${(participantRefundAmount / 100).toFixed(2)}</li>
+              </ul>
+              ${validated.reason ? `<p><strong>Reason:</strong> ${validated.reason}</p>` : ''}
+              <p>The refund should appear in your account within 5-10 business days.</p>
+            `,
+              text: `Hi ${participant.user.name}, Your refund of $${(participantRefundAmount / 100).toFixed(2)} has been processed for your public group lesson with ${bookingRecord.coach.name}. The refund should appear in your account within 5-10 business days.`,
+            });
+          }
+        } catch (error) {
+          console.error(`Failed to refund participant ${participant.userId}:`, error);
+        }
+      }
+
+      if (refundedCount === 0) {
+        return { success: false, error: 'Failed to process any refunds' };
+      }
+
+      await db
+        .update(booking)
+        .set({
+          approvalStatus: 'cancelled',
+          fulfillmentStatus: 'disputed',
+          cancellationReason: validated.reason || 'Refund processed by admin',
+          updatedAt: new Date(),
+        })
+        .where(eq(booking.id, validated.bookingId));
+
+      await resend.emails.send({
+        from: 'Hubletics <noreply@hubletics.com>',
+        to: bookingRecord.coach.email,
+        subject: `Public Group Lesson Refunded`,
+        html: `
+          <h2>Public Group Lesson Refunded</h2>
+          <p>Hi ${bookingRecord.coach.name},</p>
+          <p>Refunds totaling <strong>$${(totalRefunded / 100).toFixed(2)}</strong> have been issued to ${refundedCount} participant(s) for your public group lesson.</p>
+          <p><strong>Booking Details:</strong></p>
+          <ul>
+            <li>Date: ${formatDateOnly(new Date(bookingRecord.scheduledStartAt), bookingRecord.coach.timezone || 'America/Chicago')}</li>
+            <li>Total Refund Amount: $${(totalRefunded / 100).toFixed(2)}</li>
+            <li>Participants Refunded: ${refundedCount}</li>
+          </ul>
+          ${validated.reason ? `<p><strong>Reason:</strong> ${validated.reason}</p>` : ''}
+          <p>The funds will be reversed from your account accordingly.</p>
+        `,
+        text: `Hi ${bookingRecord.coach.name}, Refunds totaling $${(totalRefunded / 100).toFixed(2)} have been issued to ${refundedCount} participant(s) for your public group lesson on ${formatDateOnly(new Date(bookingRecord.scheduledStartAt), bookingRecord.coach.timezone || 'America/Chicago')}.`,
+      });
+
+      return {
+        success: true,
+        message: `Refunded $${(totalRefunded / 100).toFixed(2)} to ${refundedCount} participant(s)`,
+      };
     }
 
-    const charge = charges.data[0];
-
-    const clientPaidCents = bookingRecord.individualDetails?.clientPaysCents || 0;
-    const refundAmountCents =
-      refundType === 'full' ? clientPaidCents : Math.round((partialAmount || 0) * 100);
-
-    if (refundAmountCents <= 0 || refundAmountCents > clientPaidCents) {
-      return { success: false, error: 'Invalid refund amount' };
-    }
-
-    const refund = await stripe.refunds.create({
-      charge: charge.id,
-      amount: refundAmountCents,
-      reverse_transfer: true,
-      reason: 'requested_by_customer',
-    });
-
-    // Update booking record
-    await db
-      .update(booking)
-      .set({
-        approvalStatus: 'cancelled',
-        fulfillmentStatus: 'disputed',
-        cancellationReason: reason || 'Refund processed by admin',
-        updatedAt: new Date(),
-      })
-      .where(eq(booking.id, bookingId));
-
-    // Update payment status in details table
-    await db
-      .update(individualBookingDetails)
-      .set({
-        paymentStatus: 'refunded',
-      })
-      .where(eq(individualBookingDetails.bookingId, bookingId));
-
-    await resend.emails.send({
-      from: 'Hubletics <noreply@hubletics.com>',
-      to: bookingRecord.individualDetails?.client.email,
-      subject: `Refund Processed - ${bookingRecord.coach.name}`,
-      html: `
-        <h2>Refund Processed</h2>
-        <p>Hi ${bookingRecord.individualDetails?.client.name},</p>
-        <p>Your refund of <strong>$${(refundAmountCents / 100).toFixed(2)}</strong> has been processed.</p>
-        <p><strong>Booking Details:</strong></p>
-        <ul>
-          <li>Coach: ${bookingRecord.coach.name}</li>
-          <li>Date: ${formatDateOnly(new Date(bookingRecord.scheduledStartAt), bookingRecord.individualDetails?.client.timezone || 'America/Chicago')}
-          <li>Original Amount: $${(clientPaidCents / 100).toFixed(2)}</li>
-          <li>Refund Amount: $${(refundAmountCents / 100).toFixed(2)}</li>
-        </ul>
-        ${reason ? `<p><strong>Reason:</strong> ${reason}</p>` : ''}
-        <p>The refund should appear in your account within 5-10 business days.</p>
-      `,
-      text: `Hi ${bookingRecord.individualDetails?.client.name}, Your refund of $${(refundAmountCents / 100).toFixed(2)} has been processed for your booking with ${bookingRecord.coach.name}. The refund should appear in your account within 5-10 business days.`,
-    });
-
-    await resend.emails.send({
-      from: 'Hubletics <noreply@hubletics.com>',
-      to: bookingRecord.coach.email,
-      subject: `Booking Refunded - ${bookingRecord.individualDetails?.client.name}`,
-      html: `
-        <h2>Booking Refunded</h2>
-        <p>Hi ${bookingRecord.coach.name},</p>
-        <p>A refund of <strong>$${(refundAmountCents / 100).toFixed(2)}</strong> has been issued to ${bookingRecord.individualDetails?.client.name}.</p>
-        <p><strong>Booking Details:</strong></p>
-        <ul>
-          <li>Client: ${bookingRecord.individualDetails?.client.name}</li>
-          <li>Date: ${formatDateOnly(new Date(bookingRecord.scheduledStartAt), bookingRecord.individualDetails?.client.timezone || 'America/Chicago')}
-          <li>Refund Amount: $${(refundAmountCents / 100).toFixed(2)}</li>
-        </ul>
-        ${reason ? `<p><strong>Reason:</strong> ${reason}</p>` : ''}
-        <p>The funds will be reversed from your account accordingly.</p>
-      `,
-      text: `Hi ${bookingRecord.coach.name}, A refund of $${(refundAmountCents / 100).toFixed(2)} has been issued to ${bookingRecord.individualDetails?.client.name} for your booking on ${formatDateOnly(new Date(bookingRecord.scheduledStartAt), bookingRecord.coach.timezone || 'America/Chicago')}.`,
-    });
-
-    return {
-      success: true,
-      message: `Refund of $${(refundAmountCents / 100).toFixed(2)} processed successfully`,
-      refundId: refund.id,
-    };
+    return { success: false, error: 'Unsupported booking type' };
   } catch (error) {
     console.error('Error processing refund:', error);
     return {
@@ -267,11 +554,57 @@ bookingRecord.individualDetails.stripePaymentIntentId
   }
 }
 
+const markDisputeResolvedSchema = z.object({
+  bookingId: z.string().uuid(),
+  resolution: z.string().min(1),
+});
+
 export async function markDisputeResolved(bookingId: string, resolution: string) {
+  await requireRole('admin');
+
   try {
+    const validated = validateInput(markDisputeResolvedSchema, {
+      bookingId,
+      resolution,
+    });
+
     const bookingRecord = await db.query.booking.findFirst({
-      where: eq(booking.id, bookingId),
-      columns: { coachId: true },
+      where: eq(booking.id, validated.bookingId),
+      with: {
+        coach: {
+          columns: {
+            id: true,
+            name: true,
+            email: true,
+            timezone: true,
+          },
+        },
+        individualDetails: {
+          with: {
+            client: {
+              columns: {
+                id: true,
+                name: true,
+                email: true,
+                timezone: true,
+              },
+            },
+          },
+        },
+        privateGroupDetails: {
+          with: {
+            organizer: {
+              columns: {
+                id: true,
+                name: true,
+                email: true,
+                timezone: true,
+              },
+            },
+          },
+        },
+        publicGroupDetails: true,
+      },
     });
 
     if (!bookingRecord) {
@@ -282,12 +615,58 @@ export async function markDisputeResolved(bookingId: string, resolution: string)
       .update(booking)
       .set({
         fulfillmentStatus: 'completed',
-        cancellationReason: `Dispute resolved: ${resolution}`,
+        cancellationReason: `Dispute resolved: ${validated.resolution}`,
         updatedAt: new Date(),
       })
-      .where(eq(booking.id, bookingId));
+      .where(eq(booking.id, validated.bookingId));
 
     await incrementCoachLessonsCompleted(bookingRecord.coachId);
+
+    const clientInfo =
+      bookingRecord.bookingType === 'individual' && bookingRecord.individualDetails?.client
+        ? bookingRecord.individualDetails.client
+        : bookingRecord.bookingType === 'private_group' && bookingRecord.privateGroupDetails?.organizer
+        ? bookingRecord.privateGroupDetails.organizer
+        : null;
+
+    if (clientInfo) {
+      await resend.emails.send({
+        from: 'Hubletics <noreply@hubletics.com>',
+        to: clientInfo.email,
+        subject: `Dispute Resolved - ${bookingRecord.coach.name}`,
+        html: `
+          <h2>Dispute Resolved</h2>
+          <p>Hi ${clientInfo.name},</p>
+          <p>The dispute for your booking with ${bookingRecord.coach.name} has been resolved.</p>
+          <p><strong>Resolution:</strong> ${validated.resolution}</p>
+          <p><strong>Booking Details:</strong></p>
+          <ul>
+            <li>Coach: ${bookingRecord.coach.name}</li>
+            <li>Date: ${formatDateOnly(new Date(bookingRecord.scheduledStartAt), clientInfo.timezone || 'America/Chicago')}</li>
+          </ul>
+          <p>The booking has been marked as completed.</p>
+        `,
+        text: `Hi ${clientInfo.name}, The dispute for your booking with ${bookingRecord.coach.name} has been resolved. Resolution: ${validated.resolution}`,
+      });
+    }
+
+    await resend.emails.send({
+      from: 'Hubletics <noreply@hubletics.com>',
+      to: bookingRecord.coach.email,
+      subject: `Dispute Resolved`,
+      html: `
+        <h2>Dispute Resolved</h2>
+        <p>Hi ${bookingRecord.coach.name},</p>
+        <p>The dispute for your booking has been resolved.</p>
+        <p><strong>Resolution:</strong> ${validated.resolution}</p>
+        <p><strong>Booking Details:</strong></p>
+        <ul>
+          <li>Date: ${formatDateOnly(new Date(bookingRecord.scheduledStartAt), bookingRecord.coach.timezone || 'America/Chicago')}</li>
+        </ul>
+        <p>The booking has been marked as completed.</p>
+      `,
+      text: `Hi ${bookingRecord.coach.name}, The dispute for your booking has been resolved. Resolution: ${validated.resolution}`,
+    });
 
     return { success: true, message: 'Dispute marked as resolved' };
   } catch (error) {
@@ -296,10 +675,27 @@ export async function markDisputeResolved(bookingId: string, resolution: string)
   }
 }
 
+const initiateDisputeSchema = z.object({
+  bookingId: z.string().uuid(),
+  reason: z.string().min(1),
+  initiatedBy: z.enum(['client', 'coach']),
+});
+
 export async function initiateDispute(bookingId: string, reason: string, initiatedBy: 'client' | 'coach') {
   try {
+    const validated = validateInput(initiateDisputeSchema, {
+      bookingId,
+      reason,
+      initiatedBy,
+    });
+
+    const session = await requireAuth();
+    if (!session) {
+      return { success: false, error: 'Unauthorized' };
+    }
+
     const bookingRecord = await db.query.booking.findFirst({
-      where: eq(booking.id, bookingId),
+      where: eq(booking.id, validated.bookingId),
       with: {
         coach: {
           columns: {
@@ -321,6 +717,19 @@ export async function initiateDispute(bookingId: string, reason: string, initiat
             },
           },
         },
+        privateGroupDetails: {
+          with: {
+            organizer: {
+              columns: {
+                id: true,
+                name: true,
+                email: true,
+                timezone: true,
+              },
+            },
+          },
+        },
+        publicGroupDetails: true,
       },
     });
 
@@ -328,53 +737,88 @@ export async function initiateDispute(bookingId: string, reason: string, initiat
       return { success: false, error: 'Booking not found' };
     }
 
+    // Authorization: user must be the client/coach or admin
+    const isAuthorized =
+      session.user.role === 'admin' ||
+      (validated.initiatedBy === 'client' &&
+        (bookingRecord.bookingType === 'individual' && bookingRecord.individualDetails
+          ? bookingRecord.individualDetails.clientId === session.user.id
+          : bookingRecord.bookingType === 'private_group' && bookingRecord.privateGroupDetails
+          ? bookingRecord.privateGroupDetails.organizerId === session.user.id
+          : false)) ||
+      (validated.initiatedBy === 'coach' && bookingRecord.coachId === session.user.id);
+
+    if (!isAuthorized) {
+      return { success: false, error: 'Unauthorized to initiate dispute for this booking' };
+    }
+
     await db
       .update(booking)
       .set({
         fulfillmentStatus: 'disputed',
-        cancellationReason: `${initiatedBy === 'client' ? 'Client' : 'Coach'} initiated dispute: ${reason}`,
+        cancellationReason: `${validated.initiatedBy === 'client' ? 'Client' : 'Coach'} initiated dispute: ${validated.reason}`,
         updatedAt: new Date(),
       })
-      .where(eq(booking.id, bookingId));
+      .where(eq(booking.id, validated.bookingId));
 
-    const clientPaidCents = bookingRecord.individualDetails?.clientPaysCents || 0;
+    const clientInfo =
+      bookingRecord.bookingType === 'individual' && bookingRecord.individualDetails?.client
+        ? bookingRecord.individualDetails.client
+        : bookingRecord.bookingType === 'private_group' && bookingRecord.privateGroupDetails?.organizer
+        ? bookingRecord.privateGroupDetails.organizer
+        : null;
+
+    const amountCents =
+      bookingRecord.bookingType === 'individual' && bookingRecord.individualDetails
+        ? bookingRecord.individualDetails.clientPaysCents
+        : bookingRecord.bookingType === 'private_group' && bookingRecord.privateGroupDetails
+        ? bookingRecord.privateGroupDetails.totalGrossCents
+        : null;
+
+    const initiatorName =
+      validated.initiatedBy === 'client'
+        ? clientInfo?.name || 'Client'
+        : bookingRecord.coach.name;
 
     await resend.emails.send({
       from: 'Hubletics <noreply@hubletics.com>',
       to: 'hubleticsdev@gmail.com',
-      subject: `New Dispute - ${bookingRecord.coach.name} & ${bookingRecord.individualDetails?.client.name}`,
+      subject: `New Dispute - ${bookingRecord.coach.name} & ${clientInfo?.name || 'Unknown'}`,
       html: `
         <h2>New Booking Dispute</h2>
-        <p><strong>Initiated By:</strong> ${initiatedBy === 'client' ? bookingRecord.individualDetails?.client.name : bookingRecord.coach.name}</p>
+        <p><strong>Initiated By:</strong> ${initiatorName}</p>
         <p><strong>Booking Details:</strong></p>
         <ul>
           <li>Coach: ${bookingRecord.coach.name}</li>
-          <li>Client: ${bookingRecord.individualDetails?.client.name}</li>
-          <li>Date: ${formatDateOnly(new Date(bookingRecord.scheduledStartAt), bookingRecord.individualDetails?.client.timezone || 'America/Chicago')}
-          <li>Amount: $${(clientPaidCents / 100).toFixed(2)}</li>
+          <li>${bookingRecord.bookingType === 'private_group' ? 'Organizer' : 'Client'}: ${clientInfo?.name || 'Unknown'}</li>
+          <li>Date: ${formatDateOnly(new Date(bookingRecord.scheduledStartAt), clientInfo?.timezone || bookingRecord.coach.timezone || 'America/Chicago')}</li>
+          ${amountCents ? `<li>Amount: $${(amountCents / 100).toFixed(2)}</li>` : ''}
         </ul>
-        <p><strong>Reason:</strong> ${reason}</p>
+        <p><strong>Reason:</strong> ${validated.reason}</p>
         <p><a href="${process.env.NEXT_PUBLIC_URL}/admin/disputes">View in Admin Panel</a></p>
       `,
-      text: `New dispute initiated by ${initiatedBy} for booking between ${bookingRecord.coach.name} and ${bookingRecord.individualDetails?.client.name}. Reason: ${reason}`,
+      text: `New dispute initiated by ${validated.initiatedBy} for booking between ${bookingRecord.coach.name} and ${clientInfo?.name || 'Unknown'}. Reason: ${validated.reason}`,
     });
 
     // Notify the other party
-    const otherParty = initiatedBy === 'client' ? bookingRecord.coach : bookingRecord.individualDetails?.client;
-    await resend.emails.send({
-      from: 'Hubletics <noreply@hubletics.com>',
-      to: otherParty.email,
-      subject: 'Booking Dispute Initiated',
-      html: `
-        <h2>Booking Dispute</h2>
-        <p>Hi ${otherParty.name},</p>
-        <p>A dispute has been initiated for your booking on ${formatDateOnly(new Date(bookingRecord.scheduledStartAt), otherParty.timezone || 'America/Chicago')}.</p>
-        <p><strong>Reason:</strong> ${reason}</p>
-        <p>Our support team will review this case and contact you if additional information is needed.</p>
-        <p><a href="${process.env.NEXT_PUBLIC_URL}/dashboard/bookings">View Booking</a></p>
-      `,
-      text: `A dispute has been initiated for your booking on ${formatDateOnly(new Date(bookingRecord.scheduledStartAt), otherParty.timezone || 'America/Chicago')}. Our support team will review this case.`,
-    });
+    const otherParty =
+      validated.initiatedBy === 'client' ? bookingRecord.coach : clientInfo;
+    if (otherParty) {
+      await resend.emails.send({
+        from: 'Hubletics <noreply@hubletics.com>',
+        to: otherParty.email,
+        subject: 'Booking Dispute Initiated',
+        html: `
+          <h2>Booking Dispute</h2>
+          <p>Hi ${otherParty.name},</p>
+          <p>A dispute has been initiated for your booking on ${formatDateOnly(new Date(bookingRecord.scheduledStartAt), otherParty.timezone || 'America/Chicago')}.</p>
+          <p><strong>Reason:</strong> ${validated.reason}</p>
+          <p>Our support team will review this case and contact you if additional information is needed.</p>
+          <p><a href="${process.env.NEXT_PUBLIC_URL}/dashboard/bookings">View Booking</a></p>
+        `,
+        text: `A dispute has been initiated for your booking on ${formatDateOnly(new Date(bookingRecord.scheduledStartAt), otherParty.timezone || 'America/Chicago')}. Our support team will review this case.`,
+      });
+    }
 
     return { success: true, message: 'Dispute initiated successfully' };
   } catch (error) {

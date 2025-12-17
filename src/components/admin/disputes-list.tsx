@@ -14,6 +14,7 @@ import {
 } from '@/components/ui/dialog';
 import { toast } from 'sonner';
 import { useRouter } from 'next/navigation';
+import Link from 'next/link';
 
 type DisputedBooking = {
   id: string;
@@ -139,7 +140,23 @@ export function DisputesList({ bookings }: DisputesListProps) {
                 </div>
                 <div>
                   <h3 className="text-lg font-semibold text-gray-900">
-                    {booking.coach.name} & {booking.client?.name ?? 'Unknown Client'}
+                    <Link
+                      href={`/coaches/${booking.coach.id}`}
+                      className="hover:text-[#FF6B4A] transition-colors"
+                    >
+                      {booking.coach.name}
+                    </Link>
+                    {' & '}
+                    {booking.client ? (
+                      <Link
+                        href={`/athletes/${booking.client.id}`}
+                        className="hover:text-[#FF6B4A] transition-colors"
+                      >
+                        {booking.client.name}
+                      </Link>
+                    ) : (
+                      'Unknown Client'
+                    )}
                   </h3>
                   <p className="text-sm text-gray-600">
                     Disputed on {new Date(booking.createdAt).toLocaleDateString()}

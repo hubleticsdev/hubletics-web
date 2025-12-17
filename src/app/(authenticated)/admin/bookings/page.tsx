@@ -3,6 +3,7 @@ import { db } from '@/lib/db';
 import { booking } from '@/lib/db/schema';
 import { desc } from 'drizzle-orm';
 import Image from 'next/image';
+import Link from 'next/link';
 import { Pagination } from '@/components/ui/pagination';
 import { getPaginationOptions, createPaginationResult, getOffset } from '@/lib/pagination';
 import { deriveUiBookingStatusFromBooking, formatUiBookingStatus } from '@/lib/booking-status';
@@ -151,7 +152,10 @@ export default async function AdminBookingsPage({ searchParams }: AdminBookingsP
                     <div className="flex items-center gap-6 mb-3">
                       <div className="flex items-center gap-3">
                         {booking.client && (
-                          <>
+                          <Link
+                            href={`/athletes/${booking.client.id}`}
+                            className="flex items-center gap-3 hover:opacity-80 transition-opacity"
+                          >
                             <div className="w-10 h-10 rounded-full overflow-hidden bg-gray-200">
                               <Image
                                 src={booking.client.image || '/placeholder-avatar.png'}
@@ -165,13 +169,16 @@ export default async function AdminBookingsPage({ searchParams }: AdminBookingsP
                               <p className="text-sm font-medium text-gray-900">{booking.client.name}</p>
                               <p className="text-xs text-gray-500">Client</p>
                             </div>
-                          </>
+                          </Link>
                         )}
                       </div>
 
                       <div className="text-gray-400">→</div>
 
-                      <div className="flex items-center gap-3">
+                      <Link
+                        href={`/coaches/${booking.coach.id}`}
+                        className="flex items-center gap-3 hover:opacity-80 transition-opacity"
+                      >
                         <div className="w-10 h-10 rounded-full overflow-hidden bg-gray-200">
                           <Image
                             src={booking.coach.image || '/placeholder-avatar.png'}
@@ -185,7 +192,7 @@ export default async function AdminBookingsPage({ searchParams }: AdminBookingsP
                           <p className="text-sm font-medium text-gray-900">{booking.coach.name}</p>
                           <p className="text-xs text-gray-500">Coach</p>
                         </div>
-                      </div>
+                      </Link>
                     </div>
 
                     <div className="ml-13 space-y-1">

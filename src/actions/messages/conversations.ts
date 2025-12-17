@@ -1,7 +1,7 @@
 'use server';
 
 import { db } from '@/lib/db';
-import { conversation, message, flaggedMessage, type Conversation } from '@/lib/db/schema';
+import { conversation, message, flaggedMessage, type Conversation, user } from '@/lib/db/schema';
 import { getSession } from '@/lib/auth/session';
 import { and, eq, desc } from 'drizzle-orm';
 import { triggerMessageEvent, triggerConversationUpdate } from '@/lib/pusher/server';
@@ -62,9 +62,27 @@ export async function getOrCreateConversation(otherUserId: string) {
     throw new Error('Unauthorized');
   }
 
-  const currentUserIsClient = session.user.role === 'client';
-  const clientId = currentUserIsClient ? session.user.id : otherUserId;
-  const coachId = currentUserIsClient ? otherUserId : session.user.id;
+  let clientId: string;
+  let coachId: string;
+
+  // Admins can message anyone
+  if (session.user.role === 'admin') {
+    const otherUser = await db.query.user.findFirst({
+      where: eq(user.id, otherUserId),
+      columns: { id: true, role: true },
+    });
+
+    if (!otherUser) {
+      throw new Error('User not found');
+    }
+
+    coachId = session.user.id;
+    clientId = otherUserId;
+  } else {
+    const currentUserIsClient = session.user.role === 'client';
+    clientId = currentUserIsClient ? session.user.id : otherUserId;
+    coachId = currentUserIsClient ? otherUserId : session.user.id;
+  }
 
   await db
     .insert(conversation)

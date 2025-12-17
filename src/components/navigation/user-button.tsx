@@ -200,7 +200,40 @@ export function UserButton({ user }: UserButtonProps) {
                 size={14}
                 className="mr-3 transition-all duration-300 ease-in-out group-hover:text-[#FF6B4A] group-hover:rotate-12"
               />
-              Admin Panel
+              Admin Dashboard
+            </DropdownMenuItem>
+
+            <DropdownMenuItem
+              onClick={() => router.push('/admin/bookings')}
+              className="group py-2 font-medium cursor-pointer"
+            >
+              <CalendarClock
+                size={14}
+                className="mr-3 transition-all duration-300 ease-in-out group-hover:text-[#FF6B4A] group-hover:rotate-12"
+              />
+              All Bookings
+            </DropdownMenuItem>
+
+            <DropdownMenuItem
+              onClick={() => router.push('/admin/disputes')}
+              className="group py-2 font-medium cursor-pointer"
+            >
+              <FileText
+                size={14}
+                className="mr-3 transition-all duration-300 ease-in-out group-hover:text-[#FF6B4A] group-hover:scale-110"
+              />
+              Disputes
+            </DropdownMenuItem>
+
+            <DropdownMenuItem
+              onClick={() => router.push('/coaches')}
+              className="group py-2 font-medium cursor-pointer"
+            >
+              <Users
+                size={14}
+                className="mr-3 transition-all duration-300 ease-in-out group-hover:text-[#FF6B4A] group-hover:translate-y-[-2px]"
+              />
+              Browse Coaches
             </DropdownMenuItem>
           </>
         )}
