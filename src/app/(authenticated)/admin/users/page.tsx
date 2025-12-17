@@ -1,4 +1,4 @@
-import { requireRole, getSession } from '@/lib/auth/session';
+import { requireRole } from '@/lib/auth/session';
 import { db } from '@/lib/db';
 import { user as userTable } from '@/lib/db/schema';
 import Image from 'next/image';
