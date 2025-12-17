@@ -64,8 +64,12 @@ export async function createReview(input: CreateReviewInput) {
       return { success: false, error: 'Unauthorized - you can only review bookings you participated in' };
     }
 
+    // Check if this reviewer has already reviewed this booking
     const existingReview = await db.query.review.findFirst({
-      where: eq(review.bookingId, validatedInput.bookingId),
+      where: and(
+        eq(review.bookingId, validatedInput.bookingId),
+        eq(review.reviewerId, session.user.id)
+      ),
     });
 
     if (existingReview) {

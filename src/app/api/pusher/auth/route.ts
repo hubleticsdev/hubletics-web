@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getSession } from '@/lib/auth/session';
 import { db } from '@/lib/db';
 import { conversation } from '@/lib/db/schema';
-import { eq } from 'drizzle-orm';
+import { eq, and } from 'drizzle-orm';
 import { pusherServer } from '@/lib/pusher/server';
 import { withRateLimit, apiRateLimit } from '@/lib/rate-limit';
 
@@ -54,6 +54,33 @@ export async function POST(request: NextRequest) {
       if (conv.clientId !== session.user.id && conv.coachId !== session.user.id) {
         return NextResponse.json(
           { error: 'Access denied' },
+          { status: 403 }
+        );
+      }
+
+      const authResponse = pusherServer.authenticate(socket_id, channel_name);
+      return NextResponse.json(authResponse);
+    }
+
+    // Handle group conversation channels
+    const groupConversationMatch = channel_name.match(/^private-group-conversation-(.+)$/);
+    if (groupConversationMatch) {
+      const { groupConversation, groupConversationParticipant } = await import('@/lib/db/schema');
+      const conversationId = groupConversationMatch[1];
+
+      const participant = await db.query.groupConversationParticipant.findFirst({
+        where: and(
+          eq(groupConversationParticipant.conversationId, conversationId),
+          eq(groupConversationParticipant.userId, session.user.id)
+        ),
+        columns: {
+          id: true,
+        },
+      });
+
+      if (!participant) {
+        return NextResponse.json(
+          { error: 'Access denied - not a participant' },
           { status: 403 }
         );
       }

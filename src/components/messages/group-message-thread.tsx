@@ -8,9 +8,10 @@ import { Textarea } from '@/components/ui/textarea';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Label } from '@/components/ui/label';
 import { toast } from 'sonner';
-import { User, Flag, MoreHorizontal } from 'lucide-react';
+import { Flag, MoreHorizontal } from 'lucide-react';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import Image from 'next/image';
+import { useGroupConversationMessages } from '@/lib/pusher/client';
 
 type Message = {
   id: string;
@@ -45,6 +46,31 @@ export function GroupMessageThread({
   const [reporting, setReporting] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+
+  // Use Pusher for real-time updates
+  const { messages: pusherMessages, setMessages: setPusherMessages } = useGroupConversationMessages(conversationId);
+
+  // Merge Pusher messages with local state
+  useEffect(() => {
+    if (pusherMessages.length > 0) {
+      setMessages((prev) => {
+        const allMessages = [...prev, ...pusherMessages];
+        // Deduplicate by ID
+        const unique = allMessages.reduce((acc: Message[], msg) => {
+          const message = msg as Message;
+          if (!acc.find((m: Message) => m.id === message.id)) {
+            acc.push(message);
+          }
+          return acc;
+        }, [] as Message[]);
+        // Sort by createdAt
+        return unique.sort((a, b) => 
+          new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()
+        );
+      });
+      setPusherMessages([]); // Clear Pusher messages after merging
+    }
+  }, [pusherMessages, setPusherMessages]);
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -170,57 +196,53 @@ export function GroupMessageThread({
 
   return (
     <div className="flex flex-col h-full">
-      <div className="flex-1 overflow-y-auto p-4 space-y-6">
+      <div className="flex-1 overflow-y-auto p-4 space-y-6 message-scroll">
         {Object.entries(groupedMessages).map(([dateKey, dateMessages]) => (
           <div key={dateKey}>
-            <div className="flex items-center justify-center my-4">
-              <span className="bg-gray-200 text-gray-600 text-xs font-medium px-3 py-1 rounded-full">
+            <div className="flex items-center justify-center mb-4">
+              <div className="bg-gray-100 text-gray-600 text-xs font-medium px-3 py-1 rounded-full">
                 {formatDate(new Date(dateKey))}
-              </span>
+              </div>
             </div>
 
-            <div className="space-y-4">
+            <div className="space-y-3">
               {dateMessages.map((message) => {
-                const isCurrentUser = message.senderId === currentUserId;
-
+                const isOwn = message.senderId === currentUserId;
                 return (
                   <div
                     key={message.id}
-                    className={`flex gap-3 ${isCurrentUser ? 'flex-row-reverse' : 'flex-row'}`}
+                    className={`flex ${isOwn ? 'justify-end' : 'justify-start'}`}
                   >
-                    <div className="w-8 h-8 rounded-full bg-gray-200 flex items-center justify-center overflow-hidden shrink-0">
-                      {message.sender?.image ? (
-                        <Image
-                          src={message.sender.image}
-                          alt={message.sender.name}
-                          width={32}
-                          height={32}
-                          className="object-cover"
-                        />
-                      ) : (
-                        <User className="h-4 w-4 text-gray-400" />
+                    <div className={`flex gap-2 max-w-[70%] ${isOwn ? 'flex-row-reverse' : ''}`}>
+                      {!isOwn && (
+                        <div className="w-8 h-8 rounded-full overflow-hidden bg-gray-200 shrink-0">
+                          <Image
+                            src={message.sender?.image || '/placeholder-avatar.png'}
+                            alt={message.sender?.name || 'User'}
+                            width={32}
+                            height={32}
+                            className="object-cover"
+                          />
+                        </div>
                       )}
-                    </div>
-
-                    <div className={`flex flex-col max-w-[70%] ${isCurrentUser ? 'items-end' : 'items-start'}`}>
-                      <div className="flex items-center gap-2 mb-1">
-                        <span className="text-xs font-medium text-gray-700">
-                          {isCurrentUser ? 'You' : message.sender?.name || 'Unknown'}
-                        </span>
-                        <span className="text-xs text-gray-500">{formatTime(message.createdAt)}</span>
-                      </div>
-
                       <div className="relative group">
                         <div
                           className={`rounded-2xl px-4 py-2 ${
-                            isCurrentUser
+                            isOwn
                               ? 'bg-linear-to-r from-[#FF6B4A] to-[#FF8C5A] text-white'
                               : message.flagged
                               ? 'bg-red-50 border border-red-200 text-gray-900'
                               : 'bg-gray-100 text-gray-900'
                           }`}
                         >
-                          <p className="text-sm whitespace-pre-wrap wrap-break-word">{message.content}</p>
+                          {!isOwn && (
+                            <p className="text-xs font-medium text-gray-700 mb-1">
+                              {message.sender?.name || 'Unknown'}
+                            </p>
+                          )}
+                          <p className="text-sm whitespace-pre-wrap wrap-break-word">
+                            {message.content}
+                          </p>
                           {message.flagged && (
                             <div className="flex items-center gap-1 mt-1">
                               <Flag className="w-3 h-3 text-red-500" />
@@ -228,9 +250,13 @@ export function GroupMessageThread({
                             </div>
                           )}
                         </div>
+                        <p
+                          className={`text-xs text-gray-500 mt-1 ${isOwn ? 'text-right' : 'text-left'}`}
+                        >
+                          {formatTime(message.createdAt)}
+                        </p>
 
-                        {/* Report button for other users' messages */}
-                        {!isCurrentUser && !message.flagged && (
+                        {!isOwn && !message.flagged && (
                           <div className="absolute -top-2 -right-2 opacity-0 group-hover:opacity-100 transition-opacity">
                             <DropdownMenu>
                               <DropdownMenuTrigger asChild>
@@ -262,26 +288,25 @@ export function GroupMessageThread({
             </div>
           </div>
         ))}
-
         <div ref={messagesEndRef} />
       </div>
 
-      <div className="border-t border-gray-200 p-4 bg-white">
-        <div className="flex gap-2">
+      <div className="p-4 border-t border-gray-200 bg-white">
+        <div className="flex gap-3 items-end">
           <Textarea
             ref={textareaRef}
             value={newMessage}
             onChange={(e) => setNewMessage(e.target.value)}
             onKeyDown={handleKeyDown}
             placeholder="Type a message..."
-            className="flex-1 resize-none"
+            className="flex-1 resize-none min-h-[60px] max-h-[120px]"
             rows={2}
             disabled={sending}
           />
           <Button
             onClick={handleSend}
             disabled={!newMessage.trim() || sending}
-            className="bg-linear-to-r from-[#FF6B4A] to-[#FF8C5A] hover:opacity-90 self-end"
+            className="bg-linear-to-r from-[#FF6B4A] to-[#FF8C5A] hover:opacity-90 shrink-0"
           >
             {sending ? 'Sending...' : 'Send'}
           </Button>

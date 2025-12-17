@@ -1,9 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
-import { bookingParticipant } from '@/lib/db/schema';
-import { and, eq, isNotNull, lt } from 'drizzle-orm';
+import { bookingParticipant, publicGroupLessonDetails } from '@/lib/db/schema';
+import { and, eq, isNotNull, lte, sql } from 'drizzle-orm';
 import { validateCronAuth } from '@/lib/cron/auth';
 import { stripe } from '@/lib/stripe';
+import { sendEmail } from '@/lib/email/resend';
 
 export async function GET(request: NextRequest) {
   const authError = validateCronAuth(request);
@@ -11,7 +12,6 @@ export async function GET(request: NextRequest) {
 
   try {
     const now = new Date();
-    const twentyFourHoursAgo = new Date(now.getTime() - 24 * 60 * 60 * 1000);
 
     console.log(`[CRON] Cleanup expired payments job started at ${now.toISOString()}`);
 
@@ -21,12 +21,13 @@ export async function GET(request: NextRequest) {
       skipped: 0,
     };
 
-    // Find participants with pending/awaiting payments older than 24 hours
+    // Find participants with expired payment windows
     const expiredParticipants = await db.query.bookingParticipant.findMany({
       where: and(
+        eq(bookingParticipant.paymentStatus, 'authorized'),
         eq(bookingParticipant.status, 'awaiting_coach'),
-        isNotNull(bookingParticipant.stripePaymentIntentId),
-        lt(bookingParticipant.joinedAt, twentyFourHoursAgo)
+        isNotNull(bookingParticipant.expiresAt),
+        lte(bookingParticipant.expiresAt, now)
       ),
       with: {
         user: {
@@ -36,42 +37,20 @@ export async function GET(request: NextRequest) {
           },
         },
         booking: {
-          columns: {
-            id: true,
-            scheduledStartAt: true,
+          with: {
+            publicGroupDetails: {
+              columns: {
+                bookingId: true,
+              },
+            },
           },
         },
       },
     });
 
-    const paymentMethodMissing = await db.query.bookingParticipant.findMany({
-      where: and(
-        eq(bookingParticipant.status, 'awaiting_payment'),
-        isNotNull(bookingParticipant.stripePaymentIntentId),
-        lt(bookingParticipant.joinedAt, twentyFourHoursAgo)
-      ),
-      with: {
-        user: {
-          columns: {
-            name: true,
-            email: true,
-          },
-        },
-        booking: {
-          columns: {
-            id: true,
-            scheduledStartAt: true,
-          },
-        },
-      },
-    });
+    console.log(`[CRON] Found ${expiredParticipants.length} participants with expired payment windows`);
 
-    console.log(`[CRON] Found ${expiredParticipants.length} participants with authorized payments older than 24 hours`);
-    console.log(`[CRON] Found ${paymentMethodMissing.length} participants awaiting payment older than 24 hours`);
-
-    const participantsToProcess = [...expiredParticipants, ...paymentMethodMissing];
-
-    for (const participant of participantsToProcess) {
+    for (const participant of expiredParticipants) {
       try {
         if (!participant.stripePaymentIntentId) {
           console.warn(`Participant ${participant.id} has no stripePaymentIntentId`);
@@ -79,26 +58,48 @@ export async function GET(request: NextRequest) {
           continue;
         }
 
-        // Check PaymentIntent status in Stripe
-        const paymentIntent = await stripe.paymentIntents.retrieve(participant.stripePaymentIntentId);
+        // Cancel payment intent
+        await stripe.paymentIntents.cancel(participant.stripePaymentIntentId);
 
-        // Only cancel if still in requires_capture state (not yet captured/cancelled)
-        if (paymentIntent.status === 'requires_capture' || paymentIntent.status === 'requires_payment_method') {
-          // Cancel the PaymentIntent to release the authorization
-          await stripe.paymentIntents.cancel(participant.stripePaymentIntentId);
+        // Update participant status
+        await db
+          .update(bookingParticipant)
+          .set({
+            paymentStatus: 'cancelled',
+            status: 'cancelled',
+            cancelledAt: now,
+          })
+          .where(eq(bookingParticipant.id, participant.id));
 
-          // Remove the participant from the booking
+        // Decrement counts in publicGroupLessonDetails
+        if (participant.booking.publicGroupDetails) {
           await db
-            .delete(bookingParticipant)
-            .where(eq(bookingParticipant.id, participant.id));
-
-          console.log(`[CRON] Cancelled PaymentIntent ${participant.stripePaymentIntentId} and removed participant ${participant.id}`);
-          results.cancelled++;
-        } else {
-          console.log(`[CRON] Skipping PaymentIntent ${participant.stripePaymentIntentId} - status: ${paymentIntent.status}`);
-          results.skipped++;
+            .update(publicGroupLessonDetails)
+            .set({
+              currentParticipants: sql`${publicGroupLessonDetails.currentParticipants} - 1`,
+              authorizedParticipants: sql`${publicGroupLessonDetails.authorizedParticipants} - 1`,
+            })
+            .where(eq(publicGroupLessonDetails.bookingId, participant.bookingId));
         }
 
+        // Email participant
+        if (participant.user?.email) {
+          await sendEmail({
+            to: participant.user.email,
+            subject: 'Payment Authorization Expired',
+            html: `
+              <h2>Payment Authorization Expired</h2>
+              <p>Hi ${participant.user.name},</p>
+              <p>Your payment authorization for the group lesson has expired because the coach did not accept your request within 24 hours.</p>
+              <p>The funds have been released back to your payment method.</p>
+              <p>You can join another lesson if you're still interested.</p>
+            `,
+            text: `Your payment authorization for the group lesson has expired. The funds have been released back to your payment method.`,
+          });
+        }
+
+        console.log(`[CRON] Cancelled PaymentIntent ${participant.stripePaymentIntentId} and updated participant ${participant.id}`);
+        results.cancelled++;
       } catch (error) {
         console.error(`[CRON] Error processing participant ${participant.id}:`, error);
         results.errors.push(`${participant.id}: ${error instanceof Error ? error.message : 'Unknown error'}`);

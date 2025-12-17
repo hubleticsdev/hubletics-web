@@ -654,7 +654,6 @@ export const review = pgTable(
       .$defaultFn(() => crypto.randomUUID()),
     bookingId: text('bookingId')
       .notNull()
-      .unique()
       .references(() => booking.id),
     reviewerId: text('reviewerId')
       .notNull()
@@ -674,6 +673,10 @@ export const review = pgTable(
     index('review_coach_idx').on(table.coachId),
     index('review_booking_idx').on(table.bookingId),
     index('review_coach_created_idx').on(table.coachId, table.createdAt),
+    uniqueIndex('review_booking_reviewer_unique_idx').on(
+      table.bookingId,
+      table.reviewerId
+    ),
   ]
 );
 

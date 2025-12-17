@@ -88,3 +88,43 @@ export function useTypingIndicator(conversationId: string) {
 
   return typingUsers;
 }
+
+export function useGroupConversationMessages(conversationId: string) {
+  const [messages, setMessages] = useState<unknown[]>([]);
+  const channelName = `private-group-conversation-${conversationId}`;
+
+  usePusherEvent(channelName, 'new-message', (newMessage: unknown) => {
+    setMessages((prev) => {
+      // Check if message already exists
+      if (prev.some((m: any) => (m as any).id === (newMessage as any).id)) {
+        return prev;
+      }
+      return [...prev, newMessage];
+    });
+  });
+
+  return { messages, setMessages };
+}
+
+export function useGroupTypingIndicator(conversationId: string) {
+  const [typingUsers, setTypingUsers] = useState<Record<string, string>>({});
+  const channelName = `private-group-conversation-${conversationId}`;
+
+  usePusherEvent<{ userId: string; userName: string; isTyping: boolean }>(
+    channelName,
+    'user-typing',
+    (data) => {
+      setTypingUsers((prev) => {
+        const next = { ...prev };
+        if (data.isTyping) {
+          next[data.userId] = data.userName;
+        } else {
+          delete next[data.userId];
+        }
+        return next;
+      });
+    }
+  );
+
+  return typingUsers;
+}

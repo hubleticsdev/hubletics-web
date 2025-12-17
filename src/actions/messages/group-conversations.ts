@@ -7,6 +7,7 @@ import { eq, and, desc } from 'drizzle-orm';
 import { z } from 'zod';
 import { messageContentSchema, validateInput } from '@/lib/validations';
 import { checkMessageContent, getViolationTypes } from '@/lib/moderation/message-filter';
+import { triggerGroupMessageEvent, triggerGroupConversationUpdate } from '@/lib/pusher/server';
 
 export async function getOrCreateGroupConversation(bookingId: string) {
   try {
@@ -182,6 +183,36 @@ export async function sendGroupMessage(conversationId: string, content: string) 
 
     if (!fullMessage) {
       throw new Error('Failed to retrieve sent message');
+    }
+
+    // Trigger Pusher event for real-time updates
+    await triggerGroupMessageEvent(validatedConversationId, fullMessage);
+
+    // Get all participants to notify them of the new message
+    const participants = await db.query.groupConversationParticipant.findMany({
+      where: eq(groupConversationParticipant.conversationId, validatedConversationId),
+      columns: {
+        userId: true,
+      },
+    });
+
+    // Trigger conversation update for all participants
+    for (const participant of participants) {
+      if (participant.userId !== session.user.id) {
+        await triggerGroupConversationUpdate(participant.userId, {
+          id: validatedConversationId,
+          bookingId: (await db.query.groupConversation.findFirst({
+            where: eq(groupConversation.id, validatedConversationId),
+            columns: { bookingId: true },
+          }))?.bookingId,
+          lastMessageAt: new Date(),
+          lastMessage: {
+            content: fullMessage.content,
+            createdAt: fullMessage.createdAt,
+            senderId: fullMessage.senderId,
+          },
+        });
+      }
     }
 
     return fullMessage;
