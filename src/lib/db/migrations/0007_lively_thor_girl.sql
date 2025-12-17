@@ -1,0 +1,2 @@
+ALTER TABLE "individual_booking_details" ADD COLUMN "paymentFinalReminderSentAt" timestamp;--> statement-breakpoint
+ALTER TABLE "private_group_booking_details" ADD COLUMN "paymentFinalReminderSentAt" timestamp;

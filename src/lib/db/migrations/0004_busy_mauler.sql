@@ -1,0 +1,1 @@
+ALTER TABLE "private_group_booking_details" ADD COLUMN "organizerConfirmedAt" timestamp;

@@ -27,6 +27,7 @@ export const approvalStatusEnum = pgEnum('approval_status', [
   'approved',
   'rejected',
 ]);
+export const bookingTypeEnum = pgEnum('booking_type', ['individual', 'private_group', 'public_group']);
 export const bookingApprovalStatusEnum = pgEnum('booking_approval_status', [
   'pending_review',
   'accepted',
@@ -368,13 +369,9 @@ export const booking = pgTable(
     id: text('id')
       .primaryKey()
       .$defaultFn(() => crypto.randomUUID()),
-    clientId: text('clientId')
-      .notNull()
-      .references(() => user.id),
     coachId: text('coachId')
       .notNull()
       .references(() => user.id),
-    conversationId: text('conversationId').references(() => conversation.id),
 
     scheduledStartAt: timestamp('scheduledStartAt', { withTimezone: true }).notNull(),
     scheduledEndAt: timestamp('scheduledEndAt', { withTimezone: true }).notNull(),
@@ -384,34 +381,15 @@ export const booking = pgTable(
       address: string;
       notes?: string;
     }>(),
-    clientMessage: text('clientMessage'),
 
-    coachRate: decimal('coachRate', { precision: 10, scale: 2 }).notNull(),
-    pricePerPerson: decimal('pricePerPerson', { precision: 10, scale: 2 }),
-    expectedGrossCents: integer('expectedGrossCents'),
-    platformFeeCents: integer('platformFeeCents'),
-    stripeFeeCents: integer('stripeFeeCents'),
-    coachPayoutCents: integer('coachPayoutCents'),
-
-    stripeTransferId: varchar('stripeTransferId', { length: 255 }),
-    primaryStripePaymentIntentId: varchar('primaryStripePaymentIntentId', {
-      length: 255,
-    }),
-
-    paymentDueAt: timestamp('paymentDueAt'),
-    expiresAt: timestamp('expiresAt'),
-    paymentFinalReminderSentAt: timestamp('paymentFinalReminderSentAt'),
+    bookingType: bookingTypeEnum('bookingType').notNull(),
 
     approvalStatus: bookingApprovalStatusEnum('approvalStatus')
       .notNull()
       .default('pending_review'),
-    paymentStatus: bookingPaymentStatusEnum('paymentStatus')
-      .notNull()
-      .default('not_required'),
     fulfillmentStatus: bookingFulfillmentStatusEnum('fulfillmentStatus')
       .notNull()
       .default('scheduled'),
-    capacityStatus: bookingCapacityStatusEnum('capacityStatus'),
 
     coachRespondedAt: timestamp('coachRespondedAt'),
     proposedAlternateTime: jsonb('proposedAlternateTime').$type<{
@@ -420,7 +398,6 @@ export const booking = pgTable(
     }>(),
 
     coachConfirmedAt: timestamp('coachConfirmedAt'),
-    clientConfirmedAt: timestamp('clientConfirmedAt'),
     completedAt: timestamp('completedAt'),
 
     cancelledBy: text('cancelledBy').references(() => user.id),
@@ -431,34 +408,94 @@ export const booking = pgTable(
 
     lockedUntil: timestamp('lockedUntil'),
 
-    isGroupBooking: boolean('isGroupBooking').notNull().default(false),
-    groupType: groupTypeEnum('groupType'),
-    organizerId: text('organizerId').references(() => user.id),
-    maxParticipants: integer('maxParticipants'),
-    minParticipants: integer('minParticipants'),
-    currentParticipants: integer('currentParticipants').default(0),
-    authorizedParticipants: integer('authorizedParticipants').default(0),
-    capturedParticipants: integer('capturedParticipants').default(0),
-    recurringLessonId: text('recurringLessonId'),
-
     createdAt: timestamp('createdAt').notNull().defaultNow(),
     updatedAt: timestamp('updatedAt').notNull().defaultNow(),
   },
   (table) => [
-    index('booking_client_idx').on(table.clientId),
     index('booking_coach_idx').on(table.coachId),
     index('booking_approval_status_idx').on(table.approvalStatus),
-    index('booking_payment_status_idx').on(table.paymentStatus),
     index('booking_fulfillment_status_idx').on(table.fulfillmentStatus),
     index('booking_scheduled_start_idx').on(table.scheduledStartAt),
     index('booking_coach_date_idx').on(
       table.coachId,
       table.scheduledStartAt
     ),
-    index('booking_group_type_idx').on(table.groupType),
-    index('booking_organizer_idx').on(table.organizerId),
+    index('booking_type_idx').on(table.bookingType),
   ]
 );
+
+export const individualBookingDetails = pgTable('individual_booking_details', {
+  bookingId: text('bookingId')
+    .notNull()
+    .references(() => booking.id, { onDelete: 'cascade' })
+    .primaryKey(),
+  clientId: text('clientId')
+    .notNull()
+    .references(() => user.id),
+  conversationId: text('conversationId').references(() => conversation.id),
+
+  clientMessage: text('clientMessage'),
+
+  coachRate: decimal('coachRate', { precision: 10, scale: 2 }).notNull(),
+  clientPaysCents: integer('clientPaysCents').notNull(),
+  platformFeeCents: integer('platformFeeCents').notNull(),
+  coachPayoutCents: integer('coachPayoutCents').notNull(),
+
+  stripeTransferId: varchar('stripeTransferId', { length: 255 }),
+  stripePaymentIntentId: varchar('stripePaymentIntentId', { length: 255 }),
+  paymentStatus: bookingPaymentStatusEnum('paymentStatus').notNull(),
+  paymentDueAt: timestamp('paymentDueAt'),
+  paymentFinalReminderSentAt: timestamp('paymentFinalReminderSentAt'),
+
+  clientConfirmedAt: timestamp('clientConfirmedAt'),
+});
+
+export const privateGroupBookingDetails = pgTable('private_group_booking_details', {
+  bookingId: text('bookingId')
+    .notNull()
+    .references(() => booking.id, { onDelete: 'cascade' })
+    .primaryKey(),
+  organizerId: text('organizerId')
+    .notNull()
+    .references(() => user.id),
+
+  clientMessage: text('clientMessage'),
+
+  totalParticipants: integer('totalParticipants').notNull(),
+  pricePerPerson: decimal('pricePerPerson', { precision: 10, scale: 2 }).notNull(),
+  totalGrossCents: integer('totalGrossCents').notNull(),
+  platformFeeCents: integer('platformFeeCents').notNull(),
+  coachPayoutCents: integer('coachPayoutCents').notNull(),
+
+  stripeTransferId: varchar('stripeTransferId', { length: 255 }),
+  stripePaymentIntentId: varchar('stripePaymentIntentId', { length: 255 }),
+  paymentStatus: bookingPaymentStatusEnum('paymentStatus').notNull(),
+  paymentDueAt: timestamp('paymentDueAt'),
+  paymentFinalReminderSentAt: timestamp('paymentFinalReminderSentAt'),
+
+  organizerConfirmedAt: timestamp('organizerConfirmedAt'),
+});
+
+export const publicGroupLessonDetails = pgTable('public_group_lesson_details', {
+  bookingId: text('bookingId')
+    .notNull()
+    .references(() => booking.id, { onDelete: 'cascade' })
+    .primaryKey(),
+
+  clientMessage: text('clientMessage'),
+
+  maxParticipants: integer('maxParticipants').notNull(),
+  minParticipants: integer('minParticipants').notNull(),
+  pricePerPerson: decimal('pricePerPerson', { precision: 10, scale: 2 }).notNull(),
+
+  capacityStatus: bookingCapacityStatusEnum('capacityStatus').notNull(),
+  currentParticipants: integer('currentParticipants').notNull().default(0),
+  authorizedParticipants: integer('authorizedParticipants').notNull().default(0),
+  capturedParticipants: integer('capturedParticipants').notNull().default(0),
+
+  stripeTransferId: varchar('stripeTransferId', { length: 255 }),
+  recurringLessonId: text('recurringLessonId').references(() => recurringGroupLesson.id),
+});
 
 export const groupPricingTier = pgTable('group_pricing_tier', {
   id: text('id')
@@ -486,6 +523,20 @@ export const bookingParticipant = pgTable(
     userId: text('userId')
       .notNull()
       .references(() => user.id, { onDelete: 'cascade' }),
+
+    /**
+     * IMPORTANT: Semantics differ by booking type:
+     *
+     * Private Group:
+     * - role: 'organizer' (pays for everyone) or 'participant' (invited, doesn't pay)
+     * - paymentStatus: Only meaningful for organizer (always 'requires_payment_method' for participants)
+     * - stripePaymentIntentId: Only set for organizer
+     *
+     * Public Group:
+     * - role: Always 'participant'
+     * - paymentStatus: Tracks each participant's individual payment
+     * - stripePaymentIntentId: Each participant has their own PI
+     */
     role: varchar('role', { length: 20 }).notNull().default('participant'),
     status: participantStatusEnum('status')
       .notNull()
@@ -698,8 +749,14 @@ export const userRelations = relations(user, ({ one, many }) => ({
   sentMessages: many(message, { relationName: 'sender' }),
   conversationsAsClient: many(conversation, { relationName: 'client' }),
   conversationsAsCoach: many(conversation, { relationName: 'coach' }),
-  bookingsAsClient: many(booking, { relationName: 'client' }),
+
+  // Removed bookingsAsClient - use individualDetails.clientId or privateGroupDetails.organizerId instead
   bookingsAsCoach: many(booking, { relationName: 'coach' }),
+
+  // Add these instead:
+  individualBookingsAsClient: many(individualBookingDetails, { relationName: 'client' }),
+  privateGroupBookingsAsOrganizer: many(privateGroupBookingDetails, { relationName: 'organizer' }),
+
   reviewsGiven: many(review, { relationName: 'reviewer' }),
   reviewsReceived: many(review, { relationName: 'coach' }),
 }));
@@ -827,20 +884,62 @@ export const flaggedGroupMessageRelations = relations(flaggedGroupMessage, ({ on
   }),
 }));
 
-export const bookingRelations = relations(booking, ({ one }) => ({
+export const individualBookingDetailsRelations = relations(individualBookingDetails, ({ one }) => ({
+  booking: one(booking, {
+    fields: [individualBookingDetails.bookingId],
+    references: [booking.id],
+  }),
   client: one(user, {
-    fields: [booking.clientId],
+    fields: [individualBookingDetails.clientId],
     references: [user.id],
     relationName: 'client',
   }),
+  conversation: one(conversation, {
+    fields: [individualBookingDetails.conversationId],
+    references: [conversation.id],
+  }),
+}));
+
+export const privateGroupBookingDetailsRelations = relations(privateGroupBookingDetails, ({ one }) => ({
+  booking: one(booking, {
+    fields: [privateGroupBookingDetails.bookingId],
+    references: [booking.id],
+  }),
+  organizer: one(user, {
+    fields: [privateGroupBookingDetails.organizerId],
+    references: [user.id],
+    relationName: 'organizer',
+  }),
+}));
+
+export const publicGroupLessonDetailsRelations = relations(publicGroupLessonDetails, ({ one }) => ({
+  booking: one(booking, {
+    fields: [publicGroupLessonDetails.bookingId],
+    references: [booking.id],
+  }),
+  recurringLesson: one(recurringGroupLesson, {
+    fields: [publicGroupLessonDetails.recurringLessonId],
+    references: [recurringGroupLesson.id],
+  }),
+}));
+
+export const bookingRelations = relations(booking, ({ one }) => ({
   coach: one(user, {
     fields: [booking.coachId],
     references: [user.id],
     relationName: 'coach',
   }),
-  conversation: one(conversation, {
-    fields: [booking.conversationId],
-    references: [conversation.id],
+  individualDetails: one(individualBookingDetails, {
+    fields: [booking.id],
+    references: [individualBookingDetails.bookingId],
+  }),
+  privateGroupDetails: one(privateGroupBookingDetails, {
+    fields: [booking.id],
+    references: [privateGroupBookingDetails.bookingId],
+  }),
+  publicGroupDetails: one(publicGroupLessonDetails, {
+    fields: [booking.id],
+    references: [publicGroupLessonDetails.bookingId],
   }),
   review: one(review, {
     fields: [booking.id],
@@ -1044,6 +1143,15 @@ export type NewFlaggedGroupMessage = typeof flaggedGroupMessage.$inferInsert;
 
 export type Booking = typeof booking.$inferSelect;
 export type NewBooking = typeof booking.$inferInsert;
+
+export type IndividualBookingDetails = typeof individualBookingDetails.$inferSelect;
+export type NewIndividualBookingDetails = typeof individualBookingDetails.$inferInsert;
+
+export type PrivateGroupBookingDetails = typeof privateGroupBookingDetails.$inferSelect;
+export type NewPrivateGroupBookingDetails = typeof privateGroupBookingDetails.$inferInsert;
+
+export type PublicGroupLessonDetails = typeof publicGroupLessonDetails.$inferSelect;
+export type NewPublicGroupLessonDetails = typeof publicGroupLessonDetails.$inferInsert;
 
 export type BookingParticipant = typeof bookingParticipant.$inferSelect;
 export type NewBookingParticipant = typeof bookingParticipant.$inferInsert;

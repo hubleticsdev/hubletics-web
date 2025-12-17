@@ -22,6 +22,41 @@
       "when": 1765592416118,
       "tag": "0002_spotty_sphinx",
       "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1765941945133,
+      "tag": "0003_curvy_boomer",
+      "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1765945691129,
+      "tag": "0004_busy_mauler",
+      "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1765947599382,
+      "tag": "0005_dazzling_aqueduct",
+      "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1765947807698,
+      "tag": "0006_large_skullbuster",
+      "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1765949205218,
+      "tag": "0007_lively_thor_girl",
+      "breakpoints": true
     }
   ]
 }
