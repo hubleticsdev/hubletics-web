@@ -10,6 +10,7 @@ import { recordPaymentEvent } from '@/lib/payment-audit';
 import { recordStateTransition } from '@/lib/booking-audit';
 import { getPaymentIntentId } from '@/lib/booking-payment-helpers';
 import type { BookingWithDetails } from '@/lib/booking-type-guards';
+import { env } from '@/lib/env';
 
 export async function POST(request: NextRequest) {
   const body = await request.text();
@@ -22,7 +23,7 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  if (!process.env.STRIPE_WEBHOOK_SECRET) {
+  if (!env.STRIPE_WEBHOOK_SECRET) {
     console.error('Missing STRIPE_WEBHOOK_SECRET environment variable');
     return NextResponse.json(
       { error: 'Webhook secret not configured' },
@@ -36,7 +37,7 @@ export async function POST(request: NextRequest) {
     event = stripe.webhooks.constructEvent(
       body,
       signature,
-      process.env.STRIPE_WEBHOOK_SECRET
+      env.STRIPE_WEBHOOK_SECRET
     );
   } catch (err) {
     console.error('Webhook signature verification failed:', err);

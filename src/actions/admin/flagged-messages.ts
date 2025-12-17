@@ -1,7 +1,7 @@
 'use server';
 
 import { db } from '@/lib/db';
-import { flaggedMessage, flaggedGroupMessage, message, groupMessage, adminAction } from '@/lib/db/schema';
+import { flaggedMessage, flaggedGroupMessage, message, groupMessage, adminAction, user } from '@/lib/db/schema';
 import { requireRole } from '@/lib/auth/session';
 import { eq, desc } from 'drizzle-orm';
 import { z } from 'zod';
@@ -149,9 +149,20 @@ export async function updateFlaggedMessage(input: UpdateFlaggedMessageInput) {
   // Determine if this is a regular flagged message or group flagged message
   const regularFlaggedMsg = await db.query.flaggedMessage.findFirst({
     where: eq(flaggedMessage.id, validated.flaggedMessageId),
+    with: {
+      message: {
+        columns: {
+          senderId: true,
+        },
+      },
+    },
   });
 
+  let targetUserId: string | null = null;
+
   if (regularFlaggedMsg) {
+    targetUserId = regularFlaggedMsg.message?.senderId || null;
+    
     // Update regular flagged message
     await db
       .update(flaggedMessage)
@@ -178,9 +189,18 @@ export async function updateFlaggedMessage(input: UpdateFlaggedMessageInput) {
   } else {
     const groupFlaggedMsg = await db.query.flaggedGroupMessage.findFirst({
       where: eq(flaggedGroupMessage.id, validated.flaggedMessageId),
+      with: {
+        groupMessage: {
+          columns: {
+            senderId: true,
+          },
+        },
+      },
     });
 
     if (groupFlaggedMsg) {
+      targetUserId = groupFlaggedMsg.groupMessage?.senderId || null;
+      
       await db
         .update(flaggedGroupMessage)
         .set({
@@ -205,6 +225,29 @@ export async function updateFlaggedMessage(input: UpdateFlaggedMessageInput) {
     } else {
       throw new Error('Flagged message not found');
     }
+  }
+
+  // Handle user suspension/banning
+  if (targetUserId && (validated.action === 'user_suspended' || validated.action === 'user_banned')) {
+    const newStatus = validated.action === 'user_suspended' ? 'suspended' : 'banned';
+    
+    await db
+      .update(user)
+      .set({
+        status: newStatus,
+        updatedAt: new Date(),
+      })
+      .where(eq(user.id, targetUserId));
+
+    // Log admin action
+    await db.insert(adminAction).values({
+      adminId: session.user.id,
+      action: validated.action === 'user_suspended' ? 'suspended_user' : 'banned_user',
+      relatedEntityId: targetUserId,
+      notes: `User ${newStatus} due to flagged message${validated.adminNotes ? ` - ${validated.adminNotes}` : ''}`,
+    });
+
+    console.log(`[ADMIN] User ${targetUserId} ${newStatus} by ${session.user.id} due to flagged message`);
   }
 
   await db.insert(adminAction).values({

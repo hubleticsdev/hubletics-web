@@ -1,8 +1,9 @@
-import { requireRole } from '@/lib/auth/session';
+import { requireRole, getSession } from '@/lib/auth/session';
 import { db } from '@/lib/db';
 import { user as userTable } from '@/lib/db/schema';
 import Image from 'next/image';
 import { PlatformFeeEditor } from '@/components/admin/PlatformFeeEditor';
+import { UserActions } from '@/components/admin/user-actions';
 import { Pagination } from '@/components/ui/pagination';
 import { getPaginationOptions, createPaginationResult, getOffset } from '@/lib/pagination';
 
@@ -13,7 +14,7 @@ interface AdminUsersPageProps {
 }
 
 export default async function AdminUsersPage({ searchParams }: AdminUsersPageProps) {
-  await requireRole('admin');
+  const session = await requireRole('admin');
 
   const params = await searchParams;
   const searchParamsObj = new URLSearchParams();
@@ -106,6 +107,9 @@ export default async function AdminUsersPage({ searchParams }: AdminUsersPagePro
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                   Last Login
                 </th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  Actions
+                </th>
               </tr>
             </thead>
             <tbody className="bg-white divide-y divide-gray-200">
@@ -173,6 +177,16 @@ export default async function AdminUsersPage({ searchParams }: AdminUsersPagePro
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                     {user.lastLoginAt ? new Date(user.lastLoginAt).toLocaleDateString() : 'Never'}
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap">
+                    <UserActions
+                      userId={user.id}
+                      currentStatus={user.status}
+                      userName={user.name || 'Unknown'}
+                      userEmail={user.email}
+                      isCurrentUser={user.id === session.user.id}
+                      isAdmin={user.role === 'admin'}
+                    />
                   </td>
                 </tr>
               ))}

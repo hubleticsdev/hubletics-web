@@ -91,6 +91,21 @@ export async function getMyBookings(
         )
         .where(and(...privateGroupConditions));
 
+      // Also include private group bookings where user is a participant
+      const privateGroupParticipantBookingIds = await db
+        .select({ bookingId: bookingParticipant.bookingId })
+        .from(bookingParticipant)
+        .innerJoin(booking, eq(bookingParticipant.bookingId, booking.id))
+        .innerJoin(
+          privateGroupBookingDetails,
+          eq(booking.id, privateGroupBookingDetails.bookingId)
+        )
+        .where(and(
+          eq(bookingParticipant.userId, userId),
+          eq(booking.bookingType, 'private_group'),
+          ...conditions
+        ));
+
       // Build conditions for public group bookings
       const publicGroupConditions = [
         eq(bookingParticipant.userId, userId),
@@ -114,9 +129,13 @@ export async function getMyBookings(
         .where(and(...publicGroupConditions));
 
       // Combine all booking IDs
+      const privateGroupIdsSet = new Set([
+        ...privateGroupBookingIds.map(b => b.bookingId),
+        ...privateGroupParticipantBookingIds.map(b => b.bookingId),
+      ]);
       const allBookingIds = [
         ...individualBookingIds.map(b => b.bookingId),
-        ...privateGroupBookingIds.map(b => b.bookingId),
+        ...Array.from(privateGroupIdsSet),
         ...publicGroupBookingIds.map(b => b.bookingId),
       ];
 
