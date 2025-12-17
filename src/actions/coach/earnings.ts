@@ -66,6 +66,28 @@ export async function getCoachEarningsSummary(): Promise<EarningsSummary> {
     ? parseFloat(coachUser.platformFeePercentage as unknown as string)
     : 15;
 
+  const publicGroupBookingIds = completedBookings
+    .filter(b => b.bookingType === 'public_group')
+    .map(b => b.id);
+
+  // Batch-load all captured participants
+  const allCapturedParticipants = publicGroupBookingIds.length > 0
+    ? await db.query.bookingParticipant.findMany({
+        where: and(
+          inArray(bookingParticipant.bookingId, publicGroupBookingIds),
+          eq(bookingParticipant.paymentStatus, 'captured')
+        ),
+      })
+    : [];
+
+  const participantsByBookingId = allCapturedParticipants.reduce((acc, p) => {
+    if (!acc[p.bookingId]) {
+      acc[p.bookingId] = [];
+    }
+    acc[p.bookingId].push(p);
+    return acc;
+  }, {} as Record<string, typeof allCapturedParticipants>);
+
   // Calculate earnings from detail tables
   let totalEarningsCents = 0;
   let pendingBalanceCents = 0;
@@ -82,13 +104,7 @@ export async function getCoachEarningsSummary(): Promise<EarningsSummary> {
       coachPayoutCents = b.privateGroupDetails.coachPayoutCents;
       stripeTransferId = b.privateGroupDetails.stripeTransferId ?? null;
     } else if (isPublicGroupBooking(b)) {
-      // Calculate aggregate payout from captured participants
-      const capturedParticipants = await db.query.bookingParticipant.findMany({
-        where: and(
-          eq(bookingParticipant.bookingId, b.id),
-          eq(bookingParticipant.paymentStatus, 'captured')
-        ),
-      });
+      const capturedParticipants = participantsByBookingId[b.id] || [];
 
       for (const participant of capturedParticipants) {
         if (participant.amountCents) {
@@ -173,12 +189,10 @@ export async function getCoachBookingEarnings(): Promise<BookingEarning[]> {
     ? parseFloat(coachUserForList.platformFeePercentage as unknown as string)
     : 15;
 
-  // Get public group booking IDs to fetch participants in batch
   const publicGroupIds = bookings
     .filter(b => b.bookingType === 'public_group')
     .map(b => b.id);
 
-  // Fetch all captured participants for public groups in one query
   const publicGroupParticipants = publicGroupIds.length > 0
     ? await db.query.bookingParticipant.findMany({
         where: and(

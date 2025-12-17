@@ -59,6 +59,33 @@ export async function searchAthletes(
       );
     }
 
+    // Add budget filtering at SQL level for performance
+    if (filters.minBudget !== undefined || filters.maxBudget !== undefined) {
+      const budgetConditions = [];
+      
+      if (filters.minBudget !== undefined) {
+        budgetConditions.push(
+          or(
+            sql`(${athleteProfile.budgetRange}->>'single')::numeric >= ${filters.minBudget}`,
+            sql`(${athleteProfile.budgetRange}->>'max')::numeric >= ${filters.minBudget}`
+          )!
+        );
+      }
+      
+      if (filters.maxBudget !== undefined) {
+        budgetConditions.push(
+          or(
+            sql`(${athleteProfile.budgetRange}->>'single')::numeric <= ${filters.maxBudget}`,
+            sql`(${athleteProfile.budgetRange}->>'min')::numeric <= ${filters.maxBudget}`
+          )!
+        );
+      }
+      
+      if (budgetConditions.length > 0) {
+        conditions.push(and(...budgetConditions));
+      }
+    }
+
     const athletes = await db.query.athleteProfile.findMany({
       where: conditions.length > 0 ? and(...conditions) : undefined,
       with: {
@@ -73,27 +100,12 @@ export async function searchAthletes(
       limit: 100,
     });
 
-    let filteredAthletes = athletes;
+    const totalCount = await db.$count(
+      athleteProfile,
+      conditions.length > 0 ? and(...conditions) : undefined
+    );
 
-    if (filters.minBudget || filters.maxBudget) {
-      filteredAthletes = athletes.filter((athlete) => {
-        const budget = athlete.budgetRange as
-          | { min: number; max: number }
-          | { single: number };
-
-        if ('single' in budget) {
-          if (filters.minBudget && budget.single < filters.minBudget) return false;
-          if (filters.maxBudget && budget.single > filters.maxBudget) return false;
-          return true;
-        } else {
-          if (filters.minBudget && budget.max < filters.minBudget) return false;
-          if (filters.maxBudget && budget.min > filters.maxBudget) return false;
-          return true;
-        }
-      });
-    }
-
-    const results: AthleteSearchResult[] = filteredAthletes.map((athlete) => ({
+    const results: AthleteSearchResult[] = athletes.map((athlete) => ({
       id: athlete.id,
       userId: athlete.userId,
       fullName: athlete.fullName,
@@ -111,7 +123,7 @@ export async function searchAthletes(
 
     return {
       athletes: results,
-      total: results.length,
+      total: totalCount,
     };
   } catch (error) {
     console.error('Search athletes error:', error);
@@ -121,18 +133,14 @@ export async function searchAthletes(
 
 export async function getAvailableSports(): Promise<string[]> {
   try {
-    const athletes = await db
-      .select({
-        sports: athleteProfile.sportsInterested,
+    const result = await db
+      .selectDistinct({
+        sport: sql<string>`unnest(${athleteProfile.sportsInterested})`.as('sport'),
       })
-      .from(athleteProfile);
+      .from(athleteProfile)
+      .orderBy(sql`sport`);
 
-    const sportsSet = new Set<string>();
-    athletes.forEach((athlete) => {
-      athlete.sports?.forEach((sport) => sportsSet.add(sport));
-    });
-
-    return Array.from(sportsSet).sort();
+    return result.map((r) => r.sport);
   } catch (error) {
     console.error('Get available sports error:', error);
     return [];

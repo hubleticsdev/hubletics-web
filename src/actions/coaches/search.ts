@@ -57,7 +57,15 @@ export async function searchCoaches(
     }
 
     if (validatedFilters.location) {
-      conditions.push(ilike(coachProfile.location, `%${validatedFilters.location}%`));
+      conditions.push(
+        or(
+          sql`${coachProfile.location}->>'state' ILIKE ${`%${validatedFilters.location}%`}`,
+          sql`EXISTS (
+            SELECT 1 FROM jsonb_array_elements_text(${coachProfile.location}->'cities') AS city
+            WHERE city ILIKE ${`%${validatedFilters.location}%`}
+          )`
+        )!
+      );
     }
 
     if (validatedFilters.minPrice !== undefined) {
@@ -103,9 +111,14 @@ export async function searchCoaches(
       limit: 50,
     });
 
+    const totalCount = await db.$count(
+      coachProfile,
+      and(...conditions)
+    );
+
     return {
       coaches: coaches as CoachSearchResult[],
-      total: coaches.length,
+      total: totalCount,
     };
   } catch (error) {
     console.error('Search coaches error:', error);
@@ -149,23 +162,22 @@ export async function getCoachPublicProfile(userId: string) {
 export async function getAvailableSpecialties(): Promise<string[]> {
   try {
     const result = await db
-      .select({
-        specialties: coachProfile.specialties,
+      .selectDistinct({
+        sport: sql<string>`spec->>'sport'`.as('sport'),
       })
       .from(coachProfile)
+      .crossJoin(
+        sql`jsonb_array_elements(${coachProfile.specialties}) AS spec`
+      )
       .where(
         and(
           eq(coachProfile.adminApprovalStatus, 'approved'),
           eq(coachProfile.stripeOnboardingComplete, true)
         )
-      );
-    
-    const allSports = result.flatMap((r) => 
-      (r.specialties || []).map((spec) => spec.sport)
-    );
-    const uniqueSports = Array.from(new Set(allSports)).sort();
+      )
+      .orderBy(sql`sport`);
 
-    return uniqueSports;
+    return result.map((r) => r.sport);
   } catch (error) {
     console.error('Get available specialties error:', error);
     return [];

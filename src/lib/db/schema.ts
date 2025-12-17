@@ -448,7 +448,11 @@ export const individualBookingDetails = pgTable('individual_booking_details', {
   paymentFinalReminderSentAt: timestamp('paymentFinalReminderSentAt'),
 
   clientConfirmedAt: timestamp('clientConfirmedAt'),
-});
+}, (table) => [
+  index('individual_booking_details_client_id_idx').on(table.clientId),
+  index('individual_booking_details_payment_status_idx').on(table.paymentStatus),
+  index('individual_booking_details_payment_due_at_idx').on(table.paymentDueAt),
+]);
 
 export const privateGroupBookingDetails = pgTable('private_group_booking_details', {
   bookingId: text('bookingId')
@@ -474,7 +478,11 @@ export const privateGroupBookingDetails = pgTable('private_group_booking_details
   paymentFinalReminderSentAt: timestamp('paymentFinalReminderSentAt'),
 
   organizerConfirmedAt: timestamp('organizerConfirmedAt'),
-});
+}, (table) => [
+  index('private_group_booking_details_organizer_id_idx').on(table.organizerId),
+  index('private_group_booking_details_payment_status_idx').on(table.paymentStatus),
+  index('private_group_booking_details_payment_due_at_idx').on(table.paymentDueAt),
+]);
 
 export const publicGroupLessonDetails = pgTable('public_group_lesson_details', {
   bookingId: text('bookingId')

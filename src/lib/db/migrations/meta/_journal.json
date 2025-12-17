@@ -71,6 +71,13 @@
       "when": 1765955054668,
       "tag": "0009_same_garia",
       "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1765963728480,
+      "tag": "0010_brief_the_stranger",
+      "breakpoints": true
     }
   ]
 }

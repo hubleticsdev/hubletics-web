@@ -3,7 +3,7 @@
 import { requireRole } from '@/lib/auth/session';
 import { db } from '@/lib/db';
 import { recurringGroupLesson, booking, publicGroupLessonDetails } from '@/lib/db/schema';
-import { eq, and, desc } from 'drizzle-orm';
+import { eq, and, desc, inArray } from 'drizzle-orm';
 
 export async function getMyRecurringLessons() {
   try {
@@ -43,16 +43,29 @@ export async function getRecurringLessonWithBookings(recurringId: string) {
       return { success: false, error: 'Recurring lesson not found', lesson: null, bookings: [] };
     }
 
-    // Fetch public group bookings and filter by recurringLessonId from details
-    const allBookings = await db.query.booking.findMany({
-      where: eq(booking.bookingType, 'public_group'),
-      with: {
-        publicGroupDetails: true,
-      },
-      orderBy: desc(booking.scheduledStartAt),
-    });
+    const bookingIds = await db
+      .select({ bookingId: booking.id })
+      .from(booking)
+      .innerJoin(
+        publicGroupLessonDetails,
+        eq(booking.id, publicGroupLessonDetails.bookingId)
+      )
+      .where(
+        and(
+          eq(booking.bookingType, 'public_group'),
+          eq(publicGroupLessonDetails.recurringLessonId, recurringId)
+        )
+      );
 
-    const bookings = allBookings.filter(b => b.publicGroupDetails?.recurringLessonId === recurringId);
+    const bookings = bookingIds.length > 0
+      ? await db.query.booking.findMany({
+          where: inArray(booking.id, bookingIds.map(b => b.bookingId)),
+          with: {
+            publicGroupDetails: true,
+          },
+          orderBy: desc(booking.scheduledStartAt),
+        })
+      : [];
 
     return { success: true, lesson, bookings };
   } catch (error) {

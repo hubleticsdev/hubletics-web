@@ -1,28 +1,42 @@
 'use server';
 
 import { db } from '@/lib/db';
-import { booking, bookingParticipant } from '@/lib/db/schema';
-import { eq, and, gte } from 'drizzle-orm';
+import { booking, bookingParticipant, publicGroupLessonDetails } from '@/lib/db/schema';
+import { eq, and, gte, inArray } from 'drizzle-orm';
 
 export async function getPublicGroupLessons(coachId: string) {
   try {
     const now = new Date();
 
-    const lessons = await db.query.booking.findMany({
-      where: and(
-        eq(booking.coachId, coachId),
-        eq(booking.bookingType, 'public_group'),
-        gte(booking.scheduledStartAt, now)
-      ),
-      with: {
-        publicGroupDetails: true,
-      },
-      orderBy: (booking, { asc }) => [asc(booking.scheduledStartAt)],
-    });
+    const lessons = await db
+      .select({ bookingId: booking.id })
+      .from(booking)
+      .innerJoin(
+        publicGroupLessonDetails,
+        eq(booking.id, publicGroupLessonDetails.bookingId)
+      )
+      .where(
+        and(
+          eq(booking.coachId, coachId),
+          eq(booking.bookingType, 'public_group'),
+          gte(booking.scheduledStartAt, now),
+          eq(publicGroupLessonDetails.capacityStatus, 'open')
+        )
+      );
 
-    const lessonsWithCounts = lessons
-      .filter(lesson => lesson.publicGroupDetails?.capacityStatus === 'open')
-      .map(lesson => ({
+    const lessonIds = lessons.map(l => l.bookingId);
+
+    const lessonsWithDetails = lessonIds.length > 0
+      ? await db.query.booking.findMany({
+          where: inArray(booking.id, lessonIds),
+          with: {
+            publicGroupDetails: true,
+          },
+          orderBy: (booking, { asc }) => [asc(booking.scheduledStartAt)],
+        })
+      : [];
+
+    const lessonsWithCounts = lessonsWithDetails.map(lesson => ({
         ...lesson,
         maxParticipants: lesson.publicGroupDetails?.maxParticipants ?? 0,
         minParticipants: lesson.publicGroupDetails?.minParticipants ?? 0,

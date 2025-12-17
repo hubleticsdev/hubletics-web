@@ -22,9 +22,7 @@ export async function createPaymentForBooking(bookingId: string) {
     const bookingRecord = await db.query.booking.findFirst({
       where: and(
         eq(booking.id, validatedBookingId),
-        eq(booking.bookingType, 'individual'),
-        eq(individualBookingDetails.clientId, session.user.id),
-        eq(individualBookingDetails.paymentStatus, 'awaiting_client_payment')
+        eq(booking.bookingType, 'individual')
       ),
       with: {
         individualDetails: true,
@@ -32,7 +30,15 @@ export async function createPaymentForBooking(bookingId: string) {
     });
 
     if (!bookingRecord || !bookingRecord.individualDetails) {
-      return { success: false, error: 'Booking not found or not awaiting payment' };
+      return { success: false, error: 'Booking not found' };
+    }
+
+    if (bookingRecord.individualDetails.clientId !== session.user.id) {
+      return { success: false, error: 'Unauthorized' };
+    }
+
+    if (bookingRecord.individualDetails.paymentStatus !== 'awaiting_client_payment') {
+      return { success: false, error: 'Booking is not awaiting payment' };
     }
 
     if (bookingRecord.individualDetails.paymentDueAt && new Date() > new Date(bookingRecord.individualDetails.paymentDueAt)) {
@@ -102,9 +108,7 @@ export async function createPaymentForPrivateGroupBooking(bookingId: string) {
     const bookingRecord = await db.query.booking.findFirst({
       where: and(
         eq(booking.id, validatedBookingId),
-        eq(booking.bookingType, 'private_group'),
-        eq(privateGroupBookingDetails.organizerId, session.user.id),
-        eq(privateGroupBookingDetails.paymentStatus, 'awaiting_client_payment')
+        eq(booking.bookingType, 'private_group')
       ),
       with: {
         coach: {
@@ -121,7 +125,15 @@ export async function createPaymentForPrivateGroupBooking(bookingId: string) {
     });
 
     if (!bookingRecord || !bookingRecord.privateGroupDetails) {
-      return { success: false, error: 'Booking not found or not awaiting payment' };
+      return { success: false, error: 'Booking not found' };
+    }
+
+    if (bookingRecord.privateGroupDetails.organizerId !== session.user.id) {
+      return { success: false, error: 'Unauthorized' };
+    }
+
+    if (bookingRecord.privateGroupDetails.paymentStatus !== 'awaiting_client_payment') {
+      return { success: false, error: 'Booking is not awaiting payment' };
     }
 
     if (bookingRecord.privateGroupDetails.paymentDueAt && new Date() > new Date(bookingRecord.privateGroupDetails.paymentDueAt)) {
@@ -185,9 +197,7 @@ export async function confirmBookingPayment(bookingId: string) {
     const bookingRecord = await db.query.booking.findFirst({
       where: and(
         eq(booking.id, validatedBookingId),
-        eq(booking.bookingType, 'individual'),
-        eq(individualBookingDetails.clientId, session.user.id),
-        eq(individualBookingDetails.paymentStatus, 'awaiting_client_payment')
+        eq(booking.bookingType, 'individual')
       ),
       with: {
         individualDetails: true,
@@ -196,6 +206,14 @@ export async function confirmBookingPayment(bookingId: string) {
 
     if (!bookingRecord || !bookingRecord.individualDetails) {
       return { success: false, error: 'Booking not found' };
+    }
+
+    if (bookingRecord.individualDetails.clientId !== session.user.id) {
+      return { success: false, error: 'Unauthorized' };
+    }
+
+    if (bookingRecord.individualDetails.paymentStatus !== 'awaiting_client_payment') {
+      return { success: false, error: 'Booking is not awaiting payment' };
     }
 
     if (!bookingRecord.individualDetails.stripePaymentIntentId) {
@@ -258,14 +276,24 @@ export async function confirmPrivateGroupBookingPayment(bookingId: string) {
     const bookingRecord = await db.query.booking.findFirst({
       where: and(
         eq(booking.id, validatedBookingId),
-        eq(booking.bookingType, 'private_group'),
-        eq(privateGroupBookingDetails.organizerId, session.user.id),
-        eq(privateGroupBookingDetails.paymentStatus, 'awaiting_client_payment')
+        eq(booking.bookingType, 'private_group')
       ),
       with: {
         privateGroupDetails: true,
       },
     });
+
+    if (!bookingRecord || !bookingRecord.privateGroupDetails) {
+      return { success: false, error: 'Booking not found' };
+    }
+
+    if (bookingRecord.privateGroupDetails.organizerId !== session.user.id) {
+      return { success: false, error: 'Unauthorized' };
+    }
+
+    if (bookingRecord.privateGroupDetails.paymentStatus !== 'awaiting_client_payment') {
+      return { success: false, error: 'Booking is not awaiting payment' };
+    }
 
     if (!bookingRecord || !bookingRecord.privateGroupDetails) {
       return { success: false, error: 'Booking not found' };
