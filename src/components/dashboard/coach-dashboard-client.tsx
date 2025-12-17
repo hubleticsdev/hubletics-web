@@ -678,7 +678,10 @@ function StatusCard({ tone, title, description, cta, icon: Icon }: StatusBanner)
 function NextSessionCard({ booking }: { booking: UpcomingBooking }) {
   const start = new Date(booking.scheduledStartAt);
   const end = new Date(booking.scheduledEndAt);
-  const amount = booking.expectedGrossCents ? booking.expectedGrossCents / 100 : 0;
+  // Coaches should see what they'll receive
+  const amount = booking.coachPayoutCents !== undefined && booking.coachPayoutCents !== null
+    ? booking.coachPayoutCents / 100
+    : 0;
   const locationName = booking.location?.name ?? 'Location to be confirmed';
   const locationAddress = booking.location?.address ?? 'Address shared after confirmation';
   const durationLabel = Number.isFinite(booking.duration) ? `${booking.duration} min` : '—';
@@ -706,7 +709,7 @@ function NextSessionCard({ booking }: { booking: UpcomingBooking }) {
           </span>
         </div>
         <div className="flex items-center justify-between">
-          <span>Total</span>
+          <span>You receive</span>
           <span className="font-semibold text-[#FF6B4A]">
             ${Number.isFinite(amount) ? amount.toFixed(2) : '0.00'}
           </span>

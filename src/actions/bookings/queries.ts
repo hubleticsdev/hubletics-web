@@ -266,16 +266,22 @@ export async function getPendingBookingRequests() {
     const combinedBookings = [
       ...pendingBookings.map(b => {
         const bookingWithDetails = b as BookingWithDetails;
+        let expectedGrossCents: number | null = null;
+        let coachPayoutCents: number | null = null;
         let clientMessage: string | null = null;
         let clientData: { id: string; name: string; email: string; image: string | null } | undefined = undefined;
 
         if (isIndividualBooking(bookingWithDetails)) {
+          expectedGrossCents = bookingWithDetails.individualDetails.clientPaysCents;
+          coachPayoutCents = bookingWithDetails.individualDetails.coachPayoutCents;
           clientMessage = bookingWithDetails.individualDetails.clientMessage ?? null;
           const details = b.individualDetails as typeof b.individualDetails & {
             client?: { id: string; name: string; email: string; image: string | null } | null;
           };
           clientData = (details as any).client ?? undefined;
         } else if (isPrivateGroupBooking(bookingWithDetails)) {
+          expectedGrossCents = bookingWithDetails.privateGroupDetails.totalGrossCents;
+          coachPayoutCents = bookingWithDetails.privateGroupDetails.coachPayoutCents;
           clientMessage = bookingWithDetails.privateGroupDetails.clientMessage ?? null;
           const details = b.privateGroupDetails as typeof b.privateGroupDetails & {
             organizer?: { id: string; name: string; email: string; image: string | null } | null;
@@ -286,6 +292,8 @@ export async function getPendingBookingRequests() {
         return {
           ...b,
           status: deriveUiBookingStatusFromBooking(bookingWithDetails),
+          expectedGrossCents,
+          coachPayoutCents,
           clientMessage,
           client: clientData,
         };
@@ -415,11 +423,13 @@ export async function getUpcomingBookings() {
     const formattedBookings = bookings.map(b => {
       const bookingWithDetails = b as BookingWithDetails;
       let expectedGrossCents: number | null = null;
+      let coachPayoutCents: number | null = null;
       let clientMessage: string | null = null;
       let client: { id: string; name: string; email: string; image: string | null } | null = null;
 
       if (isIndividualBooking(bookingWithDetails)) {
         expectedGrossCents = bookingWithDetails.individualDetails.clientPaysCents;
+        coachPayoutCents = bookingWithDetails.individualDetails.coachPayoutCents;
         clientMessage = bookingWithDetails.individualDetails.clientMessage ?? null;
         // Access client relation from query result
         const details = b.individualDetails as typeof b.individualDetails & {
@@ -428,6 +438,7 @@ export async function getUpcomingBookings() {
         client = (details as any).client ?? null;
       } else if (isPrivateGroupBooking(bookingWithDetails)) {
         expectedGrossCents = bookingWithDetails.privateGroupDetails.totalGrossCents;
+        coachPayoutCents = bookingWithDetails.privateGroupDetails.coachPayoutCents;
         clientMessage = bookingWithDetails.privateGroupDetails.clientMessage ?? null;
         // Access organizer relation from query result
         const details = b.privateGroupDetails as typeof b.privateGroupDetails & {
@@ -442,6 +453,7 @@ export async function getUpcomingBookings() {
         ...b,
         status: deriveUiBookingStatusFromBooking(bookingWithDetails),
         expectedGrossCents,
+        coachPayoutCents,
         clientMessage,
         client,
       };

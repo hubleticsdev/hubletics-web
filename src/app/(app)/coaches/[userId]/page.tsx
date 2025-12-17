@@ -12,6 +12,7 @@ import { getCoachReviews } from '@/actions/reviews/create';
 import { getReputationDisplay } from '@/lib/reputation';
 import { getPublicGroupLessons } from '@/actions/group-bookings/queries';
 import { PublicLessonsListWrapper } from '@/components/group-bookings/public-lessons-list-wrapper';
+import { getCoachAllowedDurations } from '@/lib/coach-durations';
 
 export default async function CoachProfilePage({
   params,
@@ -65,7 +66,9 @@ export default async function CoachProfilePage({
       };
 
   const blockedDates = coach.blockedDates || [];
-  const sessionDuration = coach.sessionDuration || 60;
+  // Get allowed durations
+  const { durations: allowedDurations, defaultDuration } = await getCoachAllowedDurations(userId);
+  const sessionDuration = defaultDuration;
   const nextSession = sortedBookings.find(
     (booking) => new Date(booking.scheduledStartAt) >= new Date(),
   );
@@ -119,6 +122,7 @@ export default async function CoachProfilePage({
               coach={coach}
               userId={userId}
               sessionDuration={sessionDuration}
+              allowedDurations={allowedDurations.map(d => d.durationMinutes)}
               availability={availability}
               blockedDates={blockedDates}
               existingBookings={existingBookings}
@@ -251,6 +255,7 @@ function BookingSummary({
   coach,
   userId,
   sessionDuration,
+  allowedDurations,
   availability,
   blockedDates,
   existingBookings,
@@ -262,6 +267,7 @@ function BookingSummary({
   coach: NonNullable<Awaited<ReturnType<typeof getCoachPublicProfile>>>;
   userId: string;
   sessionDuration: number;
+  allowedDurations: number[];
   availability: Record<string, Array<{ start: string; end: string }>>;
   blockedDates: string[];
   existingBookings: Array<{ scheduledStartAt: Date; scheduledEndAt: Date }>;
@@ -329,6 +335,7 @@ function BookingSummary({
             coachName={coach.fullName}
             hourlyRate={coachHourlyRate}
             sessionDuration={sessionDuration}
+            allowedDurations={allowedDurations}
             availability={availability}
             blockedDates={blockedDates}
             existingBookings={existingBookings}

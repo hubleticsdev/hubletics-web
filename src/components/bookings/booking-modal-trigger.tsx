@@ -8,6 +8,7 @@ interface BookingModalTriggerProps {
   coachName: string;
   hourlyRate: number;
   sessionDuration: number;
+  allowedDurations?: number[];
   availability: Record<string, Array<{ start: string; end: string }>>;
   blockedDates: string[];
   existingBookings: Array<{ scheduledStartAt: Date; scheduledEndAt: Date }>;
@@ -23,6 +24,7 @@ export function BookingModalTrigger({
   coachName,
   hourlyRate,
   sessionDuration,
+  allowedDurations,
   availability,
   blockedDates,
   existingBookings,
@@ -40,7 +42,7 @@ export function BookingModalTrigger({
         onClick={() => setIsOpen(true)}
         className={
           buttonClass ||
-          'px-8 py-3 bg-gradient-to-r from-[#FF6B4A] to-[#FF8C5A] text-white font-semibold rounded-lg hover:shadow-lg transition-all duration-200 cursor-pointer'
+          'px-8 py-3 bg-linear-to-r from-[#FF6B4A] to-[#FF8C5A] text-white font-semibold rounded-lg hover:shadow-lg transition-all duration-200 cursor-pointer'
         }
       >
         {buttonText || 'Book a Session'}
@@ -52,6 +54,7 @@ export function BookingModalTrigger({
           coachName={coachName}
           hourlyRate={hourlyRate}
           sessionDuration={sessionDuration}
+          allowedDurations={allowedDurations}
           availability={availability}
           blockedDates={blockedDates}
           existingBookings={existingBookings}

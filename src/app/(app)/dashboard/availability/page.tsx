@@ -4,6 +4,7 @@ import { db } from '@/lib/db';
 import { coachProfile, booking } from '@/lib/db/schema';
 import { eq, and, gte } from 'drizzle-orm';
 import { AvailabilityManager } from '@/components/availability/availability-manager';
+import { getCoachAllowedDurations } from '@/lib/coach-durations';
 
 export default async function AvailabilityPage() {
   const session = await getSession();
@@ -58,6 +59,9 @@ export default async function AvailabilityPage() {
     Object.entries(rawAvailability).map(([key, value]) => [key.toLowerCase(), value])
   );
 
+  // Get allowed durations
+  const { durations: allowedDurations, defaultDuration } = await getCoachAllowedDurations(session.user.id);
+
   return (
     <div className="min-h-screen bg-gray-50 pt-20">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
@@ -72,6 +76,8 @@ export default async function AvailabilityPage() {
           weeklyAvailability={normalizedAvailability}
           blockedDates={profile.blockedDates || []}
           sessionDuration={profile.sessionDuration}
+          allowedDurations={allowedDurations.map(d => d.durationMinutes)}
+          defaultDuration={defaultDuration}
           upcomingBookings={          upcomingBookings.map((b) => {
             const client = b.bookingType === 'individual' 
               ? b.individualDetails?.client 

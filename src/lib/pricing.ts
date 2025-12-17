@@ -68,9 +68,10 @@ export function calculateBookingPricing(
 
 export function getClientDisplayRate(
   coachHourlyRate: number,
-  customPlatformFee?: number
+  customPlatformFee?: number,
+  durationMinutes: number = 60
 ): number {
-  const pricing = calculateBookingPricing(coachHourlyRate, 60, customPlatformFee);
+  const pricing = calculateBookingPricing(coachHourlyRate, durationMinutes, customPlatformFee);
   return pricing.clientPays;
 }
 
@@ -152,13 +153,14 @@ export function formatCurrency(amount: number): string {
 
 export function calculateRateForTakeHome(
   desiredTakeHome: number,
-  customPlatformFee?: number
+  customPlatformFee?: number,
+  durationMinutes: number = 60
 ): {
   suggestedRate: number;
   clientWillPay: number;
   breakdown: PricingBreakdown;
 } {
-  const breakdown = calculateBookingPricing(desiredTakeHome, 60, customPlatformFee);
+  const breakdown = calculateBookingPricing(desiredTakeHome, durationMinutes, customPlatformFee);
 
   return {
     suggestedRate: desiredTakeHome,

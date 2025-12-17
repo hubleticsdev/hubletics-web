@@ -3,7 +3,7 @@
 import { getSession } from '@/lib/auth/session';
 import { db } from '@/lib/db';
 import { booking, publicGroupLessonDetails, recurringGroupLesson, coachProfile } from '@/lib/db/schema';
-import { eq, and, gte, lte, or } from 'drizzle-orm';
+import { eq, and, gte, lte, or, sql } from 'drizzle-orm';
 import { revalidatePath } from 'next/cache';
 import { calculateGroupTotals } from '@/lib/pricing';
 import { generateBookingsFromRecurringTemplate } from '@/lib/recurring-lessons';
@@ -68,6 +68,7 @@ export async function createPublicGroupLesson(input: PublicLessonInput) {
       return { success: false, error: 'Price must be greater than 0' };
     }
 
+    const now = new Date();
     const conflicts = await db.query.booking.findMany({
       where: and(
         eq(booking.coachId, session.user.id),
@@ -88,13 +89,28 @@ export async function createPublicGroupLesson(input: PublicLessonInput) {
         or(
           eq(booking.approvalStatus, 'pending_review'),
           eq(booking.approvalStatus, 'accepted'),
-          // capacityStatus is in publicGroupDetails
+          sql`${booking.lockedUntil} > ${now}`
         )
       ),
+      columns: {
+        id: true,
+        lockedUntil: true,
+        approvalStatus: true,
+      },
     });
 
     if (conflicts.length > 0) {
-      return { success: false, error: 'Time slot conflict detected' };
+      // Check if any conflicts are due to locks
+      const lockedConflicts = conflicts.filter(c => c.lockedUntil && new Date(c.lockedUntil) > now);
+      
+      if (lockedConflicts.length > 0) {
+        return { 
+          success: false, 
+          error: 'This time slot is temporarily reserved. Please try again in a few moments or select a different time.' 
+        };
+      }
+      
+      return { success: false, error: 'Time slot conflict detected. Please select a different time.' };
     }
 
     const userPlatformFee = parseFloat(coach.user.platformFeePercentage || '15');
@@ -102,7 +118,7 @@ export async function createPublicGroupLesson(input: PublicLessonInput) {
 
     const bookingId = crypto.randomUUID();
 
-    // Create base booking record (auto-approved since coach created it)
+    // Create base booking record
     await db.insert(booking).values({
       id: bookingId,
       coachId: session.user.id,

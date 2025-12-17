@@ -22,6 +22,7 @@ interface BookingModalProps {
   coachName: string;
   hourlyRate: number;
   sessionDuration: number;
+  allowedDurations?: number[];
   availability: Record<string, { start: string; end: string }[]>;
   blockedDates: string[];
   existingBookings: Array<{ scheduledStartAt: Date; scheduledEndAt: Date }>;
@@ -36,6 +37,7 @@ export function BookingModal({
   coachName,
   hourlyRate,
   sessionDuration,
+  allowedDurations,
   availability,
   blockedDates,
   existingBookings,
@@ -45,6 +47,14 @@ export function BookingModal({
   onClose,
 }: BookingModalProps) {
   const router = useRouter();
+
+  const availableDurations = allowedDurations && allowedDurations.length > 0 
+    ? allowedDurations 
+    : [sessionDuration];
+  
+  const [selectedDuration, setSelectedDuration] = useState<number>(
+    availableDurations.includes(sessionDuration) ? sessionDuration : availableDurations[0]
+  );
 
   const [bookingType, setBookingType] = useState<'individual' | 'group'>('individual');
   const [selectedSlot, setSelectedSlot] = useState<{ start: Date; end: Date } | null>(null);
@@ -63,7 +73,6 @@ export function BookingModal({
 
   const handleBookingTypeChange = (type: 'individual' | 'group') => {
     setBookingType(type);
-    // Reset form when switching types
     setSelectedSlot(null);
     setSelectedLocationIndex(-1);
     setLocationName('');
@@ -73,6 +82,7 @@ export function BookingModal({
     setParticipantUsernames([]);
     setStep('datetime');
     setError(null);
+    setSelectedDuration(availableDurations.includes(sessionDuration) ? sessionDuration : availableDurations[0]);
   };
 
   const handleLocationSelect = (index: number) => {
@@ -89,7 +99,6 @@ export function BookingModal({
     }
   };
 
-  // Fetch pricing tiers when group booking is enabled
   useEffect(() => {
     if (allowPrivateGroups && bookingType === 'group') {
       setIsLoadingTiers(true);
@@ -111,8 +120,7 @@ export function BookingModal({
   // Calculate pricing based on booking type
   const calculatedPricing = useMemo(() => {
     if (bookingType === 'individual') {
-      // Use shared pricing utility for individual bookings
-      const pricing = calculateBookingPricing(hourlyRate, sessionDuration, platformFeePercentage);
+      const pricing = calculateBookingPricing(hourlyRate, selectedDuration, platformFeePercentage);
       return {
         baseCost: pricing.clientPays,
         displayCost: pricing.clientPays,
@@ -120,7 +128,6 @@ export function BookingModal({
         totalParticipants: 1,
       };
     } else {
-      // Group booking: calculate based on participant count and pricing tiers
       const totalParticipants = participantUsernames.length + 1; // +1 for organizer
       
       if (totalParticipants < 2) {
@@ -163,7 +170,7 @@ export function BookingModal({
         groupTotals,
       };
     }
-  }, [bookingType, hourlyRate, sessionDuration, platformFeePercentage, participantUsernames.length, pricingTiers]);
+  }, [bookingType, hourlyRate, selectedDuration, platformFeePercentage, participantUsernames.length, pricingTiers]);
 
   const baseSessionCost = calculatedPricing.displayCost;
 
@@ -183,11 +190,16 @@ export function BookingModal({
           throw new Error('Please add at least one participant');
         }
 
+        // Calculate actual duration from selected slot
+        const actualDuration = Math.round(
+          (selectedSlot.end.getTime() - selectedSlot.start.getTime()) / (1000 * 60)
+        );
+
         bookingResult = await createPrivateGroupBooking({
           coachId,
           scheduledStartAt: selectedSlot.start,
           scheduledEndAt: selectedSlot.end,
-          duration: sessionDuration,
+          duration: actualDuration,
           location: {
             name: locationName,
             address: locationAddress,
@@ -294,10 +306,37 @@ export function BookingModal({
 
           {step === 'datetime' && (
             <div className="space-y-6">
+              {availableDurations.length > 1 && (
+                <div className="p-4 bg-gray-50 border border-gray-200 rounded-lg">
+                  <label className="block text-sm font-semibold text-gray-900 mb-3">
+                    Select Session Duration
+                  </label>
+                  <div className="flex flex-wrap gap-3">
+                    {availableDurations.map((duration) => (
+                      <button
+                        key={duration}
+                        type="button"
+                        onClick={() => {
+                          setSelectedDuration(duration);
+                          setSelectedSlot(null);
+                        }}
+                        className={`px-4 py-2 rounded-lg font-medium transition-all ${
+                          selectedDuration === duration
+                            ? 'bg-[#FF6B4A] text-white'
+                            : 'bg-white text-gray-700 hover:bg-gray-100 border border-gray-300'
+                        }`}
+                      >
+                        {duration} min
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+
               <BookingCalendar
                 coachAvailability={availability}
                 blockedDates={blockedDates}
-                sessionDuration={sessionDuration}
+                sessionDuration={selectedDuration}
                 existingBookings={existingBookings}
                 onSelectSlot={(start, end) => setSelectedSlot({ start, end })}
                 selectedSlot={selectedSlot}
@@ -314,7 +353,7 @@ export function BookingModal({
                         {formatTimeRange(selectedSlot.start, selectedSlot.end, coachTimezone)}
                       </div>
                       <div className="text-sm text-gray-600 mt-1">
-                        Duration: {sessionDuration} minutes
+                        Duration: {selectedDuration} minutes
                       </div>
                       {bookingType === 'group' && calculatedPricing.pricePerPerson && (
                         <div className="text-sm text-gray-600 mt-1">
@@ -338,6 +377,9 @@ export function BookingModal({
                               ${calculatedPricing.pricePerPerson.toFixed(2)} per person
                             </div>
                           )}
+                          <div className="text-xs text-gray-500 mt-1">
+                            Includes platform and processing fees
+                          </div>
                         </>
                       )}
                     </div>
@@ -508,7 +550,7 @@ export function BookingModal({
                     <div className="text-sm">
                       {selectedSlot ? formatTimeRange(selectedSlot.start, selectedSlot.end, coachTimezone) : ''}
                       {' • '}
-                      {sessionDuration} minutes
+                      {selectedDuration} minutes
                     </div>
                   </div>
                 </div>

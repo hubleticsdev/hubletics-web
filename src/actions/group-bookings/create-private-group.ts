@@ -3,7 +3,7 @@
 import { getSession } from '@/lib/auth/session';
 import { db } from '@/lib/db';
 import { booking, privateGroupBookingDetails, bookingParticipant, coachProfile, user } from '@/lib/db/schema';
-import { eq, and, gte, lte, or, inArray } from 'drizzle-orm';
+import { eq, and, gte, lte, or, inArray, sql } from 'drizzle-orm';
 import { calculateGroupTotals } from '@/lib/pricing';
 import { getApplicableTier } from './pricing-tiers';
 import { sendEmail } from '@/lib/email/resend';
@@ -11,6 +11,7 @@ import { getBookingRequestEmailTemplate } from '@/lib/email/templates/booking-no
 import crypto from 'crypto';
 import { revalidatePath } from 'next/cache';
 import { formatDateOnly, formatTimeOnly } from '@/lib/utils/date';
+import { getCoachAllowedDurations } from '@/lib/coach-durations';
 
 interface PrivateGroupBookingInput {
   coachId: string;
@@ -79,8 +80,21 @@ export async function createPrivateGroupBooking(input: PrivateGroupBookingInput)
 
     const pricePerPerson = parseFloat(tierResult.tier.pricePerPerson);
     const userPlatformFee = parseFloat(coach.user.platformFeePercentage || '15');
+    
+    // Validate duration is in coach's allowed durations
+    const { durations: allowedDurations } = await getCoachAllowedDurations(input.coachId);
+    const allowedDurationMinutes = allowedDurations.map(d => d.durationMinutes);
+    
+    if (!allowedDurationMinutes.includes(input.duration)) {
+      return {
+        success: false,
+        error: `This coach only accepts bookings of ${allowedDurationMinutes.join(', ')} minutes. Please select a valid duration.`,
+      };
+    }
+    
     const groupTotals = calculateGroupTotals(pricePerPerson, totalParticipants, userPlatformFee);
 
+    const now = new Date();
     const conflicts = await db.query.booking.findMany({
       where: and(
         eq(booking.coachId, input.coachId),
@@ -101,13 +115,28 @@ export async function createPrivateGroupBooking(input: PrivateGroupBookingInput)
         or(
           eq(booking.approvalStatus, 'pending_review'),
           eq(booking.approvalStatus, 'accepted'),
-          // capacityStatus is only for public groups, not private groups
+          sql`${booking.lockedUntil} > ${now}`
         )
       ),
+      columns: {
+        id: true,
+        lockedUntil: true,
+        approvalStatus: true,
+      },
     });
 
     if (conflicts.length > 0) {
-      return { success: false, error: 'Time slot no longer available' };
+      // Check if any conflicts are due to locks
+      const lockedConflicts = conflicts.filter(c => c.lockedUntil && new Date(c.lockedUntil) > now);
+      
+      if (lockedConflicts.length > 0) {
+        return { 
+          success: false, 
+          error: 'This time slot is temporarily reserved by another user. Please try again in a few moments or select a different time.' 
+        };
+      }
+      
+      return { success: false, error: 'Time slot no longer available. Please select a different time.' };
     }
 
     const bookingId = crypto.randomUUID();

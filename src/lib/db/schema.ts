@@ -511,6 +511,21 @@ export const groupPricingTier = pgTable('group_pricing_tier', {
   updatedAt: timestamp('updatedAt').notNull().defaultNow(),
 });
 
+export const coachAllowedDurations = pgTable('coach_allowed_durations', {
+  id: text('id')
+    .primaryKey()
+    .$defaultFn(() => crypto.randomUUID()),
+  coachId: text('coachId')
+    .notNull()
+    .references(() => user.id, { onDelete: 'cascade' }),
+  durationMinutes: integer('durationMinutes').notNull(),
+  isDefault: boolean('isDefault').notNull().default(false),
+  createdAt: timestamp('createdAt').notNull().defaultNow(),
+}, (table) => [
+  index('coach_allowed_durations_coach_idx').on(table.coachId),
+  uniqueIndex('coach_allowed_durations_unique_idx').on(table.coachId, table.durationMinutes),
+]);
+
 export const bookingParticipant = pgTable(
   'booking_participant',
   {
@@ -785,7 +800,7 @@ export const athleteProfileRelations = relations(athleteProfile, ({ one }) => ({
   }),
 }));
 
-export const coachProfileRelations = relations(coachProfile, ({ one }) => ({
+export const coachProfileRelations = relations(coachProfile, ({ one, many }) => ({
   user: one(user, {
     fields: [coachProfile.userId],
     references: [user.id],
@@ -793,6 +808,14 @@ export const coachProfileRelations = relations(coachProfile, ({ one }) => ({
   approvedBy: one(user, {
     fields: [coachProfile.adminApprovedBy],
     references: [user.id],
+  }),
+  allowedDurations: many(coachAllowedDurations),
+}));
+
+export const coachAllowedDurationsRelations = relations(coachAllowedDurations, ({ one }) => ({
+  coach: one(coachProfile, {
+    fields: [coachAllowedDurations.coachId],
+    references: [coachProfile.userId],
   }),
 }));
 
@@ -1131,6 +1154,9 @@ export type NewAthleteProfile = typeof athleteProfile.$inferInsert;
 
 export type CoachProfile = typeof coachProfile.$inferSelect;
 export type NewCoachProfile = typeof coachProfile.$inferInsert;
+
+export type CoachAllowedDurations = typeof coachAllowedDurations.$inferSelect;
+export type NewCoachAllowedDurations = typeof coachAllowedDurations.$inferInsert;
 
 export type Conversation = typeof conversation.$inferSelect;
 export type NewConversation = typeof conversation.$inferInsert;

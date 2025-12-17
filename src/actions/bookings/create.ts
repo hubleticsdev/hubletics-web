@@ -12,6 +12,7 @@ import { z } from 'zod';
 import { createBookingSchema, validateInput } from '@/lib/validations';
 import { sanitizeText } from '@/lib/utils';
 import { formatDateOnly, formatTimeOnly } from '@/lib/utils/date';
+import { getCoachAllowedDurations } from '@/lib/coach-durations';
 
 export type CreateBookingInput = z.infer<typeof createBookingSchema>;
 
@@ -81,33 +82,26 @@ export async function createBooking(input: CreateBookingInput) {
           sql`${booking.lockedUntil} > ${now}`
         )
       ),
-      with: {
-        individualDetails: {
-          columns: { paymentStatus: true }
-        },
-        publicGroupDetails: {
-          columns: { capacityStatus: true }
-        }
-      },
       columns: {
         id: true,
         lockedUntil: true,
+        approvalStatus: true,
       },
     });
 
-    // Any results from the conflicts query are blocking (they match our WHERE conditions)
-    const blockingConflicts = conflicts;
-
-    if (blockingConflicts.length > 0) {
-      console.log(`[CONFLICT] Time slot conflict for coach ${validatedInput.coachId}:`, blockingConflicts);
-      return {
-        success: false,
-        error: 'This time slot is no longer available. Please select a different time.',
-      };
-    }
-
     if (conflicts.length > 0) {
+      // Check if any conflicts are due to locks (more specific error message)
+      const lockedConflicts = conflicts.filter(c => c.lockedUntil && new Date(c.lockedUntil) > now);
+      
       console.log(`[CONFLICT] Time slot conflict for coach ${validatedInput.coachId}:`, conflicts);
+      
+      if (lockedConflicts.length > 0) {
+        return {
+          success: false,
+          error: 'This time slot is temporarily reserved by another user. Please try again in a few moments or select a different time.',
+        };
+      }
+      
       return {
         success: false,
         error: 'This time slot is no longer available. Please select a different time.',
@@ -139,6 +133,16 @@ export async function createBooking(input: CreateBookingInput) {
       (validatedInput.scheduledEndAt.getTime() - validatedInput.scheduledStartAt.getTime()) /
         (1000 * 60)
     );
+
+    const { durations: allowedDurations } = await getCoachAllowedDurations(validatedInput.coachId);
+    const allowedDurationMinutes = allowedDurations.map(d => d.durationMinutes);
+    
+    if (!allowedDurationMinutes.includes(duration)) {
+      return {
+        success: false,
+        error: `This coach only accepts bookings of ${allowedDurationMinutes.join(', ')} minutes. Please select a valid duration.`,
+      };
+    }
 
     const coachRateNum = parseFloat(coach.hourlyRate);
     const platformFee = coach.user?.platformFeePercentage

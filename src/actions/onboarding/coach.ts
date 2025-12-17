@@ -3,7 +3,7 @@
 import { requireRole } from '@/lib/auth/session';
 import { db } from '@/lib/db';
 import { withTransaction } from '@/lib/db/transactions';
-import { coachProfile, user as userTable } from '@/lib/db/schema';
+import { coachProfile, coachAllowedDurations, user as userTable } from '@/lib/db/schema';
 import { sanitizeText } from '@/lib/utils';
 import { z } from 'zod';
 import { coachProfileSchema, validateInput } from '@/lib/validations';
@@ -45,6 +45,13 @@ export async function createCoachProfile(data: CoachProfileData) {
       sessionDuration: validatedData.sessionDuration,
       weeklyAvailability: validatedData.weeklyAvailability,
       preferredLocations: validatedData.preferredLocations.length > 0 ? validatedData.preferredLocations : undefined,
+    });
+
+    // Create initial allowed duration entry (marked as default)
+    await tx.insert(coachAllowedDurations).values({
+      coachId: user.id,
+      durationMinutes: validatedData.sessionDuration,
+      isDefault: true,
     });
 
     await tx.update(userTable)

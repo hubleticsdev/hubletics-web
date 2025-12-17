@@ -1,9 +1,10 @@
 'use server';
 
 import { db } from '@/lib/db';
-import { booking, coachProfile } from '@/lib/db/schema';
+import { booking, coachProfile, coachAllowedDurations } from '@/lib/db/schema';
 import { eq, and, gte } from 'drizzle-orm';
 import { getSession } from '@/lib/auth/session';
+import { withTransaction } from '@/lib/db/transactions';
 
 export async function getCoachBookings(coachId: string) {
   try {
@@ -32,10 +33,14 @@ export async function updateCoachAvailability({
   weeklyAvailability,
   blockedDates,
   sessionDuration,
+  allowedDurations,
+  defaultDuration,
 }: {
   weeklyAvailability: Record<string, Array<{ start: string; end: string }>>;
   blockedDates: string[];
   sessionDuration: number;
+  allowedDurations: number[];
+  defaultDuration: number;
 }) {
   try {
     const session = await getSession();
@@ -43,15 +48,31 @@ export async function updateCoachAvailability({
       return { success: false, error: 'Unauthorized' };
     }
 
-    await db
-      .update(coachProfile)
-      .set({
-        weeklyAvailability,
-        blockedDates,
-        sessionDuration,
-        updatedAt: new Date(),
-      })
-      .where(eq(coachProfile.userId, session.user.id));
+    await withTransaction(async (tx) => {
+      await tx
+        .update(coachProfile)
+        .set({
+          weeklyAvailability,
+          blockedDates,
+          sessionDuration: defaultDuration,
+          updatedAt: new Date(),
+        })
+        .where(eq(coachProfile.userId, session.user.id));
+
+      await tx
+        .delete(coachAllowedDurations)
+        .where(eq(coachAllowedDurations.coachId, session.user.id));
+
+      if (allowedDurations.length > 0) {
+        await tx.insert(coachAllowedDurations).values(
+          allowedDurations.map((duration) => ({
+            coachId: session.user.id,
+            durationMinutes: duration,
+            isDefault: duration === defaultDuration,
+          }))
+        );
+      }
+    });
 
     return { success: true };
   } catch (error) {

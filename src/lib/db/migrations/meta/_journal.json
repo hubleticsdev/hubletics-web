@@ -64,6 +64,13 @@
       "when": 1765951300887,
       "tag": "0008_massive_firelord",
       "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1765955054668,
+      "tag": "0009_same_garia",
+      "breakpoints": true
     }
   ]
 }

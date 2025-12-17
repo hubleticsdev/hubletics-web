@@ -557,12 +557,18 @@ export function BookingsList({ bookings, userRole, userId }: BookingsListProps) 
                           <DollarSign className="h-5 w-5 text-gray-400 mt-0.5" />
                           <div>
                             <div className="text-sm font-medium text-gray-900">
-                              ${formatDollars(booking.expectedGrossCents)}
+                              {userRole === 'coach' && booking.coachPayoutCents !== undefined && booking.coachPayoutCents !== null
+                                ? `$${formatDollars(booking.coachPayoutCents)}`
+                                : `$${formatDollars(booking.expectedGrossCents)}`}
                             </div>
                             <div className="text-sm text-gray-600">
-                              {booking.isGroupBooking && booking.pricePerPerson 
-                                ? `$${booking.pricePerPerson}/person` 
-                                : 'Total amount'}
+                              {userRole === 'coach'
+                                ? (booking.isGroupBooking && booking.pricePerPerson 
+                                    ? `You receive ($${booking.pricePerPerson}/person)` 
+                                    : 'You receive')
+                                : (booking.isGroupBooking && booking.pricePerPerson 
+                                    ? `$${booking.pricePerPerson}/person` 
+                                    : 'Total amount')}
                             </div>
                           </div>
                         </div>
