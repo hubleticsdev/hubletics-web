@@ -67,6 +67,7 @@ interface CoachDashboardClientProps {
   timezone: string;
   pendingRequests: Array<{
     id: string;
+    bookingType?: 'individual' | 'private_group' | 'public_group';
     clientId?: string;
     client?: { name: string; email?: string; image?: string | null; id?: string };
     scheduledStartAt: Date;
@@ -74,6 +75,10 @@ interface CoachDashboardClientProps {
     duration?: number;
     location?: { name: string; address: string; notes?: string };
     clientMessage?: string | null;
+    expectedGrossCents?: number | null;
+    coachPayoutCents?: number | null;
+    platformFeeCents?: number | null;
+    stripeFeeCents?: number | null;
     isGroupBooking?: boolean;
     groupType?: string | null;
     pricePerPerson?: string | null;

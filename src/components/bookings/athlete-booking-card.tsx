@@ -3,9 +3,11 @@
 import { useState } from 'react';
 import { cancelBooking, confirmBookingComplete } from '@/actions/bookings/manage';
 import Image from 'next/image';
+import Link from 'next/link';
 import type { UiBookingStatus } from '@/lib/booking-status';
 import { formatDateOnly, formatTimeOnly, formatDateWithTimezone } from '@/lib/utils/date';
 import { PaymentModal } from './payment-modal';
+import { coachPaths } from '@/lib/paths';
 
 interface AthleteBookingCardProps {
   booking: {
@@ -35,6 +37,7 @@ interface AthleteBookingCardProps {
     privateGroupDetails?: {
       totalGrossCents: number;
       paymentDueAt?: Date | null;
+      organizerConfirmedAt?: Date | null;
     } | null;
     pendingParticipantsCount?: number;
   };
@@ -64,7 +67,11 @@ export function AthleteBookingCard({ booking, timezone = 'America/Chicago', onUp
     paymentDueAt = booking.privateGroupDetails.paymentDueAt;
   }
 
-  const clientConfirmedAt = booking.individualDetails?.clientConfirmedAt;
+  const clientConfirmedAt = booking.bookingType === 'individual'
+    ? booking.individualDetails?.clientConfirmedAt
+    : booking.bookingType === 'private_group'
+    ? booking.privateGroupDetails?.organizerConfirmedAt
+    : null;
 
   const handleConfirmComplete = async () => {
     setIsProcessing(true);
@@ -146,7 +153,12 @@ export function AthleteBookingCard({ booking, timezone = 'America/Chicago', onUp
             )}
           </div>
           <div>
-            <div className="font-semibold text-gray-900">{booking.coach.name}</div>
+            <Link 
+              href={coachPaths.profile(booking.coach.id)}
+              className="font-semibold text-gray-900 hover:text-[#FF6B4A] transition-colors"
+            >
+              {booking.coach.name}
+            </Link>
             <div className="text-sm text-gray-600">{booking.coach.email}</div>
           </div>
         </div>

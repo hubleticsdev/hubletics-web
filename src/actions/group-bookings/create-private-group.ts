@@ -12,6 +12,7 @@ import crypto from 'crypto';
 import { revalidatePath } from 'next/cache';
 import { formatDateOnly, formatTimeOnly } from '@/lib/utils/date';
 import { getCoachAllowedDurations } from '@/lib/coach-durations';
+import { withTransaction } from '@/lib/db/transactions';
 
 interface PrivateGroupBookingInput {
   coachId: string;
@@ -140,7 +141,7 @@ export async function createPrivateGroupBooking(input: PrivateGroupBookingInput)
     }
 
     const bookingId = crypto.randomUUID();
-    const idempotencyKey = crypto
+    let idempotencyKey = crypto
       .createHash('sha256')
       .update(
         JSON.stringify({
@@ -157,60 +158,91 @@ export async function createPrivateGroupBooking(input: PrivateGroupBookingInput)
     });
 
     if (existingBooking) {
-      const ageHours = (Date.now() - new Date(existingBooking.createdAt).getTime()) / (1000 * 60 * 60);
-      if (ageHours < 24) {
-        return { success: true, bookingId: existingBooking.id };
+      const isTerminalState = ['cancelled', 'declined', 'expired'].includes(existingBooking.approvalStatus);
+      
+      if (isTerminalState) {
+        idempotencyKey = crypto
+          .createHash('sha256')
+          .update(
+            JSON.stringify({
+              organizerId: session.user.id,
+              coachId: input.coachId,
+              start: input.scheduledStartAt.toISOString(),
+              participants: input.participantUsernames.sort(),
+              timestamp: Date.now(),
+            })
+          )
+          .digest('hex');
+      } else {
+        const ageMinutes = (Date.now() - new Date(existingBooking.createdAt).getTime()) / (1000 * 60);
+        if (ageMinutes < 30) {
+          return { success: true, bookingId: existingBooking.id };
+        }
+        idempotencyKey = crypto
+          .createHash('sha256')
+          .update(
+            JSON.stringify({
+              organizerId: session.user.id,
+              coachId: input.coachId,
+              start: input.scheduledStartAt.toISOString(),
+              participants: input.participantUsernames.sort(),
+              timestamp: Date.now(),
+            })
+          )
+          .digest('hex');
       }
     }
 
-    // Create base booking record
-    await db.insert(booking).values({
-      id: bookingId,
-      coachId: input.coachId,
-      scheduledStartAt: input.scheduledStartAt,
-      scheduledEndAt: input.scheduledEndAt,
-      duration: input.duration,
-      location: input.location,
-      bookingType: 'private_group',
-      approvalStatus: 'pending_review',
-      fulfillmentStatus: 'scheduled',
-      idempotencyKey,
-      lockedUntil: new Date(Date.now() + 5 * 60 * 1000),
-    });
+    await withTransaction(async (tx) => {
+      await tx.insert(booking).values({
+        id: bookingId,
+        coachId: input.coachId,
+        scheduledStartAt: input.scheduledStartAt,
+        scheduledEndAt: input.scheduledEndAt,
+        duration: input.duration,
+        location: input.location,
+        bookingType: 'private_group',
+        approvalStatus: 'pending_review',
+        fulfillmentStatus: 'scheduled',
+        idempotencyKey,
+        lockedUntil: new Date(Date.now() + 5 * 60 * 1000),
+      });
 
-    // Create private group booking details
-    await db.insert(privateGroupBookingDetails).values({
-      bookingId,
-      organizerId: session.user.id,
-      totalParticipants,
-      pricePerPerson: pricePerPerson.toString(),
-      totalGrossCents: groupTotals.totalGrossCents,
-      platformFeeCents: groupTotals.platformFeeCents,
-      coachPayoutCents: groupTotals.coachPayoutCents,
-      stripeFeeCents: groupTotals.stripeFeeCents,
-      paymentStatus: 'not_required',
-    });
-
-    await db.insert(bookingParticipant).values([
-      {
+      // Create private group booking details
+      await tx.insert(privateGroupBookingDetails).values({
         bookingId,
-        userId: session.user.id,
-        role: 'organizer',
-        status: 'requested',
-        paymentStatus: 'requires_payment_method',
-        amountPaid: (groupTotals.totalGrossCents / 100).toFixed(2),
-        amountCents: groupTotals.totalGrossCents,
+        organizerId: session.user.id,
+        totalParticipants,
+        pricePerPerson: pricePerPerson.toString(),
+        totalGrossCents: groupTotals.totalGrossCents,
+        platformFeeCents: groupTotals.platformFeeCents,
+        coachPayoutCents: groupTotals.coachPayoutCents,
         stripeFeeCents: groupTotals.stripeFeeCents,
-      },
-      ...participants.map(p => ({
-        bookingId,
-        userId: p.id,
-        role: 'participant' as const,
-        status: 'requested' as const,
-        paymentStatus: 'requires_payment_method' as const,
-        amountPaid: null,
-      })),
-    ]);
+        paymentStatus: 'not_required',
+        clientMessage: input.clientMessage || null,
+      });
+
+      await tx.insert(bookingParticipant).values([
+        {
+          bookingId,
+          userId: session.user.id,
+          role: 'organizer',
+          status: 'requested',
+          paymentStatus: 'requires_payment_method',
+          amountPaid: (groupTotals.totalGrossCents / 100).toFixed(2),
+          amountCents: groupTotals.totalGrossCents,
+          stripeFeeCents: groupTotals.stripeFeeCents,
+        },
+        ...participants.map(p => ({
+          bookingId,
+          userId: p.id,
+          role: 'participant' as const,
+          status: 'requested' as const,
+          paymentStatus: 'requires_payment_method' as const,
+          amountPaid: null,
+        })),
+      ]);
+    });
 
     const emailTemplate = getBookingRequestEmailTemplate(
       coach.fullName,

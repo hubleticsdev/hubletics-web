@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { acceptBooking, declineBooking } from '@/actions/bookings/manage';
+import { acceptBooking, declineBooking, acceptPrivateGroupBooking } from '@/actions/bookings/manage';
 import Image from 'next/image';
 import { formatUiBookingStatus } from '@/lib/booking-status';
 import type { UiBookingStatus } from '@/lib/booking-status';
@@ -10,6 +10,7 @@ import { formatDateOnly, formatTimeOnly } from '@/lib/utils/date';
 interface BookingCardProps {
   booking: {
     id: string;
+    bookingType?: 'individual' | 'private_group' | 'public_group';
     scheduledStartAt: Date;
     scheduledEndAt?: Date;
     duration?: number;
@@ -19,6 +20,12 @@ interface BookingCardProps {
       notes?: string;
     };
     status: UiBookingStatus;
+    clientMessage?: string | null;
+    expectedGrossCents?: number | null;
+    coachPayoutCents?: number | null;
+    platformFeeCents?: number | null;
+    stripeFeeCents?: number | null;
+    // For individual bookings
     individualDetails?: {
       clientMessage?: string | null;
       clientPaysCents: number;
@@ -32,6 +39,13 @@ interface BookingCardProps {
         image?: string | null;
       };
     } | null;
+    // For private group bookings (flattened)
+    client?: {
+      id?: string;
+      name: string;
+      email?: string;
+      image?: string | null;
+    } | null;
   };
   timezone?: string;
   onUpdate?: () => void;
@@ -43,20 +57,20 @@ export function CoachBookingCard({ booking, timezone = 'America/Chicago', onUpda
   const [error, setError] = useState<string | null>(null);
   const [declineReason, setDeclineReason] = useState('');
 
-  if (!booking.individualDetails?.client) {
+  const client = booking.individualDetails?.client || booking.client;
+  const clientMessage = booking.individualDetails?.clientMessage ?? booking.clientMessage ?? null;
+  const expectedGrossCents = booking.individualDetails?.clientPaysCents ?? booking.expectedGrossCents ?? 0;
+  const coachPayoutCents = booking.individualDetails?.coachPayoutCents ?? booking.coachPayoutCents ?? 0;
+  const platformFeeCents = booking.individualDetails?.platformFeeCents ?? booking.platformFeeCents ?? 0;
+  const stripeFeeCents = booking.individualDetails?.stripeFeeCents ?? booking.stripeFeeCents ?? 0;
+
+  if (!client || !client.name) {
     return (
       <div className="bg-red-50 border border-red-200 rounded-xl p-6">
         <p className="text-red-800">Error: Booking missing client information</p>
       </div>
     );
   }
-
-  const client = booking.individualDetails.client;
-  const clientMessage = booking.individualDetails.clientMessage;
-  const expectedGrossCents = booking.individualDetails.clientPaysCents;
-  const coachPayoutCents = booking.individualDetails.coachPayoutCents;
-  const platformFeeCents = booking.individualDetails.platformFeeCents;
-  const stripeFeeCents = booking.individualDetails.stripeFeeCents ?? 0;
 
   const startDate = new Date(booking.scheduledStartAt);
   const endDate = booking.scheduledEndAt ? new Date(booking.scheduledEndAt) : null;
@@ -65,7 +79,11 @@ export function CoachBookingCard({ booking, timezone = 'America/Chicago', onUpda
     setIsProcessing(true);
     setError(null);
 
-    const result = await acceptBooking(booking.id);
+    const isPrivateGroup = booking.bookingType === 'private_group' || (!booking.individualDetails && !!booking.client);
+    
+    const result = isPrivateGroup
+      ? await acceptPrivateGroupBooking(booking.id)
+      : await acceptBooking(booking.id);
 
     setIsProcessing(false);
 
@@ -146,7 +164,7 @@ export function CoachBookingCard({ booking, timezone = 'America/Chicago', onUpda
         </div>
         <div>
           <div className="font-semibold text-gray-900">{client.name}</div>
-          <div className="text-sm text-gray-600">{client.email}</div>
+          {client.email && <div className="text-sm text-gray-600">{client.email}</div>}
         </div>
       </div>
 
@@ -267,14 +285,14 @@ export function CoachBookingCard({ booking, timezone = 'America/Chicago', onUpda
           <button
             onClick={() => setShowDeclineForm(true)}
             disabled={isProcessing}
-            className="flex-1 px-4 py-2 border border-gray-300 text-gray-700 font-medium rounded-lg hover:bg-gray-50 transition-colors disabled:opacity-50"
+            className="cursor-pointer flex-1 px-4 py-2 border border-gray-300 text-gray-700 font-medium rounded-lg hover:bg-gray-50 transition-colors disabled:opacity-50"
           >
             Decline
           </button>
           <button
             onClick={handleAccept}
             disabled={isProcessing}
-            className="flex-1 px-4 py-2 bg-linear-to-r from-[#FF6B4A] to-[#FF8C5A] text-white font-medium rounded-lg hover:shadow-lg transition-all disabled:opacity-50"
+            className="cursor-pointer flex-1 px-4 py-2 bg-linear-to-r from-[#FF6B4A] to-[#FF8C5A] text-white font-medium rounded-lg hover:shadow-lg transition-all disabled:opacity-50"
           >
             {isProcessing ? 'Processing...' : 'Accept & Request Payment'}
           </button>
@@ -301,14 +319,14 @@ export function CoachBookingCard({ booking, timezone = 'America/Chicago', onUpda
               type="button"
               onClick={() => setShowDeclineForm(false)}
               disabled={isProcessing}
-              className="flex-1 px-4 py-2 border border-gray-300 text-gray-700 font-medium rounded-lg hover:bg-gray-50 transition-colors disabled:opacity-50"
+              className="cursor-pointer flex-1 px-4 py-2 border border-gray-300 text-gray-700 font-medium rounded-lg hover:bg-gray-50 transition-colors disabled:opacity-50"
             >
               Cancel
             </button>
             <button
               type="submit"
               disabled={isProcessing}
-              className="flex-1 px-4 py-2 bg-red-600 text-white font-medium rounded-lg hover:bg-red-700 transition-colors disabled:opacity-50"
+              className="cursor-pointer flex-1 px-4 py-2 bg-red-600 text-white font-medium rounded-lg hover:bg-red-700 transition-colors disabled:opacity-50"
             >
               {isProcessing ? 'Processing...' : 'Confirm Decline'}
             </button>

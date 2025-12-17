@@ -434,6 +434,7 @@ function NextSessionCard({ booking }: { booking: UpcomingBooking }) {
     amount = parseFloat(booking.publicGroupDetails.pricePerPerson);
   }
   const coachName = booking.coach?.name ?? 'Your coach';
+  const coachId = booking.coach?.id;
   const locationName = booking.location?.name ?? 'Location to be confirmed';
   const durationLabel = Number.isFinite(booking.duration) ? `${booking.duration} min` : '—';
 
@@ -443,7 +444,13 @@ function NextSessionCard({ booking }: { booking: UpcomingBooking }) {
         Next session
       </p>
       <h3 className="mt-3 text-lg font-semibold text-slate-900">
-        {coachName} · {locationName}
+        {coachId ? (
+          <Link href={`/coaches/${coachId}`} className="hover:text-[#FF6B4A] transition-colors">
+            {coachName}
+          </Link>
+        ) : (
+          coachName
+        )} · {locationName}
       </h3>
       <p className="mt-2 text-sm text-slate-500">
         {format(start, 'EEEE, MMM d')} · {format(start, 'p')} – {format(end, 'p')}

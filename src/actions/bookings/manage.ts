@@ -275,7 +275,10 @@ export async function declineBooking(bookingId: string, reason?: string) {
         eq(booking.id, bookingId),
         eq(booking.coachId, session.user.id),
         eq(booking.approvalStatus, 'pending_review'),
-        eq(booking.bookingType, 'individual')
+        or(
+          eq(booking.bookingType, 'individual'),
+          eq(booking.bookingType, 'private_group')
+        )
       ),
       with: {
         coach: {
@@ -294,63 +297,138 @@ export async function declineBooking(bookingId: string, reason?: string) {
             },
           },
         },
+        privateGroupDetails: {
+          with: {
+            organizer: {
+              columns: {
+                name: true,
+                email: true,
+                timezone: true,
+              },
+            },
+          },
+        },
       },
     });
 
-    if (!bookingRecord || !bookingRecord.individualDetails) {
+    if (!bookingRecord) {
       return { success: false, error: 'Booking not found' };
     }
 
-    // Only cancel PI if one exists (won't exist for pending_review individual bookings with deferred payment)
-    if (bookingRecord.individualDetails.stripePaymentIntentId) {
-      await cancelBookingPayment(bookingRecord.individualDetails.stripePaymentIntentId);
-      console.log(`Payment cancelled: ${bookingRecord.individualDetails.stripePaymentIntentId}`);
+    // Handle individual bookings
+    if (bookingRecord.bookingType === 'individual') {
+      if (!bookingRecord.individualDetails) {
+        return { success: false, error: 'Booking details not found' };
+      }
+
+      // Only cancel PI if one exists (won't exist for pending_review individual bookings with deferred payment)
+      if (bookingRecord.individualDetails.stripePaymentIntentId) {
+        await cancelBookingPayment(bookingRecord.individualDetails.stripePaymentIntentId);
+        console.log(`Payment cancelled: ${bookingRecord.individualDetails.stripePaymentIntentId}`);
+      }
+
+      await db
+        .update(booking)
+        .set({
+          approvalStatus: 'declined',
+          coachRespondedAt: new Date(),
+          cancellationReason: reason,
+          updatedAt: new Date(),
+        })
+        .where(eq(booking.id, bookingId));
+
+      // Record state transition
+      await recordStateTransition({
+        bookingId: bookingRecord.id,
+        field: 'approvalStatus',
+        oldStatus: 'pending_review',
+        newStatus: 'declined',
+        changedBy: session.user.id,
+        reason,
+      });
+
+      console.log(`Booking declined: ${bookingId}`);
+
+      // Send decline notification email to client
+      const startDate = new Date(bookingRecord.scheduledStartAt);
+      const clientTimezone = bookingRecord.individualDetails.client.timezone || 'America/Chicago';
+      const lessonDate = formatDateOnly(startDate, clientTimezone);
+      const lessonTime = formatTimeOnly(startDate, clientTimezone);
+
+      const emailTemplate = getBookingDeclinedEmailTemplate(
+        bookingRecord.individualDetails.client.name,
+        bookingRecord.coach.name,
+        lessonDate,
+        lessonTime,
+        reason
+      );
+
+      await sendEmail({
+        to: bookingRecord.individualDetails.client.email,
+        subject: emailTemplate.subject,
+        html: emailTemplate.html,
+        text: emailTemplate.text,
+      });
+
+      console.log(`Decline notification sent to: ${bookingRecord.individualDetails.client.email}`);
     }
 
-    await db
-      .update(booking)
-      .set({
-        approvalStatus: 'declined',
-        coachRespondedAt: new Date(),
-        cancellationReason: reason,
-        updatedAt: new Date(),
-      })
-      .where(eq(booking.id, bookingId));
+    // Handle private group bookings
+    if (bookingRecord.bookingType === 'private_group') {
+      if (!bookingRecord.privateGroupDetails) {
+        return { success: false, error: 'Booking details not found' };
+      }
 
-    // Record state transition
-    await recordStateTransition({
-      bookingId: bookingRecord.id,
-      field: 'approvalStatus',
-      oldStatus: 'pending_review',
-      newStatus: 'declined',
-      changedBy: session.user.id,
-      reason,
-    });
+      if (bookingRecord.privateGroupDetails.stripePaymentIntentId) {
+        await cancelBookingPayment(bookingRecord.privateGroupDetails.stripePaymentIntentId);
+        console.log(`Payment cancelled: ${bookingRecord.privateGroupDetails.stripePaymentIntentId}`);
+      }
 
-    console.log(`Booking declined: ${bookingId}`);
+      await db
+        .update(booking)
+        .set({
+          approvalStatus: 'declined',
+          coachRespondedAt: new Date(),
+          cancellationReason: reason,
+          updatedAt: new Date(),
+        })
+        .where(eq(booking.id, bookingId));
 
-    // Send decline notification email to client
-    const startDate = new Date(bookingRecord.scheduledStartAt);
-    const clientTimezone = bookingRecord.individualDetails?.client.timezone || 'America/Chicago';
-    const lessonDate = formatDateOnly(startDate, clientTimezone);
-    const lessonTime = formatTimeOnly(startDate, clientTimezone);
+      // Record state transition
+      await recordStateTransition({
+        bookingId: bookingRecord.id,
+        field: 'approvalStatus',
+        oldStatus: 'pending_review',
+        newStatus: 'declined',
+        changedBy: session.user.id,
+        reason,
+      });
 
-    const emailTemplate = getBookingDeclinedEmailTemplate(
-      bookingRecord.individualDetails.client.name,
-      bookingRecord.coach.name,
-      lessonDate,
-      lessonTime,
-      reason
-    );
+      console.log(`Private group booking declined: ${bookingId}`);
 
-    await sendEmail({
-      to: bookingRecord.individualDetails?.client.email,
-      subject: emailTemplate.subject,
-      html: emailTemplate.html,
-      text: emailTemplate.text,
-    });
+      // Send decline notification email to organizer
+      const startDate = new Date(bookingRecord.scheduledStartAt);
+      const organizerTimezone = bookingRecord.privateGroupDetails.organizer.timezone || 'America/Chicago';
+      const lessonDate = formatDateOnly(startDate, organizerTimezone);
+      const lessonTime = formatTimeOnly(startDate, organizerTimezone);
 
-    console.log(`Decline notification sent to: ${bookingRecord.individualDetails?.client.email}`);
+      const emailTemplate = getBookingDeclinedEmailTemplate(
+        bookingRecord.privateGroupDetails.organizer.name,
+        bookingRecord.coach.name,
+        lessonDate,
+        lessonTime,
+        reason
+      );
+
+      await sendEmail({
+        to: bookingRecord.privateGroupDetails.organizer.email,
+        subject: emailTemplate.subject,
+        html: emailTemplate.html,
+        text: emailTemplate.text,
+      });
+
+      console.log(`Decline notification sent to organizer: ${bookingRecord.privateGroupDetails.organizer.email}`);
+    }
 
     revalidatePath('/dashboard/coach');
 

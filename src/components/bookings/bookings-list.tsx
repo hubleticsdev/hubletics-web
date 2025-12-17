@@ -519,7 +519,16 @@ export function BookingsList({ bookings, userRole, userId }: BookingsListProps) 
                           )}
                         </div>
                         <div>
-                          <div className="font-semibold text-gray-900">{otherUser?.name}</div>
+                          {userRole === 'client' && otherUser?.id ? (
+                            <Link 
+                              href={`/coaches/${otherUser.id}`}
+                              className="font-semibold text-gray-900 hover:text-[#FF6B4A] transition-colors"
+                            >
+                              {otherUser.name}
+                            </Link>
+                          ) : (
+                            <div className="font-semibold text-gray-900">{otherUser?.name}</div>
+                          )}
                           <div className="text-sm text-gray-500 capitalize">
                             {userRole === 'coach' ? 'Client' : 'Coach'}
                           </div>
@@ -631,17 +640,19 @@ export function BookingsList({ bookings, userRole, userId }: BookingsListProps) 
 
                       {booking.isGroupBooking && (
                         <>
-                          <Link href={`/dashboard/group-chat/${booking.id}`}>
-                            <Button
-                              type="button"
-                              variant="outline"
-                              size="sm"
-                              className="border-blue-300 text-blue-600 hover:bg-blue-50"
-                            >
-                              <MessageCircle className="h-4 w-4 mr-2" />
-                              Group Chat
-                            </Button>
-                          </Link>
+                          {booking.status !== 'cancelled' && (
+                            <Link href={`/dashboard/group-chat/${booking.id}`}>
+                              <Button
+                                type="button"
+                                variant="outline"
+                                size="sm"
+                                className="border-blue-300 text-blue-600 hover:bg-blue-50"
+                              >
+                                <MessageCircle className="h-4 w-4 mr-2" />
+                                Group Chat
+                              </Button>
+                            </Link>
+                          )}
                           <Button
                             type="button"
                             onClick={() => {

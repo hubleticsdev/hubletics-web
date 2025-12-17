@@ -359,12 +359,16 @@ export async function getPendingBookingRequests() {
         const bookingWithDetails = b as BookingWithDetails;
         let expectedGrossCents: number | null = null;
         let coachPayoutCents: number | null = null;
+        let platformFeeCents: number | null = null;
+        let stripeFeeCents: number | null = null;
         let clientMessage: string | null = null;
         let clientData: { id: string; name: string; email: string; image: string | null } | undefined = undefined;
 
         if (isIndividualBooking(bookingWithDetails)) {
           expectedGrossCents = bookingWithDetails.individualDetails.clientPaysCents;
           coachPayoutCents = bookingWithDetails.individualDetails.coachPayoutCents;
+          platformFeeCents = bookingWithDetails.individualDetails.platformFeeCents;
+          stripeFeeCents = bookingWithDetails.individualDetails.stripeFeeCents;
           clientMessage = bookingWithDetails.individualDetails.clientMessage ?? null;
           const details = b.individualDetails as typeof b.individualDetails & {
             client?: { id: string; name: string; email: string; image: string | null } | null;
@@ -373,6 +377,8 @@ export async function getPendingBookingRequests() {
         } else if (isPrivateGroupBooking(bookingWithDetails)) {
           expectedGrossCents = bookingWithDetails.privateGroupDetails.totalGrossCents;
           coachPayoutCents = bookingWithDetails.privateGroupDetails.coachPayoutCents;
+          platformFeeCents = bookingWithDetails.privateGroupDetails.platformFeeCents;
+          stripeFeeCents = bookingWithDetails.privateGroupDetails.stripeFeeCents;
           clientMessage = bookingWithDetails.privateGroupDetails.clientMessage ?? null;
           const details = b.privateGroupDetails as typeof b.privateGroupDetails & {
             organizer?: { id: string; name: string; email: string; image: string | null } | null;
@@ -385,6 +391,8 @@ export async function getPendingBookingRequests() {
           status: deriveUiBookingStatusFromBooking(bookingWithDetails),
           expectedGrossCents,
           coachPayoutCents,
+          platformFeeCents,
+          stripeFeeCents,
           clientMessage,
           client: clientData,
         };
@@ -578,12 +586,16 @@ export async function getUpcomingBookings() {
       const bookingWithDetails = b as BookingWithDetails;
       let expectedGrossCents: number | null = null;
       let coachPayoutCents: number | null = null;
+      let platformFeeCents: number | null = null;
+      let stripeFeeCents: number | null = null;
       let clientMessage: string | null = null;
       let client: { id: string; name: string; email: string; image: string | null } | null = null;
 
       if (isIndividualBooking(bookingWithDetails)) {
         expectedGrossCents = bookingWithDetails.individualDetails.clientPaysCents;
         coachPayoutCents = bookingWithDetails.individualDetails.coachPayoutCents;
+        platformFeeCents = bookingWithDetails.individualDetails.platformFeeCents;
+        stripeFeeCents = bookingWithDetails.individualDetails.stripeFeeCents;
         clientMessage = bookingWithDetails.individualDetails.clientMessage ?? null;
         // Access client relation from query result
         const details = b.individualDetails as typeof b.individualDetails & {
@@ -593,6 +605,8 @@ export async function getUpcomingBookings() {
       } else if (isPrivateGroupBooking(bookingWithDetails)) {
         expectedGrossCents = bookingWithDetails.privateGroupDetails.totalGrossCents;
         coachPayoutCents = bookingWithDetails.privateGroupDetails.coachPayoutCents;
+        platformFeeCents = bookingWithDetails.privateGroupDetails.platformFeeCents;
+        stripeFeeCents = bookingWithDetails.privateGroupDetails.stripeFeeCents;
         clientMessage = bookingWithDetails.privateGroupDetails.clientMessage ?? null;
         // Access organizer relation from query result
         const details = b.privateGroupDetails as typeof b.privateGroupDetails & {
@@ -608,6 +622,8 @@ export async function getUpcomingBookings() {
         status: deriveUiBookingStatusFromBooking(bookingWithDetails),
         expectedGrossCents,
         coachPayoutCents,
+        platformFeeCents,
+        stripeFeeCents,
         clientMessage,
         client,
       };
