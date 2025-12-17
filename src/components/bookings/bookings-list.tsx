@@ -21,7 +21,7 @@ import {
   DialogDescription,
 } from '@/components/ui/dialog';
 import { Calendar, MapPin, Clock, DollarSign, User, Loader2, Star, AlertCircle, Users, MessageCircle, Flag } from 'lucide-react';
-import { acceptBooking, declineBooking } from '@/actions/bookings/manage';
+import { acceptBooking, declineBooking, acceptPrivateGroupBooking } from '@/actions/bookings/manage';
 import { leavePublicLesson, cancelPrivateGroupBooking, coachCancelGroupLesson } from '@/actions/group-bookings/cancel';
 import { initiateDispute } from '@/actions/admin/disputes';
 import Link from 'next/link';
@@ -106,6 +106,7 @@ export function BookingsList({ bookings, userRole, userId }: BookingsListProps) 
     coachName: string;
     amount: number;
     paymentDueAt: Date;
+    bookingType?: 'individual' | 'private_group';
   } | null>(null);
   const [declineDialogOpen, setDeclineDialogOpen] = useState(false);
   const [bookingToDecline, setBookingToDecline] = useState<string | null>(null);
@@ -211,11 +212,13 @@ export function BookingsList({ bookings, userRole, userId }: BookingsListProps) 
     });
   };
 
-  const handleAccept = async (bookingId: string) => {
+  const handleAccept = async (bookingId: string, groupType?: 'private' | 'public' | null) => {
     setProcessingBookingId(bookingId);
     setError(null);
 
-    const result = await acceptBooking(bookingId);
+    const result = groupType === 'private' 
+      ? await acceptPrivateGroupBooking(bookingId)
+      : await acceptBooking(bookingId);
 
     if (result.success) {
       router.refresh();
@@ -573,7 +576,7 @@ export function BookingsList({ bookings, userRole, userId }: BookingsListProps) 
                           </div>
                         </div>
 
-                        {booking.isGroupBooking && (
+                        {booking.isGroupBooking && booking.groupType === 'public' && (
                           <div className="flex items-start gap-2">
                             <Users className="h-5 w-5 text-gray-400 mt-0.5" />
                             <div>
@@ -599,7 +602,7 @@ export function BookingsList({ bookings, userRole, userId }: BookingsListProps) 
                         <>
                           <Button
                             type="button"
-                            onClick={() => handleAccept(booking.id)}
+                            onClick={() => handleAccept(booking.id, booking.groupType)}
                             disabled={processingBookingId === booking.id}
                             className="bg-green-600 hover:bg-green-700 text-white"
                             size="sm"
@@ -718,7 +721,8 @@ export function BookingsList({ bookings, userRole, userId }: BookingsListProps) 
                         </Button>
                       )}
 
-                      {booking.status === 'awaiting_payment' && userRole === 'client' && booking.paymentDueAt && (
+                      {booking.status === 'awaiting_payment' && userRole === 'client' && booking.paymentDueAt && 
+                       (booking.groupType !== 'private' || booking.organizerId === userId) && (
                         <>
                           <Button
                             type="button"
@@ -729,6 +733,7 @@ export function BookingsList({ bookings, userRole, userId }: BookingsListProps) 
                                   coachName: booking.coach?.name || 'Coach',
                                   amount: booking.expectedGrossCents ? booking.expectedGrossCents / 100 : 0,
                                   paymentDueAt: new Date(booking.paymentDueAt),
+                                  bookingType: booking.groupType === 'private' ? 'private_group' : 'individual',
                                 });
                                 setPaymentModalOpen(true);
                               }
@@ -805,6 +810,7 @@ export function BookingsList({ bookings, userRole, userId }: BookingsListProps) 
           coachName={selectedPayment.coachName}
           amount={selectedPayment.amount}
           paymentDueAt={selectedPayment.paymentDueAt}
+          bookingType={selectedPayment.bookingType || 'individual'}
           onSuccess={() => {
             router.refresh();
             setPaymentModalOpen(false);

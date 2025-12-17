@@ -221,30 +221,33 @@ export async function getMyBookings(
       }
     }
 
-    // Count participants for group bookings
-    const groupBookingIds = bookings
-      .filter(b => b.bookingType === 'private_group' || b.bookingType === 'public_group')
+    const publicGroupBookingIds = bookings
+      .filter(b => b.bookingType === 'public_group')
       .map(b => b.id);
-    const participantCounts: Record<string, number> = {};
+    const pendingParticipantCounts: Record<string, number> = {};
 
-    if (groupBookingIds.length > 0) {
-      const participants = await db.query.bookingParticipant.findMany({
-        where: inArray(bookingParticipant.bookingId, groupBookingIds),
+    if (publicGroupBookingIds.length > 0) {
+      // Count participants awaiting coach approval for public groups
+      const pendingParticipants = await db.query.bookingParticipant.findMany({
+        where: and(
+          inArray(bookingParticipant.bookingId, publicGroupBookingIds),
+          eq(bookingParticipant.status, 'awaiting_coach')
+        ),
         columns: {
           bookingId: true,
         },
       });
 
-      participants.forEach(p => {
-        participantCounts[p.bookingId] = (participantCounts[p.bookingId] || 0) + 1;
+      pendingParticipants.forEach(p => {
+        pendingParticipantCounts[p.bookingId] = (pendingParticipantCounts[p.bookingId] || 0) + 1;
       });
     }
 
     const bookingsWithCounts = bookings.map(b => ({
       ...b,
       status: deriveUiBookingStatusFromBooking(b as BookingWithDetails),
-      pendingParticipantsCount: (b.bookingType === 'private_group' || b.bookingType === 'public_group')
-        ? (participantCounts[b.id] || 0)
+      pendingParticipantsCount: b.bookingType === 'public_group'
+        ? (pendingParticipantCounts[b.id] || 0)
         : undefined,
     }));
 

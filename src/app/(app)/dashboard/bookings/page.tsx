@@ -46,6 +46,11 @@ export default async function BookingsPage() {
       pricePerPerson: b.bookingType === 'public_group' ? b.publicGroupDetails?.pricePerPerson : b.bookingType === 'private_group' ? b.privateGroupDetails?.pricePerPerson : null,
       organizerId: b.bookingType === 'private_group' ? b.privateGroupDetails?.organizerId : null,
       client: b.bookingType === 'individual' ? b.individualDetails?.client : b.bookingType === 'private_group' ? b.privateGroupDetails?.organizer : null,
+      paymentDueAt: b.bookingType === 'individual' 
+        ? b.individualDetails?.paymentDueAt 
+        : b.bookingType === 'private_group'
+        ? b.privateGroupDetails?.paymentDueAt
+        : null,
     };
     return flattened;
   });

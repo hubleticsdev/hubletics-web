@@ -56,7 +56,7 @@ function PaymentForm({
         return;
       }
 
-      const { error: confirmError } = await stripe.confirmPayment({
+      const { error: confirmError, paymentIntent: confirmedPaymentIntent } = await stripe.confirmPayment({
         elements,
         redirect: 'if_required',
       });
@@ -67,19 +67,47 @@ function PaymentForm({
         return;
       }
 
-      const confirmPayment = bookingType === 'private_group'
-        ? confirmPrivateGroupBookingPayment
-        : confirmBookingPayment;
+      // Check if payment was actually confirmed
+      if (confirmedPaymentIntent) {
+        if (confirmedPaymentIntent.status === 'requires_capture' || confirmedPaymentIntent.status === 'succeeded') {
+          const confirmPayment = bookingType === 'private_group'
+            ? confirmPrivateGroupBookingPayment
+            : confirmBookingPayment;
 
-      const result = await confirmPayment(bookingId);
+          const result = await confirmPayment(bookingId);
 
-      if (result && result.success) {
-        toast.success('Payment successful! Your lesson is confirmed.');
-        onSuccess();
+          if (result && result.success) {
+            toast.success('Payment successful! Your lesson is confirmed.');
+            onSuccess();
+          } else {
+            toast.error(result?.error || 'Failed to confirm booking');
+            setProcessing(false);
+          }
+        } else if (confirmedPaymentIntent.status === 'requires_payment_method') {
+          toast.error('Payment not confirmed. Please check your payment method and try again.');
+          setProcessing(false);
+        } else {
+          await new Promise(resolve => setTimeout(resolve, 1000));
+          const confirmPayment = bookingType === 'private_group'
+            ? confirmPrivateGroupBookingPayment
+            : confirmBookingPayment;
+
+          const result = await confirmPayment(bookingId);
+
+          if (result && result.success) {
+            toast.success('Payment successful! Your lesson is confirmed.');
+            onSuccess();
+          } else {
+            toast.error(result?.error || 'Failed to confirm booking');
+            setProcessing(false);
+          }
+        }
       } else {
-        toast.error(result?.error || 'Failed to confirm booking');
+        // No payment intent returned
+        toast.error('Payment confirmation incomplete. Please try again.');
         setProcessing(false);
       }
+
     } catch (error) {
       console.error('Payment error:', error);
       toast.error('Payment failed. Please try again.');

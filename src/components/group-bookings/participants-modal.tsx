@@ -33,6 +33,8 @@ export function ParticipantsModal({ bookingId, isOpen, onClose }: ParticipantsMo
     joinedAt: Date;
   }>>([]);
   const [isCoach, setIsCoach] = useState(false);
+  const [bookingType, setBookingType] = useState<'individual' | 'private_group' | 'public_group' | null>(null);
+  const [organizerId, setOrganizerId] = useState<string | undefined>(undefined);
   const [error, setError] = useState<string | null>(null);
   const [processingParticipantId, setProcessingParticipantId] = useState<string | null>(null);
 
@@ -45,6 +47,8 @@ export function ParticipantsModal({ bookingId, isOpen, onClose }: ParticipantsMo
     if (result.success && result.participants) {
       setParticipants(result.participants);
       setIsCoach(result.isCoach || false);
+      setBookingType(result.bookingType || null);
+      setOrganizerId(result.organizerId);
     } else {
       setError(result.error || 'Failed to load participants');
     }
@@ -141,7 +145,20 @@ export function ParticipantsModal({ bookingId, isOpen, onClose }: ParticipantsMo
                 </div>
 
                 <div className="flex items-center gap-2">
-                  {participant.paymentStatus === 'captured' ? (
+                  {bookingType === 'private_group' ? (
+                    participant.userId === organizerId ? (
+                      <div className="flex items-center gap-1 px-2 py-1 bg-blue-100 text-blue-700 rounded text-xs font-medium">
+                        <User className="h-3 w-3" />
+                        Organizer
+                      </div>
+                    ) : (
+                      <div className="flex items-center gap-1 px-2 py-1 bg-gray-100 text-gray-700 rounded text-xs font-medium">
+                        <User className="h-3 w-3" />
+                        Participant
+                      </div>
+                    )
+                  ) : participant.paymentStatus === 'captured' ? (
+                    // Public group: show payment status
                     <div className="flex items-center gap-1 px-2 py-1 bg-green-100 text-green-700 rounded text-xs font-medium">
                       <CheckCircle className="h-3 w-3" />
                       Paid

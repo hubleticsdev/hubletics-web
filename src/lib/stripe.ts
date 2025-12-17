@@ -107,6 +107,10 @@ export async function createBookingPaymentIntent(
       amount: Math.round(amount * 100),
       currency: 'usd',
       capture_method: 'manual',
+      on_behalf_of: coachStripeAccountId,
+      transfer_data: {
+        destination: coachStripeAccountId,
+      },
       metadata: {
         ...metadata,
         coachStripeAccountId,

@@ -4,7 +4,7 @@ import { getSession } from '@/lib/auth/session';
 import { db } from '@/lib/db';
 import { booking, individualBookingDetails, privateGroupBookingDetails, coachProfile, bookingParticipant } from '@/lib/db/schema';
 import { eq, and } from 'drizzle-orm';
-import { createBookingPaymentIntent, captureBookingPayment } from '@/lib/stripe';
+import { createBookingPaymentIntent, captureBookingPayment, stripe } from '@/lib/stripe';
 import { validateInput, uuidSchema } from '@/lib/validations';
 import { recordPaymentEvent } from '@/lib/payment-audit';
 import { recordStateTransition } from '@/lib/booking-audit';
@@ -220,7 +220,40 @@ export async function confirmBookingPayment(bookingId: string) {
       return { success: false, error: 'No payment intent found' };
     }
 
-    await captureBookingPayment(bookingRecord.individualDetails.stripePaymentIntentId);
+    let paymentIntent;
+    let retries = 3;
+    while (retries > 0) {
+      paymentIntent = await stripe.paymentIntents.retrieve(bookingRecord.individualDetails.stripePaymentIntentId);
+      
+      if (paymentIntent.status === 'requires_capture' || paymentIntent.status === 'succeeded') {
+        break;
+      }
+      
+      if (paymentIntent.status === 'requires_payment_method') {
+        retries--;
+        if (retries > 0) {
+          await new Promise(resolve => setTimeout(resolve, 1000));
+          continue;
+        }
+        return { success: false, error: 'Payment not confirmed. Please try again.' };
+      }
+      
+      break;
+    }
+
+    if (!paymentIntent) {
+      return { success: false, error: 'Failed to retrieve payment intent' };
+    }
+
+    if (paymentIntent.status === 'requires_capture') {
+      await captureBookingPayment(bookingRecord.individualDetails.stripePaymentIntentId);
+    } else if (paymentIntent.status === 'succeeded') {
+      console.log(`Payment intent ${paymentIntent.id} already succeeded`);
+    } else if (paymentIntent.status === 'requires_payment_method') {
+      return { success: false, error: 'Payment not confirmed. Please check your payment method and try again.' };
+    } else {
+      return { success: false, error: `Payment intent is in invalid state: ${paymentIntent.status}` };
+    }
 
     const oldPaymentStatus = bookingRecord.individualDetails.paymentStatus;
 
@@ -304,7 +337,41 @@ export async function confirmPrivateGroupBookingPayment(bookingId: string) {
       return { success: false, error: 'No payment intent found' };
     }
 
-    await captureBookingPayment(bookingRecord.privateGroupDetails.stripePaymentIntentId);
+    let paymentIntent;
+    let retries = 3;
+    while (retries > 0) {
+      paymentIntent = await stripe.paymentIntents.retrieve(bookingRecord.privateGroupDetails.stripePaymentIntentId);
+      
+      if (paymentIntent.status === 'requires_capture' || paymentIntent.status === 'succeeded') {
+        break;
+      }
+      
+      if (paymentIntent.status === 'requires_payment_method') {
+        retries--;
+        if (retries > 0) {
+          await new Promise(resolve => setTimeout(resolve, 1000));
+          continue;
+        }
+        return { success: false, error: 'Payment not confirmed. Please check your payment method and try again.' };
+      }
+      
+      break;
+    }
+
+    if (!paymentIntent) {
+      return { success: false, error: 'Failed to retrieve payment intent' };
+    }
+
+    // Check if payment intent is in a capturable state
+    if (paymentIntent.status === 'requires_capture') {
+      await captureBookingPayment(bookingRecord.privateGroupDetails.stripePaymentIntentId);
+    } else if (paymentIntent.status === 'succeeded') {
+      console.log(`Payment intent ${paymentIntent.id} already succeeded`);
+    } else if (paymentIntent.status === 'requires_payment_method') {
+      return { success: false, error: 'Payment not confirmed. Please check your payment method and try again.' };
+    } else {
+      return { success: false, error: `Payment intent is in invalid state: ${paymentIntent.status}` };
+    }
 
     const oldPaymentStatus = bookingRecord.privateGroupDetails.paymentStatus;
 

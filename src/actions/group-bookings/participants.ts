@@ -17,6 +17,7 @@ export async function getBookingParticipants(bookingId: string) {
       where: eq(booking.id, bookingId),
       with: {
         privateGroupDetails: true,
+        publicGroupDetails: true,
       },
     });
 
@@ -65,7 +66,9 @@ export async function getBookingParticipants(bookingId: string) {
     return {
       success: true,
       participants: formattedParticipants,
+      bookingType: bookingRecord.bookingType,
       isOrganizer: bookingRecord.bookingType === 'private_group' && bookingRecord.privateGroupDetails?.organizerId === session.user.id,
+      organizerId: bookingRecord.bookingType === 'private_group' ? bookingRecord.privateGroupDetails?.organizerId : undefined,
       isCoach,
     };
   } catch (error) {
