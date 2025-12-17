@@ -257,6 +257,7 @@ export async function confirmBookingPayment(bookingId: string) {
     });
 
     console.log(`Payment confirmed for individual booking ${validatedBookingId}`);
+    return { success: true };
   } catch (error) {
     console.error('Confirm payment error:', error);
     return { success: false, error: 'Failed to confirm payment' };

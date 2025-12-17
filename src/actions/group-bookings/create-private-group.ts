@@ -187,6 +187,7 @@ export async function createPrivateGroupBooking(input: PrivateGroupBookingInput)
       totalGrossCents: groupTotals.totalGrossCents,
       platformFeeCents: groupTotals.platformFeeCents,
       coachPayoutCents: groupTotals.coachPayoutCents,
+      stripeFeeCents: groupTotals.stripeFeeCents,
       paymentStatus: 'not_required',
     });
 
@@ -199,6 +200,7 @@ export async function createPrivateGroupBooking(input: PrivateGroupBookingInput)
         paymentStatus: 'requires_payment_method',
         amountPaid: (groupTotals.totalGrossCents / 100).toFixed(2),
         amountCents: groupTotals.totalGrossCents,
+        stripeFeeCents: groupTotals.stripeFeeCents,
       },
       ...participants.map(p => ({
         bookingId,

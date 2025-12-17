@@ -7,6 +7,7 @@ import { getSession } from '@/lib/auth/session';
 import { revalidatePath } from 'next/cache';
 import { updateUserAccountSchema, updateAthleteProfileSchema, updateCoachProfileSchema, validateInput, usernameSchema } from '@/lib/validations';
 import { invalidateSessionCache } from '@/lib/auth/cache';
+import { deleteUploadThingFile } from '@/lib/uploadthing/utils';
 
 export async function updateUserAccount({ name, username }: { name: string; username?: string }) {
   try {
@@ -115,7 +116,20 @@ export async function updateCoachProfile(data: {
       return { success: false, error: 'Unauthorized' };
     }
 
+    const currentProfile = await db.query.coachProfile.findFirst({
+      where: eq(coachProfile.userId, session.user.id),
+      columns: {
+        introVideo: true,
+      },
+    });
+
     const validatedData = validateInput(updateCoachProfileSchema, data);
+
+    if (currentProfile?.introVideo && currentProfile.introVideo !== validatedData.introVideo) {
+      deleteUploadThingFile(currentProfile.introVideo).catch(err => {
+        console.error('Failed to delete old intro video:', err);
+      });
+    }
 
     await db
       .update(coachProfile)

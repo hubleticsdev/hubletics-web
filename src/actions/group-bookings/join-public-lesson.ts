@@ -10,6 +10,7 @@ import { getNewParticipantRequestEmailTemplate } from '@/lib/email/templates/gro
 import { revalidatePath } from 'next/cache';
 import { formatDateOnly, formatTimeOnly } from '@/lib/utils/date';
 import { recordPaymentEvent } from '@/lib/payment-audit';
+import { calculateCoachEarnings } from '@/lib/pricing';
 
 export async function joinPublicLesson(lessonId: string) {
   try {
@@ -87,6 +88,11 @@ export async function joinPublicLesson(lessonId: string) {
     }
 
     const pricePerPerson = parseFloat(lesson.publicGroupDetails.pricePerPerson);
+    
+    const platformFee = coach.user?.platformFeePercentage
+      ? parseFloat(coach.user.platformFeePercentage as unknown as string)
+      : 15;
+    const earnings = calculateCoachEarnings(pricePerPerson, platformFee);
 
     const paymentIntent = await createBookingPaymentIntent(
       pricePerPerson,
@@ -110,6 +116,7 @@ export async function joinPublicLesson(lessonId: string) {
       paymentStatus: 'requires_payment_method',
       amountPaid: pricePerPerson.toString(),
       amountCents: Math.round(pricePerPerson * 100),
+      stripeFeeCents: earnings.stripeFeeCents,
       stripePaymentIntentId: paymentIntent.id,
       expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000),
     }).returning({ id: bookingParticipant.id });

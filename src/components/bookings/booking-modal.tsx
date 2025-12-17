@@ -126,6 +126,13 @@ export function BookingModal({
         displayCost: pricing.clientPays,
         pricePerPerson: null,
         totalParticipants: 1,
+        breakdown: {
+          coachRate: pricing.coachDesiredRate,
+          clientPays: pricing.clientPays,
+          stripeFee: pricing.stripeFee,
+          platformFee: pricing.platformFee,
+          coachPayout: pricing.coachPayout,
+        },
       };
     } else {
       const totalParticipants = participantUsernames.length + 1; // +1 for organizer
@@ -149,7 +156,7 @@ export function BookingModal({
       });
 
       if (!tierResult) {
-        // No tier found - show error or default
+        // No tier found
         return {
           baseCost: 0,
           displayCost: 0,
@@ -585,11 +592,34 @@ export function BookingModal({
                           {calculatedPricing.totalParticipants} × ${calculatedPricing.pricePerPerson.toFixed(2)} per person
                         </div>
                       )}
-                      <div className="text-xs text-gray-600 mt-1">
-                        {bookingType === 'individual' 
-                          ? 'Plus platform fees (calculated at payment)'
-                          : 'Includes platform fees'}
-                      </div>
+                      {bookingType === 'individual' && calculatedPricing.breakdown && (
+                        <details className="text-xs text-gray-600 mt-2">
+                          <summary className="cursor-pointer hover:text-gray-700 mb-1">View breakdown</summary>
+                          <div className="mt-2 space-y-1 bg-gray-50 p-2 rounded">
+                            <div className="flex justify-between">
+                              <span>Coach&apos;s rate:</span>
+                              <span className="font-medium">${calculatedPricing.breakdown.coachRate.toFixed(2)}</span>
+                            </div>
+                            <div className="flex justify-between text-red-600">
+                              <span>Stripe fee:</span>
+                              <span>+${calculatedPricing.breakdown.stripeFee.toFixed(2)}</span>
+                            </div>
+                            <div className="flex justify-between text-red-600">
+                              <span>Platform fee:</span>
+                              <span>+${calculatedPricing.breakdown.platformFee.toFixed(2)}</span>
+                            </div>
+                            <div className="flex justify-between border-t border-gray-300 pt-1 font-semibold text-gray-900">
+                              <span>You pay:</span>
+                              <span>${calculatedPricing.breakdown.clientPays.toFixed(2)}</span>
+                            </div>
+                          </div>
+                        </details>
+                      )}
+                      {bookingType === 'group' && (
+                        <div className="text-xs text-gray-600 mt-1">
+                          Includes platform fees
+                        </div>
+                      )}
                     </>
                   )}
                 </div>

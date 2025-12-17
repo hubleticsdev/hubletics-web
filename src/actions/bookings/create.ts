@@ -178,6 +178,7 @@ export async function createBooking(input: CreateBookingInput) {
       clientPaysCents: pricing.clientPaysCents,
       platformFeeCents: pricing.platformFeeCents,
       coachPayoutCents: pricing.coachPayoutCents,
+      stripeFeeCents: pricing.stripeFeeCents,
       paymentStatus: 'not_required',
     });
 

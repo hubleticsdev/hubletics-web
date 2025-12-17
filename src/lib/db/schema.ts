@@ -440,6 +440,7 @@ export const individualBookingDetails = pgTable('individual_booking_details', {
   clientPaysCents: integer('clientPaysCents').notNull(),
   platformFeeCents: integer('platformFeeCents').notNull(),
   coachPayoutCents: integer('coachPayoutCents').notNull(),
+  stripeFeeCents: integer('stripeFeeCents').notNull(),
 
   stripeTransferId: varchar('stripeTransferId', { length: 255 }),
   stripePaymentIntentId: varchar('stripePaymentIntentId', { length: 255 }),
@@ -470,6 +471,7 @@ export const privateGroupBookingDetails = pgTable('private_group_booking_details
   totalGrossCents: integer('totalGrossCents').notNull(),
   platformFeeCents: integer('platformFeeCents').notNull(),
   coachPayoutCents: integer('coachPayoutCents').notNull(),
+  stripeFeeCents: integer('stripeFeeCents').notNull(),
 
   stripeTransferId: varchar('stripeTransferId', { length: 255 }),
   stripePaymentIntentId: varchar('stripePaymentIntentId', { length: 255 }),
@@ -546,20 +548,6 @@ export const bookingParticipant = pgTable(
     userId: text('userId')
       .notNull()
       .references(() => user.id, { onDelete: 'cascade' }),
-
-    /**
-     * IMPORTANT: Semantics differ by booking type:
-     *
-     * Private Group:
-     * - role: 'organizer' (pays for everyone) or 'participant' (invited, doesn't pay)
-     * - paymentStatus: Only meaningful for organizer (always 'requires_payment_method' for participants)
-     * - stripePaymentIntentId: Only set for organizer
-     *
-     * Public Group:
-     * - role: Always 'participant'
-     * - paymentStatus: Tracks each participant's individual payment
-     * - stripePaymentIntentId: Each participant has their own PI
-     */
     role: varchar('role', { length: 20 }).notNull().default('participant'),
     status: participantStatusEnum('status')
       .notNull()
@@ -569,6 +557,7 @@ export const bookingParticipant = pgTable(
       .default('requires_payment_method'),
     amountPaid: decimal('amountPaid', { precision: 10, scale: 2 }),
     amountCents: integer('amountCents'),
+    stripeFeeCents: integer('stripeFeeCents'),
     stripePaymentIntentId: varchar('stripePaymentIntentId', { length: 255 }),
     expiresAt: timestamp('expiresAt'),
     authorizedAt: timestamp('authorizedAt'),

@@ -14,6 +14,8 @@ import {
 } from '@/components/ui/dialog';
 import { updateUserAccount, updateAthleteProfile, updateCoachProfile } from '@/actions/profile/update';
 import { checkUsernameAvailability } from '@/actions/auth/validate-username';
+import { UploadButton } from '@/lib/uploadthing';
+import { toast } from 'sonner';
 
 interface User {
   id: string;
@@ -475,19 +477,78 @@ export function ProfileForm({ user, profile }: ProfileFormProps) {
             </div>
 
             <div>
-              <label htmlFor="introVideo" className="block text-sm font-medium text-gray-700 mb-1">
-                Intro Video URL
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Intro Video
               </label>
-              <input
-                type="url"
-                id="introVideo"
-                value={coachData.introVideo}
-                onChange={(e) =>
-                  setCoachData({ ...coachData, introVideo: e.target.value })
-                }
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#FF6B4A] focus:border-transparent"
-                placeholder="https://..."
-              />
+              {coachData.introVideo ? (
+                <div className="space-y-3">
+                  <div className="relative border-2 border-green-200 rounded-lg overflow-hidden bg-black">
+                    <video
+                      src={coachData.introVideo}
+                      controls
+                      className="w-full max-h-96 object-contain"
+                    >
+                      Your browser does not support the video tag.
+                    </video>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setCoachData({ ...coachData, introVideo: '' });
+                        toast.success('Video removed. Upload a new one below.');
+                      }}
+                      className="absolute top-2 right-2 p-2 bg-red-500 hover:bg-red-600 text-white rounded-full shadow-lg transition-colors"
+                      title="Remove video"
+                    >
+                      <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
+                        <path
+                          fillRule="evenodd"
+                          d="M9 2a1 1 0 00-.894.553L7.382 4H4a1 1 0 000 2v10a2 2 0 002 2h8a2 2 0 002-2V6a1 1 0 100-2h-3.382l-.724-1.447A1 1 0 0011 2H9zM7 8a1 1 0 012 0v6a1 1 0 11-2 0V8zm5-1a1 1 0 00-1 1v6a1 1 0 102 0V8a1 1 0 00-1-1z"
+                          clipRule="evenodd"
+                        />
+                      </svg>
+                    </button>
+                    <div className="absolute bottom-2 left-2 px-3 py-1.5 bg-green-500 text-white text-xs font-medium rounded-full flex items-center gap-1.5">
+                      <svg className="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 20 20">
+                        <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+                      </svg>
+                      Video uploaded
+                    </div>
+                  </div>
+                  <div className="text-xs text-gray-500">
+                    Upload a new video to replace the current one
+                  </div>
+                </div>
+              ) : null}
+              <div className="mt-2">
+                <UploadButton
+                  endpoint="coachIntroVideo"
+                  onClientUploadComplete={async (res) => {
+                    if (res?.[0]?.url) {
+                      setCoachData({ ...coachData, introVideo: res[0].url });
+                      toast.success('Intro video uploaded!');
+                    }
+                  }}
+                  onUploadError={(error: Error) => {
+                    toast.error(`Upload failed: ${error.message}`);
+                  }}
+                  appearance={{
+                    button:
+                      'ut-ready:bg-gradient-to-r ut-ready:from-[#FF6B4A] ut-ready:to-[#FF8C5A] ut-uploading:cursor-not-allowed ut-ready:cursor-pointer ut-uploading:bg-gray-400 ut-button:text-white ut-button:font-semibold ut-button:rounded-lg ut-button:px-4 ut-button:py-2',
+                    container: 'flex items-center',
+                    allowedContent: 'text-xs text-gray-500 mt-2',
+                  }}
+                  content={{
+                    button({ ready, isUploading }) {
+                      if (isUploading) return 'Uploading...';
+                      if (ready) return coachData.introVideo ? 'Replace Video' : 'Upload Video';
+                      return 'Getting ready...';
+                    },
+                  }}
+                />
+              </div>
+              <p className="text-xs text-gray-500 mt-2">
+                Recommended: MP4 format, max 64MB. Your old video will be automatically deleted when you upload a new one.
+              </p>
             </div>
 
             <div>
