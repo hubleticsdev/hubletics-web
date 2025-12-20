@@ -48,6 +48,12 @@ export default function AdminLayout({
             >
               Disputes
             </Link>
+            <Link
+              href="/admin/flagged-messages"
+              className="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 rounded-lg"
+            >
+              Flagged Messages
+            </Link>
           </nav>
         </aside>
 
