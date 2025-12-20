@@ -4,14 +4,12 @@ import { useState } from 'react';
 import { updateUserStatus } from '@/actions/admin/users';
 import { Button } from '@/components/ui/button';
 import { toast } from 'sonner';
-import { Loader2, Ban, ShieldOff, CheckCircle, XCircle } from 'lucide-react';
+import { Loader2, Ban, ShieldOff, CheckCircle } from 'lucide-react';
 import type { UserStatus } from '@/types/auth';
 
 interface UserActionsProps {
   userId: string;
   currentStatus: UserStatus;
-  userName: string;
-  userEmail: string;
   isCurrentUser: boolean;
   isAdmin: boolean;
 }
@@ -19,8 +17,6 @@ interface UserActionsProps {
 export function UserActions({
   userId,
   currentStatus,
-  userName,
-  userEmail,
   isCurrentUser,
   isAdmin,
 }: UserActionsProps) {

@@ -2,7 +2,7 @@
 
 import { getSession } from '@/lib/auth/session';
 import { db } from '@/lib/db';
-import { booking, bookingParticipant, coachProfile, user, publicGroupLessonDetails } from '@/lib/db/schema';
+import { booking, bookingParticipant, coachProfile, publicGroupLessonDetails } from '@/lib/db/schema';
 import { eq, and } from 'drizzle-orm';
 import { transferToCoach } from '@/lib/stripe';
 import { sendEmail } from '@/lib/email/resend';

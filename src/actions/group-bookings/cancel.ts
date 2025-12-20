@@ -174,11 +174,11 @@ export async function cancelPrivateGroupBooking(bookingId: string) {
       })
       .where(eq(booking.id, bookingId));
 
-    if (bookingRecord.privateGroupDetails) {
+    if (bookingRecord.privateGroupDetails && newPaymentStatus) {
       await db
         .update(privateGroupBookingDetails)
         .set({
-          paymentStatus: newPaymentStatus as any,
+          paymentStatus: newPaymentStatus,
         })
         .where(eq(privateGroupBookingDetails.bookingId, bookingId));
     }

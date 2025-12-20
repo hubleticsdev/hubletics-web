@@ -1,5 +1,4 @@
 import { UTApi } from 'uploadthing/server';
-import { env } from '@/lib/env';
 
 // Extract fileKey from UploadThing URL
 export function extractFileKeyFromUrl(url: string): string | null {

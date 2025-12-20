@@ -1,13 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
 import { booking, individualBookingDetails, privateGroupBookingDetails } from '@/lib/db/schema';
-import { eq, and, or } from 'drizzle-orm';
+import { eq, or } from 'drizzle-orm';
 import type { BookingWithDetails } from '@/lib/booking-type-guards';
 import { isIndividualBooking, isPrivateGroupBooking } from '@/lib/booking-type-guards';
 import { sendEmail } from '@/lib/email/resend';
 import {
   getBookingCancelledDueToPaymentEmailTemplate,
-  getPaymentReminder12HoursEmailTemplate,
   getPaymentReminder30MinutesEmailTemplate
 } from '@/lib/email/templates/payment-notifications';
 import { validateCronAuth } from '@/lib/cron/auth';
@@ -92,7 +91,7 @@ export async function GET(request: NextRequest) {
           const details = bookingRecord.individualDetails as typeof bookingRecord.individualDetails & {
             client?: { name: string; email: string; timezone: string | null } | null;
           };
-          client = (details as any).client ?? null;
+          client = details.client ?? null;
           expectedGrossCents = bookingWithDetails.individualDetails.clientPaysCents;
         } else if (isPrivateGroupBooking(bookingWithDetails)) {
           paymentDueAt = bookingWithDetails.privateGroupDetails.paymentDueAt;
@@ -101,7 +100,7 @@ export async function GET(request: NextRequest) {
           const details = bookingRecord.privateGroupDetails as typeof bookingRecord.privateGroupDetails & {
             organizer?: { name: string; email: string; timezone: string | null } | null;
           };
-          client = (details as any).organizer ?? null;
+          client = details.organizer ?? null;
           expectedGrossCents = bookingWithDetails.privateGroupDetails.totalGrossCents;
         }
 
@@ -110,7 +109,6 @@ export async function GET(request: NextRequest) {
           continue;
         }
 
-        const hoursUntilDue = (paymentDueAt.getTime() - now.getTime()) / (1000 * 60 * 60);
         const minutesUntilDue = (paymentDueAt.getTime() - now.getTime()) / (1000 * 60);
 
         if (now > paymentDueAt) {

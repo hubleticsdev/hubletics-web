@@ -3,7 +3,7 @@
 import { requireRole } from '@/lib/auth/session';
 import { db } from '@/lib/db';
 import { booking, individualBookingDetails } from '@/lib/db/schema';
-import { eq, and, sql } from 'drizzle-orm';
+import { eq, and } from 'drizzle-orm';
 
 export type AthleteSpendSummary = {
   totalSpent: number;

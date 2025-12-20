@@ -1,10 +1,10 @@
 'use server';
 
 import { db } from '@/lib/db';
-import { booking, individualBookingDetails, privateGroupBookingDetails, publicGroupLessonDetails, bookingParticipant } from '@/lib/db/schema';
+import { booking, individualBookingDetails, privateGroupBookingDetails, bookingParticipant } from '@/lib/db/schema';
 import { eq, and } from 'drizzle-orm';
 import type { BookingWithDetails } from '@/lib/booking-type-guards';
-import { isIndividualBooking, isPrivateGroupBooking, isPublicGroupBooking } from '@/lib/booking-type-guards';
+import { isIndividualBooking, isPrivateGroupBooking } from '@/lib/booking-type-guards';
 import { requireRole, requireAuth } from '@/lib/auth/session';
 import { resend } from '@/lib/email/resend';
 import { incrementCoachLessonsCompleted } from '@/lib/coach-stats';
@@ -78,7 +78,7 @@ export async function getDisputedBookings(page = 1, limit = 25) {
         const details = b.individualDetails as typeof b.individualDetails & {
           client?: { id: string; name: string; email: string; image: string | null } | null;
         };
-        client = (details as any).client ?? null;
+        client = details.client ?? null;
       } else if (isPrivateGroupBooking(bookingWithDetails)) {
         expectedGrossCents = bookingWithDetails.privateGroupDetails.totalGrossCents;
         coachPayoutCents = bookingWithDetails.privateGroupDetails.coachPayoutCents;
@@ -87,7 +87,7 @@ export async function getDisputedBookings(page = 1, limit = 25) {
         const details = b.privateGroupDetails as typeof b.privateGroupDetails & {
           organizer?: { id: string; name: string; email: string; image: string | null } | null;
         };
-        client = (details as any).organizer ?? null;
+        client = details.organizer ?? null;
       }
       // Public groups don't have booking-level amounts (participants pay individually)
 
@@ -455,7 +455,7 @@ export async function processRefund(
 
           if (charges.data.length === 0) continue;
 
-          const refund = await stripe.refunds.create({
+          await stripe.refunds.create({
             charge: charges.data[0].id,
             amount: participantRefundAmount,
             reverse_transfer: true,

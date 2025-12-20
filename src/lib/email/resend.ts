@@ -50,7 +50,7 @@ function handleEmailError(error: unknown): never {
 
 export const resend = new Resend(env.RESEND_API_KEY);
 
-export const FROM_EMAIL = 'Hubletics <noreply@propelprep.com>';
+export const FROM_EMAIL = 'Hubletics <noreply@hubletics.com>';
 
 export async function sendEmail({
   to,

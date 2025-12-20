@@ -3,7 +3,7 @@
 import { getSession } from '@/lib/auth/session';
 import { db } from '@/lib/db';
 import { booking, individualBookingDetails, privateGroupBookingDetails, publicGroupLessonDetails, bookingParticipant } from '@/lib/db/schema';
-import { eq, and, or, gte, gt, inArray } from 'drizzle-orm';
+import { eq, and, or, gte, inArray } from 'drizzle-orm';
 import { deriveUiBookingStatusFromBooking, UiBookingStatus } from '@/lib/booking-status';
 import type { BookingWithDetails } from '@/lib/booking-type-guards';
 import { isIndividualBooking, isPrivateGroupBooking, isPublicGroupBooking } from '@/lib/booking-type-guards';
@@ -392,7 +392,7 @@ export async function getPendingBookingRequests() {
           const details = b.individualDetails as typeof b.individualDetails & {
             client?: { id: string; name: string; email: string; image: string | null } | null;
           };
-          clientData = (details as any).client ?? undefined;
+          clientData = details.client ?? undefined;
         } else if (isPrivateGroupBooking(bookingWithDetails)) {
           expectedGrossCents = bookingWithDetails.privateGroupDetails.totalGrossCents;
           coachPayoutCents = bookingWithDetails.privateGroupDetails.coachPayoutCents;
@@ -402,7 +402,7 @@ export async function getPendingBookingRequests() {
           const details = b.privateGroupDetails as typeof b.privateGroupDetails & {
             organizer?: { id: string; name: string; email: string; image: string | null } | null;
           };
-          clientData = (details as any).organizer ?? undefined;
+          clientData = details.organizer ?? undefined;
         }
 
         return {
@@ -620,7 +620,7 @@ export async function getUpcomingBookings() {
         const details = b.individualDetails as typeof b.individualDetails & {
           client?: { id: string; name: string; email: string; image: string | null } | null;
         };
-        client = (details as any).client ?? null;
+        client = details.client ?? null;
       } else if (isPrivateGroupBooking(bookingWithDetails)) {
         expectedGrossCents = bookingWithDetails.privateGroupDetails.totalGrossCents;
         coachPayoutCents = bookingWithDetails.privateGroupDetails.coachPayoutCents;
@@ -631,7 +631,7 @@ export async function getUpcomingBookings() {
         const details = b.privateGroupDetails as typeof b.privateGroupDetails & {
           organizer?: { id: string; name: string; email: string; image: string | null } | null;
         };
-        client = (details as any).organizer ?? null;
+        client = details.organizer ?? null;
       } else if (isPublicGroupBooking(bookingWithDetails)) {
         clientMessage = bookingWithDetails.publicGroupDetails.clientMessage ?? null;
       }

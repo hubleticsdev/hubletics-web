@@ -32,13 +32,11 @@ export async function getCoachBookings(coachId: string) {
 export async function updateCoachAvailability({
   weeklyAvailability,
   blockedDates,
-  sessionDuration,
   allowedDurations,
   defaultDuration,
 }: {
   weeklyAvailability: Record<string, Array<{ start: string; end: string }>>;
   blockedDates: string[];
-  sessionDuration: number;
   allowedDurations: number[];
   defaultDuration: number;
 }) {

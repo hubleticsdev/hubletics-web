@@ -1,7 +1,7 @@
 'use server';
 
 import { db } from '@/lib/db';
-import { booking, bookingParticipant, publicGroupLessonDetails } from '@/lib/db/schema';
+import { booking, publicGroupLessonDetails } from '@/lib/db/schema';
 import { eq, and, gte, inArray } from 'drizzle-orm';
 
 export async function getPublicGroupLessons(coachId: string) {

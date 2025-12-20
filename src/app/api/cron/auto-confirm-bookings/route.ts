@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
-import { booking, bookingParticipant, coachProfile, individualBookingDetails, privateGroupBookingDetails, publicGroupLessonDetails } from '@/lib/db/schema';
+import { booking, bookingParticipant, individualBookingDetails, privateGroupBookingDetails } from '@/lib/db/schema';
 import { and, eq, lt, isNotNull, ne } from 'drizzle-orm';
 import { processCoachPayoutSafely } from '@/actions/bookings/manage';
 import { sendEmail } from '@/lib/email/resend';

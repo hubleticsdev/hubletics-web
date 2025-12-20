@@ -182,8 +182,6 @@ export default async function AdminUsersPage({ searchParams }: AdminUsersPagePro
                     <UserActions
                       userId={user.id}
                       currentStatus={user.status}
-                      userName={user.name || 'Unknown'}
-                      userEmail={user.email}
                       isCurrentUser={user.id === session.user.id}
                       isAdmin={user.role === 'admin'}
                     />

@@ -123,7 +123,6 @@ export function AvailabilityManager({
       const result = await updateCoachAvailability({
         weeklyAvailability,
         blockedDates,
-        sessionDuration: defaultDuration,
         allowedDurations,
         defaultDuration,
       });

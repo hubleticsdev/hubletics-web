@@ -8,7 +8,7 @@ import { stripe } from '@/lib/stripe';
 import { sendEmail } from '@/lib/email/resend';
 import { getGroupLessonDeclinedEmailTemplate } from '@/lib/email/templates/group-booking-notifications';
 import { revalidatePath } from 'next/cache';
-import { formatDateOnly, formatTimeOnly } from '@/lib/utils/date';
+import { formatDateOnly } from '@/lib/utils/date';
 import { recordPaymentEvent } from '@/lib/payment-audit';
 import { recordStateTransition } from '@/lib/booking-audit';
 

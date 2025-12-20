@@ -2,14 +2,12 @@ import { NextRequest, NextResponse } from 'next/server';
 import { stripe } from '@/lib/stripe';
 import { db } from '@/lib/db';
 import { coachProfile, idempotencyKey, booking, bookingParticipant, individualBookingDetails, privateGroupBookingDetails, publicGroupLessonDetails } from '@/lib/db/schema';
-import { eq, and, gt, sql, or } from 'drizzle-orm';
+import { eq, and, gt, sql } from 'drizzle-orm';
 import Stripe from 'stripe';
 import { stripeWebhookSchema, safeValidateInput } from '@/lib/validations';
 import { revalidatePath } from 'next/cache';
 import { recordPaymentEvent } from '@/lib/payment-audit';
 import { recordStateTransition } from '@/lib/booking-audit';
-import { getPaymentIntentId } from '@/lib/booking-payment-helpers';
-import type { BookingWithDetails } from '@/lib/booking-type-guards';
 import { env } from '@/lib/env';
 
 export async function POST(request: NextRequest) {
@@ -117,7 +115,11 @@ export async function POST(request: NextRequest) {
         const detailRecord = individualDetail || privateGroupDetail;
 
         if (bookingRecord && detailRecord) {
-          const oldPaymentStatus = (detailRecord as any).paymentStatus;
+          const oldPaymentStatus = individualDetail 
+            ? individualDetail.paymentStatus 
+            : privateGroupDetail 
+              ? privateGroupDetail.paymentStatus 
+              : 'not_required';
 
           // Update payment status in detail table
           if (individualDetail) {

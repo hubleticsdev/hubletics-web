@@ -4,8 +4,8 @@ import { useState, useEffect, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import { createBooking } from '@/actions/bookings/create';
 import { createPrivateGroupBooking } from '@/actions/group-bookings/create-private-group';
-import { getCoachPricingTiersPublic, getApplicableTier } from '@/actions/group-bookings/pricing-tiers';
-import { calculateBookingPricing, calculateGroupTotals, calculateCoachEarnings } from '@/lib/pricing';
+import { getCoachPricingTiersPublic } from '@/actions/group-bookings/pricing-tiers';
+import { calculateBookingPricing, calculateGroupTotals } from '@/lib/pricing';
 import { formatDateOnly, formatTimeRange, DEFAULT_TIMEZONE } from '@/lib/utils/date';
 import { BookingCalendar } from './booking-calendar';
 import { ParticipantSelector } from '../group-bookings/participant-selector';
@@ -58,10 +58,19 @@ export function BookingModal({
 
   const [bookingType, setBookingType] = useState<'individual' | 'group'>('individual');
   const [selectedSlot, setSelectedSlot] = useState<{ start: Date; end: Date } | null>(null);
-  const [selectedLocationIndex, setSelectedLocationIndex] = useState<number>(-1);
-  const [locationName, setLocationName] = useState('');
-  const [locationAddress, setLocationAddress] = useState('');
-  const [locationNotes, setLocationNotes] = useState('');
+  // Default to first preferred location if available, otherwise -1 for custom
+  const [selectedLocationIndex, setSelectedLocationIndex] = useState<number>(
+    preferredLocations.length > 0 ? 0 : -1
+  );
+  const [locationName, setLocationName] = useState(
+    preferredLocations.length > 0 ? preferredLocations[0]?.name || '' : ''
+  );
+  const [locationAddress, setLocationAddress] = useState(
+    preferredLocations.length > 0 ? preferredLocations[0]?.address || '' : ''
+  );
+  const [locationNotes, setLocationNotes] = useState(
+    preferredLocations.length > 0 ? preferredLocations[0]?.notes || '' : ''
+  );
   const [message, setMessage] = useState('');
   const [participantUsernames, setParticipantUsernames] = useState<string[]>([]);
   const [isProcessing, setIsProcessing] = useState(false);
@@ -74,10 +83,18 @@ export function BookingModal({
   const handleBookingTypeChange = (type: 'individual' | 'group') => {
     setBookingType(type);
     setSelectedSlot(null);
-    setSelectedLocationIndex(-1);
-    setLocationName('');
-    setLocationAddress('');
-    setLocationNotes('');
+    // Reset to first preferred location if available, otherwise custom
+    const defaultLocationIndex = preferredLocations.length > 0 ? 0 : -1;
+    setSelectedLocationIndex(defaultLocationIndex);
+    if (defaultLocationIndex >= 0 && preferredLocations[0]) {
+      setLocationName(preferredLocations[0].name);
+      setLocationAddress(preferredLocations[0].address);
+      setLocationNotes(preferredLocations[0].notes || '');
+    } else {
+      setLocationName('');
+      setLocationAddress('');
+      setLocationNotes('');
+    }
     setMessage('');
     setParticipantUsernames([]);
     setStep('datetime');

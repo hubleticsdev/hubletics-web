@@ -70,7 +70,7 @@ interface Booking {
     name: string;
     email: string;
     image: string | null;
-  };
+  } | null;
   coach?: {
     id: string;
     name: string;

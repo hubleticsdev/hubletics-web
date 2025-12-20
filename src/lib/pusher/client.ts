@@ -96,7 +96,12 @@ export function useGroupConversationMessages(conversationId: string) {
   usePusherEvent(channelName, 'new-message', (newMessage: unknown) => {
     setMessages((prev) => {
       // Check if message already exists
-      if (prev.some((m: any) => (m as any).id === (newMessage as any).id)) {
+      // using typeguards since pusher messages are not typed
+      const hasId = (obj: unknown): obj is { id: string } => {
+        return typeof obj === 'object' && obj !== null && 'id' in obj && typeof (obj as { id: unknown }).id === 'string';
+      };
+      
+      if (hasId(newMessage) && prev.some((m) => hasId(m) && m.id === newMessage.id)) {
         return prev;
       }
       return [...prev, newMessage];

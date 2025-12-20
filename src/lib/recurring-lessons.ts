@@ -1,7 +1,6 @@
 import { db } from '@/lib/db';
 import { booking, recurringGroupLesson, publicGroupLessonDetails } from '@/lib/db/schema';
 import { eq } from 'drizzle-orm';
-import { calculateGroupTotals } from '@/lib/pricing';
 import crypto from 'crypto';
 
 interface RecurringLessonTemplate {

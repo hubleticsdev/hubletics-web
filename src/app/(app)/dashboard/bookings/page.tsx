@@ -11,10 +11,10 @@ export default async function BookingsPage() {
 
   const { bookings: bookingsData } = await getMyBookings();
   
-  // getMyBookings already returns bookings with status, but we need to flatten detail fields
+  // getMyBookings already returns bookings with status, but flattening detail fields
   // for backward compatibility with BookingsList component
-  const bookingsWithStatus = bookingsData.map((b: any) => {
-    const flattened: any = {
+  const bookingsWithStatus = bookingsData.map((b) => {
+    const flattened = {
       ...b,
       // Flatten detail table fields
       expectedGrossCents: b.bookingType === 'individual' 
@@ -40,7 +40,7 @@ export default async function BookingsPage() {
         ? b.publicGroupDetails?.clientMessage
         : null,
       isGroupBooking: b.bookingType === 'private_group' || b.bookingType === 'public_group',
-      groupType: b.bookingType === 'private_group' ? 'private' : b.bookingType === 'public_group' ? 'public' : null,
+      groupType: (b.bookingType === 'private_group' ? 'private' : b.bookingType === 'public_group' ? 'public' : null) as 'private' | 'public' | null,
       maxParticipants: b.bookingType === 'public_group' ? b.publicGroupDetails?.maxParticipants : null,
       currentParticipants: b.bookingType === 'public_group' ? b.publicGroupDetails?.currentParticipants : null,
       pricePerPerson: b.bookingType === 'public_group' ? b.publicGroupDetails?.pricePerPerson : b.bookingType === 'private_group' ? b.privateGroupDetails?.pricePerPerson : null,

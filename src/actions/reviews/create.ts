@@ -2,7 +2,7 @@
 
 import { getSession } from '@/lib/auth/session';
 import { db } from '@/lib/db';
-import { review, booking, coachProfile, individualBookingDetails, privateGroupBookingDetails, bookingParticipant } from '@/lib/db/schema';
+import { review, booking, coachProfile, bookingParticipant } from '@/lib/db/schema';
 import { eq, and, sql } from 'drizzle-orm';
 import { z } from 'zod';
 import { validateInput } from '@/lib/validations';

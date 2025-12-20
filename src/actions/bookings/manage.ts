@@ -17,7 +17,6 @@ import { recordStateTransition, recordMultipleTransitions } from '@/lib/booking-
 import { recordPaymentEvent } from '@/lib/payment-audit';
 import { revalidatePath } from 'next/cache';
 import { formatDateOnly, formatTimeOnly, formatDateWithTimezone } from '@/lib/utils/date';
-import { getCoachPayoutCents } from '@/lib/booking-payment-helpers';
 import { calculateCoachEarnings } from '@/lib/pricing';
 
 export async function processCoachPayoutSafely(bookingId: string): Promise<{ success: boolean; error?: string }> {
@@ -57,8 +56,6 @@ export async function processCoachPayoutSafely(bookingId: string): Promise<{ suc
 
     let paymentIntentId: string | null = null;
     let coachPayoutAmount = 0;
-    let transferTable: any = null;
-    let transferField: any = null;
 
     if (bookingRecord.bookingType === 'individual' && bookingRecord.individualDetails) {
       if (bookingRecord.individualDetails.stripeTransferId) {
@@ -67,8 +64,6 @@ export async function processCoachPayoutSafely(bookingId: string): Promise<{ suc
       }
       paymentIntentId = bookingRecord.individualDetails.stripePaymentIntentId;
       coachPayoutAmount = bookingRecord.individualDetails.coachPayoutCents / 100;
-      transferTable = individualBookingDetails;
-      transferField = individualBookingDetails.stripeTransferId;
 
     } else if (bookingRecord.bookingType === 'private_group' && bookingRecord.privateGroupDetails) {
       if (bookingRecord.privateGroupDetails.stripeTransferId) {
@@ -77,8 +72,6 @@ export async function processCoachPayoutSafely(bookingId: string): Promise<{ suc
       }
       paymentIntentId = bookingRecord.privateGroupDetails.stripePaymentIntentId;
       coachPayoutAmount = bookingRecord.privateGroupDetails.coachPayoutCents / 100;
-      transferTable = privateGroupBookingDetails;
-      transferField = privateGroupBookingDetails.stripeTransferId;
 
     } else if (bookingRecord.bookingType === 'public_group' && bookingRecord.publicGroupDetails) {
       if (bookingRecord.publicGroupDetails.stripeTransferId) {
@@ -106,8 +99,6 @@ export async function processCoachPayoutSafely(bookingId: string): Promise<{ suc
         }
       }
 
-      transferTable = publicGroupLessonDetails;
-      transferField = publicGroupLessonDetails.stripeTransferId;
       paymentIntentId = 'aggregate'; // Special case for aggregate transfers
 
     } else {
@@ -131,11 +122,28 @@ export async function processCoachPayoutSafely(bookingId: string): Promise<{ suc
 
     console.log(`[TRANSFER] Transfer successful: ${transfer.id}`);
 
+    // Determine the correct detail table and field based on booking type
+    let transferTable: typeof individualBookingDetails | typeof privateGroupBookingDetails | typeof publicGroupLessonDetails;
+    let transferField: typeof individualBookingDetails.stripeTransferId | typeof privateGroupBookingDetails.stripeTransferId | typeof publicGroupLessonDetails.stripeTransferId;
+
+    if (bookingRecord.bookingType === 'individual' && bookingRecord.individualDetails) {
+      transferTable = individualBookingDetails;
+      transferField = individualBookingDetails.stripeTransferId;
+    } else if (bookingRecord.bookingType === 'private_group' && bookingRecord.privateGroupDetails) {
+      transferTable = privateGroupBookingDetails;
+      transferField = privateGroupBookingDetails.stripeTransferId;
+    } else if (bookingRecord.bookingType === 'public_group' && bookingRecord.publicGroupDetails) {
+      transferTable = publicGroupLessonDetails;
+      transferField = publicGroupLessonDetails.stripeTransferId;
+    } else {
+      return { success: false, error: 'Unsupported booking type for transfer' };
+    }
+
+    // Update transfer ID on the detail table (detail tables don't have updatedAt)
     await db
       .update(transferTable)
       .set({
         stripeTransferId: transfer.id,
-        updatedAt: new Date(),
       })
       .where(
         and(
@@ -143,6 +151,14 @@ export async function processCoachPayoutSafely(bookingId: string): Promise<{ suc
           sql`${transferField} IS NULL`
         )
       );
+    
+    // Update the booking table's updatedAt separately
+    await db
+      .update(booking)
+      .set({
+        updatedAt: new Date(),
+      })
+      .where(eq(booking.id, bookingId));
 
     return { success: true };
   } catch (error) {
