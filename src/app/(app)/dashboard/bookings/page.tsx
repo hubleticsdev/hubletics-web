@@ -10,35 +10,35 @@ export default async function BookingsPage() {
   }
 
   const { bookings: bookingsData } = await getMyBookings();
-  
+
   // getMyBookings already returns bookings with status, but flattening detail fields
   // for backward compatibility with BookingsList component
   const bookingsWithStatus = bookingsData.map((b) => {
     const flattened = {
       ...b,
       // Flatten detail table fields
-      expectedGrossCents: b.bookingType === 'individual' 
-        ? b.individualDetails?.clientPaysCents 
+      expectedGrossCents: b.bookingType === 'individual'
+        ? b.individualDetails?.clientPaysCents
         : b.bookingType === 'private_group'
-        ? b.privateGroupDetails?.totalGrossCents
-        : null,
+          ? b.privateGroupDetails?.totalGrossCents
+          : null,
       coachPayoutCents: b.bookingType === 'individual'
         ? b.individualDetails?.coachPayoutCents
         : b.bookingType === 'private_group'
-        ? b.privateGroupDetails?.coachPayoutCents
-        : null,
+          ? b.privateGroupDetails?.coachPayoutCents
+          : null,
       platformFeeCents: b.bookingType === 'individual'
         ? b.individualDetails?.platformFeeCents
         : b.bookingType === 'private_group'
-        ? b.privateGroupDetails?.platformFeeCents
-        : null,
+          ? b.privateGroupDetails?.platformFeeCents
+          : null,
       clientMessage: b.bookingType === 'individual'
         ? b.individualDetails?.clientMessage
         : b.bookingType === 'private_group'
-        ? b.privateGroupDetails?.clientMessage
-        : b.bookingType === 'public_group'
-        ? b.publicGroupDetails?.clientMessage
-        : null,
+          ? b.privateGroupDetails?.clientMessage
+          : b.bookingType === 'public_group'
+            ? b.publicGroupDetails?.clientMessage
+            : null,
       isGroupBooking: b.bookingType === 'private_group' || b.bookingType === 'public_group',
       groupType: (b.bookingType === 'private_group' ? 'private' : b.bookingType === 'public_group' ? 'public' : null) as 'private' | 'public' | null,
       maxParticipants: b.bookingType === 'public_group' ? b.publicGroupDetails?.maxParticipants : null,
@@ -46,11 +46,16 @@ export default async function BookingsPage() {
       pricePerPerson: b.bookingType === 'public_group' ? b.publicGroupDetails?.pricePerPerson : b.bookingType === 'private_group' ? b.privateGroupDetails?.pricePerPerson : null,
       organizerId: b.bookingType === 'private_group' ? b.privateGroupDetails?.organizerId : null,
       client: b.bookingType === 'individual' ? b.individualDetails?.client : b.bookingType === 'private_group' ? b.privateGroupDetails?.organizer : null,
-      paymentDueAt: b.bookingType === 'individual' 
-        ? b.individualDetails?.paymentDueAt 
+      paymentDueAt: b.bookingType === 'individual'
+        ? b.individualDetails?.paymentDueAt
         : b.bookingType === 'private_group'
-        ? b.privateGroupDetails?.paymentDueAt
-        : null,
+          ? b.privateGroupDetails?.paymentDueAt
+          : null,
+      clientConfirmedAt: b.bookingType === 'individual'
+        ? b.individualDetails?.clientConfirmedAt
+        : b.bookingType === 'private_group'
+          ? b.privateGroupDetails?.organizerConfirmedAt
+          : null,
     };
     return flattened;
   });

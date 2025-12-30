@@ -108,9 +108,6 @@ export async function createBookingPaymentIntent(
       currency: 'usd',
       capture_method: 'manual',
       on_behalf_of: coachStripeAccountId,
-      transfer_data: {
-        destination: coachStripeAccountId,
-      },
       metadata: {
         ...metadata,
         coachStripeAccountId,

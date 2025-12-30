@@ -151,7 +151,7 @@ export async function processCoachPayoutSafely(bookingId: string): Promise<{ suc
           sql`${transferField} IS NULL`
         )
       );
-    
+
     // Update the booking table's updatedAt separately
     await db
       .update(booking)
@@ -734,7 +734,7 @@ export async function markBookingComplete(bookingId: string) {
     // Send confirmation email if needed
     if (shouldSendEmail && emailRecipient) {
       const startDate = new Date(bookingRecord.scheduledStartAt);
-      
+
       await sendEmail({
         to: emailRecipient.email,
         subject: `Please confirm lesson completion with ${bookingRecord.coach.name}`,
@@ -906,8 +906,31 @@ export async function confirmBookingComplete(bookingId: string) {
         )
       ),
       with: {
-        individualDetails: true,
-        privateGroupDetails: true,
+        coach: {
+          columns: {
+            name: true,
+            email: true,
+            timezone: true,
+          },
+        },
+        individualDetails: {
+          with: {
+            client: {
+              columns: {
+                name: true,
+              },
+            },
+          },
+        },
+        privateGroupDetails: {
+          with: {
+            organizer: {
+              columns: {
+                name: true,
+              },
+            },
+          },
+        },
       },
     });
 
@@ -916,7 +939,7 @@ export async function confirmBookingComplete(bookingId: string) {
     }
 
     // Verify user has permission to confirm
-    const isAuthorized = 
+    const isAuthorized =
       (bookingRecord.bookingType === 'individual' && bookingRecord.individualDetails?.clientId === session.user.id) ||
       (bookingRecord.bookingType === 'private_group' && bookingRecord.privateGroupDetails?.organizerId === session.user.id);
 
@@ -958,6 +981,31 @@ export async function confirmBookingComplete(bookingId: string) {
 
     if (newFulfillmentStatus === 'completed') {
       await processCoachPayoutSafely(bookingId);
+    }
+
+    // Send email notification to coach
+    const clientName = bookingRecord.bookingType === 'individual'
+      ? bookingRecord.individualDetails?.client?.name
+      : bookingRecord.privateGroupDetails?.organizer?.name;
+
+    const startDate = new Date(bookingRecord.scheduledStartAt);
+    const coachTimezone = bookingRecord.coach?.timezone || 'America/Chicago';
+
+    if (bookingRecord.coach?.email) {
+      await sendEmail({
+        to: bookingRecord.coach.email,
+        subject: `${clientName} confirmed session completion`,
+        html: `
+          <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+            <h2 style="color: #FF6B4A;">Session Confirmed</h2>
+            <p>Hi ${bookingRecord.coach.name},</p>
+            <p><strong>${clientName}</strong> has confirmed that your session on <strong>${formatDateOnly(startDate, coachTimezone)}</strong> was completed successfully.</p>
+            ${newFulfillmentStatus === 'completed' ? '<p style="color: #22c55e; font-weight: 600;">Your payout is now being processed.</p>' : ''}
+            <p style="margin-top: 20px;">Thank you for coaching on Hubletics!</p>
+          </div>
+        `,
+        text: `Hi ${bookingRecord.coach.name}, ${clientName} has confirmed that your session on ${formatDateOnly(startDate, coachTimezone)} was completed. ${newFulfillmentStatus === 'completed' ? 'Your payout is now being processed.' : ''}`,
+      });
     }
 
     console.log(`Booking confirmed by ${bookingRecord.bookingType === 'individual' ? 'client' : 'organizer'}: ${bookingId}`);

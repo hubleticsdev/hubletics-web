@@ -21,8 +21,9 @@ import {
   DialogDescription,
 } from '@/components/ui/dialog';
 import { Calendar, MapPin, Clock, DollarSign, User, Loader2, Star, AlertCircle, Users, MessageCircle, Flag } from 'lucide-react';
-import { acceptBooking, declineBooking, acceptPrivateGroupBooking } from '@/actions/bookings/manage';
+import { acceptBooking, declineBooking, acceptPrivateGroupBooking, markBookingComplete, confirmBookingComplete } from '@/actions/bookings/manage';
 import { leavePublicLesson, cancelPrivateGroupBooking, coachCancelGroupLesson } from '@/actions/group-bookings/cancel';
+import { completePublicLesson } from '@/actions/group-bookings/complete-public-lesson';
 import { initiateDispute } from '@/actions/admin/disputes';
 import Link from 'next/link';
 import { ReviewModal } from '@/components/reviews/review-modal';
@@ -60,10 +61,12 @@ interface Booking {
   paymentDueAt?: Date | null;
   isGroupBooking?: boolean;
   groupType?: 'private' | 'public' | null;
+  coachConfirmedAt?: Date | null;
   maxParticipants?: number | null;
   currentParticipants?: number | null;
   pricePerPerson?: string | null;
   organizerId?: string | null;
+  clientConfirmedAt?: Date | null;
   pendingParticipantsCount?: number;
   client?: {
     id: string;
@@ -121,6 +124,10 @@ export function BookingsList({ bookings, userRole, userId }: BookingsListProps) 
   const [disputeDialogOpen, setDisputeDialogOpen] = useState(false);
   const [bookingToDispute, setBookingToDispute] = useState<Booking | null>(null);
   const [disputeReason, setDisputeReason] = useState('');
+  const [markCompleteDialogOpen, setMarkCompleteDialogOpen] = useState(false);
+  const [bookingToMarkComplete, setBookingToMarkComplete] = useState<Booking | null>(null);
+  const [clientConfirmDialogOpen, setClientConfirmDialogOpen] = useState(false);
+  const [bookingToClientConfirm, setBookingToClientConfirm] = useState<Booking | null>(null);
   const pendingCount = bookings.filter(
     (b) => b.status === 'awaiting_coach' || b.status === 'awaiting_payment'
   ).length;
@@ -216,7 +223,7 @@ export function BookingsList({ bookings, userRole, userId }: BookingsListProps) 
     setProcessingBookingId(bookingId);
     setError(null);
 
-    const result = groupType === 'private' 
+    const result = groupType === 'private'
       ? await acceptPrivateGroupBooking(bookingId)
       : await acceptBooking(bookingId);
 
@@ -361,6 +368,64 @@ export function BookingsList({ bookings, userRole, userId }: BookingsListProps) 
     setGroupToCancelByCoach(null);
   };
 
+  const handleMarkComplete = (booking: Booking) => {
+    setBookingToMarkComplete(booking);
+    setMarkCompleteDialogOpen(true);
+  };
+
+  const confirmMarkComplete = async () => {
+    if (!bookingToMarkComplete) return;
+
+    setProcessingBookingId(bookingToMarkComplete.id);
+    setError(null);
+    setMarkCompleteDialogOpen(false);
+
+    // Use completePublicLesson for public groups, markBookingComplete for others
+    const isPublicGroup = bookingToMarkComplete.isGroupBooking && bookingToMarkComplete.groupType === 'public';
+    const result = isPublicGroup
+      ? await completePublicLesson(bookingToMarkComplete.id)
+      : await markBookingComplete(bookingToMarkComplete.id);
+
+    if (result.success) {
+      toast.success(isPublicGroup
+        ? 'Lesson completed! Payouts have been processed.'
+        : 'Session marked complete. The client will be notified to confirm.');
+      router.refresh();
+    } else {
+      toast.error(result.error || 'Failed to mark as complete');
+      setError(result.error || 'Failed to mark as complete');
+      setProcessingBookingId(null);
+    }
+
+    setBookingToMarkComplete(null);
+  };
+
+  const handleClientConfirm = (booking: Booking) => {
+    setBookingToClientConfirm(booking);
+    setClientConfirmDialogOpen(true);
+  };
+
+  const confirmClientConfirm = async () => {
+    if (!bookingToClientConfirm) return;
+
+    setProcessingBookingId(bookingToClientConfirm.id);
+    setError(null);
+    setClientConfirmDialogOpen(false);
+
+    const result = await confirmBookingComplete(bookingToClientConfirm.id);
+
+    if (result.success) {
+      toast.success('Session confirmed! Payment has been released to the coach.');
+      router.refresh();
+    } else {
+      toast.error(result.error || 'Failed to confirm session');
+      setError(result.error || 'Failed to confirm session');
+      setProcessingBookingId(null);
+    }
+
+    setBookingToClientConfirm(null);
+  };
+
   return (
     <div>
       {error && (
@@ -374,22 +439,20 @@ export function BookingsList({ bookings, userRole, userId }: BookingsListProps) 
           <nav className="flex -mb-px">
             <button
               onClick={() => setFilter('all')}
-              className={`px-6 py-4 text-sm font-medium border-b-2 ${
-                filter === 'all'
-                  ? 'border-[#FF6B4A] text-[#FF6B4A]'
-                  : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-              }`}
+              className={`px-6 py-4 text-sm font-medium border-b-2 ${filter === 'all'
+                ? 'border-[#FF6B4A] text-[#FF6B4A]'
+                : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                }`}
             >
               All Bookings
             </button>
             {userRole === 'coach' && (
               <button
                 onClick={() => setFilter('pending')}
-                className={`px-6 py-4 text-sm font-medium border-b-2 ${
-                  filter === 'pending'
-                    ? 'border-[#FF6B4A] text-[#FF6B4A]'
-                    : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-                }`}
+                className={`px-6 py-4 text-sm font-medium border-b-2 ${filter === 'pending'
+                  ? 'border-[#FF6B4A] text-[#FF6B4A]'
+                  : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                  }`}
               >
                 Pending Requests
                 {pendingCount > 0 && (
@@ -401,21 +464,19 @@ export function BookingsList({ bookings, userRole, userId }: BookingsListProps) 
             )}
             <button
               onClick={() => setFilter('upcoming')}
-              className={`px-6 py-4 text-sm font-medium border-b-2 ${
-                filter === 'upcoming'
-                  ? 'border-[#FF6B4A] text-[#FF6B4A]'
-                  : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-              }`}
+              className={`px-6 py-4 text-sm font-medium border-b-2 ${filter === 'upcoming'
+                ? 'border-[#FF6B4A] text-[#FF6B4A]'
+                : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                }`}
             >
               Upcoming
             </button>
             <button
               onClick={() => setFilter('past')}
-              className={`px-6 py-4 text-sm font-medium border-b-2 ${
-                filter === 'past'
-                  ? 'border-[#FF6B4A] text-[#FF6B4A]'
-                  : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-              }`}
+              className={`px-6 py-4 text-sm font-medium border-b-2 ${filter === 'past'
+                ? 'border-[#FF6B4A] text-[#FF6B4A]'
+                : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                }`}
             >
               Past
             </button>
@@ -470,10 +531,10 @@ export function BookingsList({ bookings, userRole, userId }: BookingsListProps) 
             {filter === 'pending'
               ? 'You have no booking requests needing action'
               : filter === 'upcoming'
-              ? 'You have no upcoming sessions'
-              : filter === 'past'
-              ? 'You have no past sessions'
-              : 'You have no bookings yet'}
+                ? 'You have no upcoming sessions'
+                : filter === 'past'
+                  ? 'You have no past sessions'
+                  : 'You have no bookings yet'}
           </p>
         </div>
       ) : (
@@ -520,7 +581,7 @@ export function BookingsList({ bookings, userRole, userId }: BookingsListProps) 
                         </div>
                         <div>
                           {userRole === 'client' && otherUser?.id ? (
-                            <Link 
+                            <Link
                               href={`/coaches/${otherUser.id}`}
                               className="font-semibold text-gray-900 hover:text-[#FF6B4A] transition-colors"
                             >
@@ -575,12 +636,12 @@ export function BookingsList({ bookings, userRole, userId }: BookingsListProps) 
                             </div>
                             <div className="text-sm text-gray-600">
                               {userRole === 'coach'
-                                ? (booking.isGroupBooking && booking.pricePerPerson 
-                                    ? `You receive ($${booking.pricePerPerson}/person)` 
-                                    : 'You receive')
-                                : (booking.isGroupBooking && booking.pricePerPerson 
-                                    ? `$${booking.pricePerPerson}/person` 
-                                    : 'Total amount')}
+                                ? (booking.isGroupBooking && booking.pricePerPerson
+                                  ? `You receive ($${booking.pricePerPerson}/person)`
+                                  : 'You receive')
+                                : (booking.isGroupBooking && booking.pricePerPerson
+                                  ? `$${booking.pricePerPerson}/person`
+                                  : 'Total amount')}
                             </div>
                           </div>
                         </div>
@@ -669,54 +730,54 @@ export function BookingsList({ bookings, userRole, userId }: BookingsListProps) 
                         </>
                       )}
 
-                      {booking.isGroupBooking && userRole === 'client' && booking.groupType === 'public' && 
-                       (booking.status === 'open' || booking.status === 'confirmed') && 
-                       new Date() < new Date(booking.scheduledStartAt) && (
-                        <Button
-                          type="button"
-                          onClick={() => handleLeavePublicLesson(booking.id)}
-                          disabled={processingBookingId === booking.id}
-                          variant="outline"
-                          className="border-orange-300 text-orange-600 hover:bg-orange-50"
-                          size="sm"
-                        >
-                          {processingBookingId === booking.id && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
-                          Leave Lesson
-                        </Button>
-                      )}
+                      {booking.isGroupBooking && userRole === 'client' && booking.groupType === 'public' &&
+                        (booking.status === 'open' || booking.status === 'confirmed') &&
+                        new Date() < new Date(booking.scheduledStartAt) && (
+                          <Button
+                            type="button"
+                            onClick={() => handleLeavePublicLesson(booking.id)}
+                            disabled={processingBookingId === booking.id}
+                            variant="outline"
+                            className="border-orange-300 text-orange-600 hover:bg-orange-50"
+                            size="sm"
+                          >
+                            {processingBookingId === booking.id && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
+                            Leave Lesson
+                          </Button>
+                        )}
 
-                      {booking.isGroupBooking && userRole === 'client' && booking.groupType === 'private' && 
-                       booking.organizerId === userId &&
-                       ['awaiting_coach', 'awaiting_payment', 'confirmed'].includes(booking.status) && 
-                       new Date() < new Date(booking.scheduledStartAt) && (
-                        <Button
-                          type="button"
-                          onClick={() => handleCancelPrivateGroup(booking.id)}
-                          disabled={processingBookingId === booking.id}
-                          variant="outline"
-                          className="border-red-300 text-red-600 hover:bg-red-50"
-                          size="sm"
-                        >
-                          {processingBookingId === booking.id && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
-                          Cancel Group
-                        </Button>
-                      )}
+                      {booking.isGroupBooking && userRole === 'client' && booking.groupType === 'private' &&
+                        booking.organizerId === userId &&
+                        ['awaiting_coach', 'awaiting_payment', 'confirmed'].includes(booking.status) &&
+                        new Date() < new Date(booking.scheduledStartAt) && (
+                          <Button
+                            type="button"
+                            onClick={() => handleCancelPrivateGroup(booking.id)}
+                            disabled={processingBookingId === booking.id}
+                            variant="outline"
+                            className="border-red-300 text-red-600 hover:bg-red-50"
+                            size="sm"
+                          >
+                            {processingBookingId === booking.id && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
+                            Cancel Group
+                          </Button>
+                        )}
 
-                      {booking.isGroupBooking && userRole === 'coach' && 
-                       (booking.status === 'open' || booking.status === 'confirmed') && 
-                       new Date() < new Date(booking.scheduledStartAt) && (
-                        <Button
-                          type="button"
-                          onClick={() => handleCoachCancelGroup(booking.id)}
-                          disabled={processingBookingId === booking.id}
-                          variant="outline"
-                          className="border-red-300 text-red-600 hover:bg-red-50"
-                          size="sm"
-                        >
-                          {processingBookingId === booking.id && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
-                          Cancel Lesson
-                        </Button>
-                      )}
+                      {booking.isGroupBooking && userRole === 'coach' &&
+                        (booking.status === 'open' || booking.status === 'confirmed') &&
+                        new Date() < new Date(booking.scheduledStartAt) && (
+                          <Button
+                            type="button"
+                            onClick={() => handleCoachCancelGroup(booking.id)}
+                            disabled={processingBookingId === booking.id}
+                            variant="outline"
+                            className="border-red-300 text-red-600 hover:bg-red-50"
+                            size="sm"
+                          >
+                            {processingBookingId === booking.id && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
+                            Cancel Lesson
+                          </Button>
+                        )}
 
                       {(booking.status === 'confirmed' || booking.status === 'completed') && (
                         <Button
@@ -732,35 +793,82 @@ export function BookingsList({ bookings, userRole, userId }: BookingsListProps) 
                         </Button>
                       )}
 
-                      {booking.status === 'awaiting_payment' && userRole === 'client' && booking.paymentDueAt && 
-                       (booking.groupType !== 'private' || booking.organizerId === userId) && (
-                        <>
+                      {/* Mark Complete button for coaches - shows after lesson end time */}
+                      {userRole === 'coach' &&
+                        booking.status === 'confirmed' &&
+                        !booking.coachConfirmedAt &&
+                        new Date(booking.scheduledEndAt) < new Date() && (
                           <Button
                             type="button"
-                            onClick={() => {
-                              if (booking.paymentDueAt) {
-                                setSelectedPayment({
-                                  id: booking.id,
-                                  coachName: booking.coach?.name || 'Coach',
-                                  amount: booking.expectedGrossCents ? booking.expectedGrossCents / 100 : 0,
-                                  paymentDueAt: new Date(booking.paymentDueAt),
-                                  bookingType: booking.groupType === 'private' ? 'private_group' : 'individual',
-                                });
-                                setPaymentModalOpen(true);
-                              }
-                            }}
-                            className="bg-linear-to-r from-[#FF6B4A] to-[#FF8C5A] hover:opacity-90 text-white"
+                            onClick={() => handleMarkComplete(booking)}
+                            disabled={processingBookingId === booking.id}
+                            className="bg-green-600 hover:bg-green-700 text-white"
                             size="sm"
                           >
-                            <DollarSign className="h-4 w-4 mr-2" />
-                            Pay Now
+                            {processingBookingId === booking.id ? (
+                              <>
+                                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                                Processing...
+                              </>
+                            ) : (
+                              'Mark Complete'
+                            )}
                           </Button>
-                          <div className="px-2 py-1 bg-orange-50 rounded text-xs text-orange-700 flex items-center gap-1">
-                            <AlertCircle className="h-3 w-3" />
-                            <CountdownTimer deadline={new Date(booking.paymentDueAt)} />
-                          </div>
-                        </>
-                      )}
+                        )}
+
+                      {/* Client Confirm button - shows when coach marked complete but client hasn't confirmed */}
+                      {userRole === 'client' &&
+                        booking.status === 'confirmed' &&
+                        booking.coachConfirmedAt &&
+                        !booking.clientConfirmedAt &&
+                        booking.groupType !== 'public' && (
+                          <Button
+                            type="button"
+                            onClick={() => handleClientConfirm(booking)}
+                            disabled={processingBookingId === booking.id}
+                            className="bg-green-600 hover:bg-green-700 text-white"
+                            size="sm"
+                          >
+                            {processingBookingId === booking.id ? (
+                              <>
+                                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                                Processing...
+                              </>
+                            ) : (
+                              'Confirm Session Complete'
+                            )}
+                          </Button>
+                        )}
+
+                      {booking.status === 'awaiting_payment' && userRole === 'client' && booking.paymentDueAt &&
+                        (booking.groupType !== 'private' || booking.organizerId === userId) && (
+                          <>
+                            <Button
+                              type="button"
+                              onClick={() => {
+                                if (booking.paymentDueAt) {
+                                  setSelectedPayment({
+                                    id: booking.id,
+                                    coachName: booking.coach?.name || 'Coach',
+                                    amount: booking.expectedGrossCents ? booking.expectedGrossCents / 100 : 0,
+                                    paymentDueAt: new Date(booking.paymentDueAt),
+                                    bookingType: booking.groupType === 'private' ? 'private_group' : 'individual',
+                                  });
+                                  setPaymentModalOpen(true);
+                                }
+                              }}
+                              className="bg-linear-to-r from-[#FF6B4A] to-[#FF8C5A] hover:opacity-90 text-white"
+                              size="sm"
+                            >
+                              <DollarSign className="h-4 w-4 mr-2" />
+                              Pay Now
+                            </Button>
+                            <div className="px-2 py-1 bg-orange-50 rounded text-xs text-orange-700 flex items-center gap-1">
+                              <AlertCircle className="h-3 w-3" />
+                              <CountdownTimer deadline={new Date(booking.paymentDueAt)} />
+                            </div>
+                          </>
+                        )}
 
                       {booking.status === 'completed' && userRole === 'client' && !booking.review && (
                         <Button
@@ -985,6 +1093,52 @@ export function BookingsList({ bookings, userRole, userId }: BookingsListProps) 
           )}
         </DialogContent>
       </Dialog>
+
+      {/* Mark Complete Dialog */}
+      <AlertDialog open={markCompleteDialogOpen} onOpenChange={setMarkCompleteDialogOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Mark Session Complete?</AlertDialogTitle>
+            <AlertDialogDescription>
+              {bookingToMarkComplete?.isGroupBooking && bookingToMarkComplete?.groupType === 'public' ? (
+                <>This will complete the lesson and process payouts for all participants. Are you sure you want to proceed?</>
+              ) : (
+                <>The client will be notified to confirm the session was completed. If they don&apos;t respond within 7 days, the session will be auto-confirmed and your payout will be processed.</>
+              )}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={confirmMarkComplete}
+              className="bg-green-600 hover:bg-green-700"
+            >
+              Confirm Complete
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Client Confirm Dialog */}
+      <AlertDialog open={clientConfirmDialogOpen} onOpenChange={setClientConfirmDialogOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Confirm Session Completed?</AlertDialogTitle>
+            <AlertDialogDescription>
+              By confirming, you&apos;re verifying that the session took place as scheduled. Payment will be released to the coach.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={confirmClientConfirm}
+              className="bg-green-600 hover:bg-green-700"
+            >
+              Confirm Complete
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
