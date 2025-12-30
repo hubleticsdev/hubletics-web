@@ -544,7 +544,7 @@ export function BookingsList({ bookings, userRole, userId }: BookingsListProps) 
             return (
               <div key={booking.id} className="bg-white rounded-lg shadow hover:shadow-md transition-shadow">
                 <div className="p-6">
-                  <div className="flex items-start justify-between">
+                  <div className="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-6">
                     <div className="flex-1">
                       <div className="flex items-center gap-3 mb-3 flex-wrap">
                         <span
@@ -667,7 +667,7 @@ export function BookingsList({ bookings, userRole, userId }: BookingsListProps) 
                       )}
                     </div>
 
-                    <div className="ml-6 flex flex-col gap-2">
+                    <div className="flex flex-wrap lg:flex-col gap-2 lg:ml-0 lg:shrink-0">
                       {booking.status === 'awaiting_coach' && userRole === 'coach' && (
                         <>
                           <Button
