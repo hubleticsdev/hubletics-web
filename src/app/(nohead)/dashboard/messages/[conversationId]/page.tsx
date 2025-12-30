@@ -36,7 +36,7 @@ export default async function ConversationPage({
   }
 
   return (
-    <div className="flex h-full">
+    <div className="flex h-dvh">
       <div className="hidden md:block w-96 border-r border-gray-200 bg-white overflow-y-auto">
         <div className="p-4 border-b border-gray-200">
           <h1 className="text-2xl font-bold text-gray-900">Messages</h1>

@@ -58,7 +58,7 @@ export default async function GroupChatPage({
   const displayName = `Group: ${bookingRecord.coach?.name || 'Unknown'} - ${formattedDate} @ ${formattedTime}`;
 
   return (
-    <div className="flex flex-col h-full bg-white">
+    <div className="flex flex-col h-dvh bg-white">
       {/* Desktop header with navigation */}
       <div className="hidden md:flex items-center justify-between p-4 border-b border-gray-200 bg-white">
         <div className="flex items-center gap-4 flex-1">

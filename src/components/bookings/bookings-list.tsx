@@ -435,8 +435,8 @@ export function BookingsList({ bookings, userRole, userId }: BookingsListProps) 
       )}
 
       <div className="bg-white rounded-lg shadow mb-6">
-        <div className="border-b border-gray-200">
-          <nav className="flex -mb-px">
+        <div className="border-b border-gray-200 overflow-x-auto">
+          <nav className="flex -mb-px min-w-max">
             <button
               onClick={() => setFilter('all')}
               className={`px-6 py-4 text-sm font-medium border-b-2 ${filter === 'all'
@@ -484,9 +484,9 @@ export function BookingsList({ bookings, userRole, userId }: BookingsListProps) 
         </div>
 
         <div className="p-4 border-t border-gray-200">
-          <div className="flex items-center gap-4">
+          <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-4">
             <span className="text-sm font-medium text-gray-700">Filter by date:</span>
-            <div className="flex items-center gap-2">
+            <div className="flex flex-wrap items-center gap-2">
               <input
                 type="date"
                 value={dateRange.start ? dateRange.start.toISOString().split('T')[0] : ''}

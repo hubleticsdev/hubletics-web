@@ -165,7 +165,7 @@ export default async function CoachEarningsPage() {
 
       {summary.stripeOnboardingComplete && summary.stripeAccountId && (
         <div className="mb-8 bg-white rounded-lg shadow p-6">
-          <div className="flex items-center justify-between">
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
             <div className="flex-1">
               <h3 className="text-lg font-semibold text-gray-900">Stripe Dashboard</h3>
               <p className="text-gray-600 mt-1">
@@ -173,7 +173,9 @@ export default async function CoachEarningsPage() {
                 payouts, and update your banking information.
               </p>
             </div>
-            <StripeDashboardButton />
+            <div className="sm:shrink-0">
+              <StripeDashboardButton />
+            </div>
           </div>
         </div>
       )}
@@ -278,7 +280,7 @@ export default async function CoachEarningsPage() {
           </div>
         )}
       </div>
-      
+
       <div className="mt-6 bg-gray-50 rounded-lg p-4">
         <h3 className="text-sm font-semibold text-gray-900 mb-2">How Payouts Work</h3>
         <ul className="text-sm text-gray-600 space-y-2">

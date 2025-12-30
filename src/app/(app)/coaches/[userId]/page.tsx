@@ -52,18 +52,18 @@ export default async function CoachProfilePage({
   const rawAvailability = coach.weeklyAvailability || {};
   const availability = Object.keys(rawAvailability).length > 0
     ? Object.fromEntries(
-        Object.entries(rawAvailability).map(([key, value]) => [
-          key.toLowerCase(),
-          value,
-        ])
-      )
+      Object.entries(rawAvailability).map(([key, value]) => [
+        key.toLowerCase(),
+        value,
+      ])
+    )
     : {
-        monday: [{ start: '09:00', end: '17:00' }],
-        tuesday: [{ start: '09:00', end: '17:00' }],
-        wednesday: [{ start: '09:00', end: '17:00' }],
-        thursday: [{ start: '09:00', end: '17:00' }],
-        friday: [{ start: '09:00', end: '17:00' }],
-      };
+      monday: [{ start: '09:00', end: '17:00' }],
+      tuesday: [{ start: '09:00', end: '17:00' }],
+      wednesday: [{ start: '09:00', end: '17:00' }],
+      thursday: [{ start: '09:00', end: '17:00' }],
+      friday: [{ start: '09:00', end: '17:00' }],
+    };
 
   const blockedDates = coach.blockedDates || [];
   // Get allowed durations
@@ -76,17 +76,17 @@ export default async function CoachProfilePage({
   return (
     <div className="relative isolate min-h-screen bg-slate-50 text-slate-900 pt-16">
       <header className="border-b border-slate-200 bg-white/95 backdrop-blur">
-        <div className="mx-auto flex max-w-6xl items-center justify-between px-4 py-6 sm:px-6 lg:px-8">
+        <div className="mx-auto flex max-w-6xl flex-col gap-4 px-4 py-6 sm:flex-row sm:items-center sm:justify-between sm:px-6 lg:px-8">
           <Link
             href="/coaches"
-            className="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white px-4 py-2 text-xs font-semibold uppercase tracking-[0.35em] text-slate-600 transition hover:border-[#FF6B4A]/40 hover:text-[#FF6B4A]"
+            className="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white px-4 py-2 text-xs font-semibold uppercase tracking-[0.35em] text-slate-600 transition hover:border-[#FF6B4A]/40 hover:text-[#FF6B4A] w-fit"
           >
             <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" />
             </svg>
             Back to coaches
           </Link>
-          <div className="flex items-center gap-3">
+          <div className="flex flex-wrap items-center gap-3">
             {isOwner && (
               <Link
                 href="/dashboard/profile"
