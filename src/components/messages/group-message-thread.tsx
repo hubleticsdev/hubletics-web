@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { sendGroupMessage } from '@/actions/messages/group-conversations';
 import { reportMessage } from '@/actions/messages/report-message';
 import { Button } from '@/components/ui/button';
@@ -11,7 +11,7 @@ import { toast } from 'sonner';
 import { Flag, MoreHorizontal } from 'lucide-react';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import Image from 'next/image';
-import { useGroupConversationMessages } from '@/lib/pusher/client';
+import { useAblyChannel, useTypingIndicator } from '@/lib/ably/client';
 
 type Message = {
   id: string;
@@ -46,31 +46,30 @@ export function GroupMessageThread({
   const [reporting, setReporting] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const typingTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
-  // Use Pusher for real-time updates
-  const { messages: pusherMessages, setMessages: setPusherMessages } = useGroupConversationMessages(conversationId);
+  // Ably typing indicator hook for group chat
+  const roomId = `private-group-conversation:${conversationId}`;
+  const { typingUsers, startTyping, stopTyping } = useTypingIndicator(roomId, currentUserId);
 
-  // Merge Pusher messages with local state
-  useEffect(() => {
-    if (pusherMessages.length > 0) {
-      setMessages((prev) => {
-        const allMessages = [...prev, ...pusherMessages];
-        // Deduplicate by ID
-        const unique = allMessages.reduce((acc: Message[], msg) => {
-          const message = msg as Message;
-          if (!acc.find((m: Message) => m.id === message.id)) {
-            acc.push(message);
-          }
-          return acc;
-        }, [] as Message[]);
-        // Sort by createdAt
-        return unique.sort((a, b) => 
-          new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()
-        );
-      });
-      setPusherMessages([]); // Clear Pusher messages after merging
-    }
-  }, [pusherMessages, setPusherMessages]);
+  // Subscribe to new messages via Ably
+  const handleNewMessage = useCallback((message: Message) => {
+    setMessages((prev) => {
+      if (prev.some((m) => m.id === message.id)) {
+        return prev;
+      }
+      return [...prev, message].sort((a, b) =>
+        new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()
+      );
+    });
+  }, []);
+
+  useAblyChannel<Message>(
+    `private-group-conversation:${conversationId}`,
+    'new-message',
+    handleNewMessage,
+    currentUserId
+  );
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -142,6 +141,20 @@ export function GroupMessageThread({
       e.preventDefault();
       handleSend();
     }
+  };
+
+  // Handle typing indicator on input change
+  const handleInputChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
+    setNewMessage(e.target.value);
+
+    startTyping();
+
+    if (typingTimeoutRef.current) {
+      clearTimeout(typingTimeoutRef.current);
+    }
+    typingTimeoutRef.current = setTimeout(() => {
+      stopTyping();
+    }, 2000);
   };
 
   const formatTime = (date: Date) => {
@@ -227,13 +240,12 @@ export function GroupMessageThread({
                       )}
                       <div className="relative group">
                         <div
-                          className={`rounded-2xl px-4 py-2 ${
-                            isOwn
-                              ? 'bg-linear-to-r from-[#FF6B4A] to-[#FF8C5A] text-white'
-                              : message.flagged
+                          className={`rounded-2xl px-4 py-2 ${isOwn
+                            ? 'bg-linear-to-r from-[#FF6B4A] to-[#FF8C5A] text-white'
+                            : message.flagged
                               ? 'bg-red-50 border border-red-200 text-gray-900'
                               : 'bg-gray-100 text-gray-900'
-                          }`}
+                            }`}
                         >
                           {!isOwn && (
                             <p className="text-xs font-medium text-gray-700 mb-1">
@@ -292,11 +304,26 @@ export function GroupMessageThread({
       </div>
 
       <div className="p-4 border-t border-gray-200 bg-white">
+        {/* Typing indicator for groups */}
+        {typingUsers.length > 0 && (
+          <div className="flex items-center gap-2 mb-2 text-sm text-gray-500">
+            <div className="flex gap-1">
+              <span className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '0ms' }} />
+              <span className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '150ms' }} />
+              <span className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '300ms' }} />
+            </div>
+            <span>
+              {typingUsers.length === 1
+                ? 'Someone is typing...'
+                : `${typingUsers.length} people are typing...`}
+            </span>
+          </div>
+        )}
         <div className="flex gap-3 items-end">
           <Textarea
             ref={textareaRef}
             value={newMessage}
-            onChange={(e) => setNewMessage(e.target.value)}
+            onChange={handleInputChange}
             onKeyDown={handleKeyDown}
             placeholder="Type a message..."
             className="flex-1 resize-none min-h-[60px] max-h-[120px]"

@@ -1,7 +1,7 @@
 'use client';
 
-import { usePusherEvent } from '@/lib/pusher/client';
-import { useState } from 'react';
+import { useAblyChannel } from '@/lib/ably/client';
+import { useState, useCallback } from 'react';
 import Image from 'next/image';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
@@ -31,7 +31,7 @@ export function ConversationList({ initialConversations, currentUserId }: Conver
   const [conversations, setConversations] = useState(initialConversations);
   const pathname = usePathname();
 
-  usePusherEvent<Conversation>(`user-${currentUserId}`, 'conversation-update', (updatedConv) => {
+  const handleConversationUpdate = useCallback((updatedConv: Conversation) => {
     setConversations((prev) => {
       const exists = prev.find((c) => c.id === updatedConv.id);
       if (exists) {
@@ -46,7 +46,14 @@ export function ConversationList({ initialConversations, currentUserId }: Conver
         return [updatedConv, ...prev];
       }
     });
-  });
+  }, []);
+
+  useAblyChannel<Conversation>(
+    `user:${currentUserId}`,
+    'conversation-update',
+    handleConversationUpdate,
+    currentUserId
+  );
 
   const formatTime = (date: Date) => {
     const now = new Date();
@@ -109,9 +116,8 @@ export function ConversationList({ initialConversations, currentUserId }: Conver
           <Link
             key={conv.id}
             href={`/dashboard/messages/${conv.id}`}
-            className={`flex items-center gap-4 p-4 hover:bg-gray-50 transition-colors ${
-              isActive ? 'bg-orange-50 border-l-4 border-[#FF6B4A]' : ''
-            }`}
+            className={`flex items-center gap-4 p-4 hover:bg-gray-50 transition-colors ${isActive ? 'bg-orange-50 border-l-4 border-[#FF6B4A]' : ''
+              }`}
           >
             <div className="relative shrink-0">
               <div className="w-12 h-12 rounded-full overflow-hidden bg-gray-200">

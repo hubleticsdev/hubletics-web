@@ -14,8 +14,7 @@ const serverSchema = z.object({
 
   UPLOADTHING_TOKEN: z.string().min(1, 'UPLOADTHING_TOKEN is required'),
 
-  PUSHER_APP_ID: z.string().min(1, 'PUSHER_APP_ID is required'),
-  PUSHER_SECRET: z.string().min(1, 'PUSHER_SECRET is required'),
+  ABLY_API_KEY: z.string().min(1, 'ABLY_API_KEY is required'),
 
   UPSTASH_REDIS_REST_URL: z.string().url().optional(),
   UPSTASH_REDIS_REST_TOKEN: z.string().optional(),
@@ -28,8 +27,6 @@ const clientSchema = z.object({
   NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY: z
     .string()
     .startsWith('pk_', 'NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY must start with pk_'),
-  NEXT_PUBLIC_PUSHER_KEY: z.string().min(1, 'NEXT_PUBLIC_PUSHER_KEY is required'),
-  NEXT_PUBLIC_PUSHER_CLUSTER: z.string().min(1, 'NEXT_PUBLIC_PUSHER_CLUSTER is required'),
 });
 
 const envSchema = serverSchema.merge(clientSchema);
@@ -69,18 +66,5 @@ export const clientEnv = {
     }
     return value;
   },
-  get PUSHER_KEY() {
-    const value = process.env.NEXT_PUBLIC_PUSHER_KEY;
-    if (!value) {
-      throw new Error('NEXT_PUBLIC_PUSHER_KEY is not defined');
-    }
-    return value;
-  },
-  get PUSHER_CLUSTER() {
-    const value = process.env.NEXT_PUBLIC_PUSHER_CLUSTER;
-    if (!value) {
-      throw new Error('NEXT_PUBLIC_PUSHER_CLUSTER is not defined');
-    }
-    return value;
-  },
 } as const;
+

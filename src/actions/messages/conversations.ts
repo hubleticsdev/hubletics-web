@@ -4,7 +4,7 @@ import { db } from '@/lib/db';
 import { conversation, message, flaggedMessage, type Conversation, user } from '@/lib/db/schema';
 import { getSession } from '@/lib/auth/session';
 import { and, eq, desc } from 'drizzle-orm';
-import { triggerMessageEvent, triggerConversationUpdate } from '@/lib/pusher/server';
+import { triggerMessageEvent, triggerConversationUpdate } from '@/lib/ably/server';
 import { z } from 'zod';
 import { messageContentSchema, validateInput } from '@/lib/validations';
 import { checkMessageContent, getViolationTypes } from '@/lib/moderation/message-filter';

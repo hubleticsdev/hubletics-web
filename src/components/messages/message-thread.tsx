@@ -1,7 +1,7 @@
 'use client';
 
-import { useState, useEffect, useRef } from 'react';
-import { usePusherEvent } from '@/lib/pusher/client';
+import { useState, useEffect, useRef, useCallback } from 'react';
+import { useAblyChannel, useTypingIndicator } from '@/lib/ably/client';
 import { sendMessage } from '@/actions/messages/conversations';
 import { reportMessage } from '@/actions/messages/report-message';
 import { Button } from '@/components/ui/button';
@@ -54,15 +54,28 @@ export function MessageThread({
   const [reporting, setReporting] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const typingTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
-  usePusherEvent<Message>(`private-conversation-${conversationId}`, 'new-message', (message) => {
+  // Ably typing indicator hook
+  const roomId = `private-conversation:${conversationId}`;
+  const { typingUsers, startTyping, stopTyping } = useTypingIndicator(roomId, currentUserId);
+
+  // Subscribe to new messages via Ably
+  const handleNewMessage = useCallback((message: Message) => {
     setMessages((prev) => {
       if (prev.some((m) => m.id === message.id)) {
         return prev;
       }
       return [...prev, message];
     });
-  });
+  }, []);
+
+  useAblyChannel<Message>(
+    `private-conversation:${conversationId}`,
+    'new-message',
+    handleNewMessage,
+    currentUserId
+  );
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -136,6 +149,21 @@ export function MessageThread({
     }
   };
 
+  // Handle typing indicator on input change
+  const handleInputChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
+    setNewMessage(e.target.value);
+
+    startTyping();
+
+    if (typingTimeoutRef.current) {
+      clearTimeout(typingTimeoutRef.current);
+    }
+
+    typingTimeoutRef.current = setTimeout(() => {
+      stopTyping();
+    }, 2000);
+  };
+
   const formatTime = (date: Date) => {
     return new Date(date).toLocaleTimeString('en-US', {
       hour: 'numeric',
@@ -165,19 +193,19 @@ export function MessageThread({
     });
   };
 
-    const deduplicatedMessages = messages.reduce((unique: Message[], message) => {
-      const existingIndex = unique.findIndex((m) => m.id === message.id);
-      if (existingIndex >= 0) {
-        if (message.sender && message.sender.name && !unique[existingIndex].sender?.name) {
-          unique[existingIndex] = message;
-        }
-      } else {
-        unique.push(message);
+  const deduplicatedMessages = messages.reduce((unique: Message[], message) => {
+    const existingIndex = unique.findIndex((m) => m.id === message.id);
+    if (existingIndex >= 0) {
+      if (message.sender && message.sender.name && !unique[existingIndex].sender?.name) {
+        unique[existingIndex] = message;
       }
-      return unique;
-    }, []);
-  
-    const groupedMessages = deduplicatedMessages.reduce((groups: Record<string, Message[]>, message) => {
+    } else {
+      unique.push(message);
+    }
+    return unique;
+  }, []);
+
+  const groupedMessages = deduplicatedMessages.reduce((groups: Record<string, Message[]>, message) => {
     const dateKey = new Date(message.createdAt).toDateString();
     if (!groups[dateKey]) {
       groups[dateKey] = [];
@@ -235,13 +263,12 @@ export function MessageThread({
                       )}
                       <div className="relative group">
                         <div
-                          className={`rounded-2xl px-4 py-2 ${
-                            isOwn
-                              ? 'bg-linear-to-r from-[#FF6B4A] to-[#FF8C5A] text-white'
-                              : message.flagged
+                          className={`rounded-2xl px-4 py-2 ${isOwn
+                            ? 'bg-linear-to-r from-[#FF6B4A] to-[#FF8C5A] text-white'
+                            : message.flagged
                               ? 'bg-red-50 border border-red-200 text-gray-900'
                               : 'bg-gray-100 text-gray-900'
-                          }`}
+                            }`}
                         >
                           <p className="text-sm whitespace-pre-wrap wrap-break-word">
                             {message.content}
@@ -295,11 +322,22 @@ export function MessageThread({
       </div>
 
       <div className="p-4 border-t border-gray-200 bg-white">
+        {/* Typing indicator */}
+        {typingUsers.length > 0 && (
+          <div className="flex items-center gap-2 mb-2 text-sm text-gray-500">
+            <div className="flex gap-1">
+              <span className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '0ms' }} />
+              <span className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '150ms' }} />
+              <span className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '300ms' }} />
+            </div>
+            <span>{otherParticipant.name} is typing...</span>
+          </div>
+        )}
         <div className="flex gap-3 items-end">
           <Textarea
             ref={textareaRef}
             value={newMessage}
-            onChange={(e) => setNewMessage(e.target.value)}
+            onChange={handleInputChange}
             onKeyDown={handleKeyDown}
             placeholder="Type a message..."
             className="flex-1 min-h-[44px] max-h-[120px] resize-none"

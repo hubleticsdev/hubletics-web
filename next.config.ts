@@ -13,6 +13,20 @@ const nextConfig: NextConfig = {
       },
     ],
   },
+  serverExternalPackages: [
+    'ably',
+    'keyv',
+    'cacheable-request',
+    'got',
+    '@keyv/redis',
+    '@keyv/mongo',
+    '@keyv/sqlite',
+    '@keyv/postgres',
+    '@keyv/mysql',
+    '@keyv/etcd',
+    '@keyv/offline',
+    '@keyv/tiered',
+  ],
 };
 
 export default nextConfig;

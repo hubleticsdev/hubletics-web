@@ -7,7 +7,7 @@ import { eq, and, desc } from 'drizzle-orm';
 import { z } from 'zod';
 import { messageContentSchema, validateInput } from '@/lib/validations';
 import { checkMessageContent, getViolationTypes } from '@/lib/moderation/message-filter';
-import { triggerGroupMessageEvent, triggerGroupConversationUpdate } from '@/lib/pusher/server';
+import { triggerGroupMessageEvent, triggerGroupConversationUpdate } from '@/lib/ably/server';
 
 export async function getOrCreateGroupConversation(bookingId: string) {
   try {
