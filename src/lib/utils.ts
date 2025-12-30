@@ -59,3 +59,11 @@ export function sanitizeName(dirty: string): string {
     stripIgnoreTagBody: ['script', 'style', 'iframe', 'object', 'embed']
   });
 }
+
+export function getHighResImageUrl(url: string | null | undefined): string {
+  if (!url) return '/placeholder-avatar.png';
+  if (url.includes('googleusercontent.com')) {
+    return url.split('=')[0];
+  }
+  return url;
+}

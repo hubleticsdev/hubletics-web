@@ -13,6 +13,7 @@ import { getReputationDisplay } from '@/lib/reputation';
 import { getPublicGroupLessons } from '@/actions/group-bookings/queries';
 import { PublicLessonsListWrapper } from '@/components/group-bookings/public-lessons-list-wrapper';
 import { getCoachAllowedDurations } from '@/lib/coach-durations';
+import { getHighResImageUrl } from '@/lib/utils';
 
 export default async function CoachProfilePage({
   params,
@@ -27,7 +28,7 @@ export default async function CoachProfilePage({
     notFound();
   }
 
-  const displayImage = coach.profilePhoto || coach.user.image || '/placeholder-avatar.png';
+  const displayImage = getHighResImageUrl(coach.profilePhoto || coach.user.image);
   const reputation = getReputationDisplay(coach.reputationScore, coach.totalReviews);
   const rating = reputation.averageRating;
   const coachHourlyRate = Number.parseFloat(coach.hourlyRate as unknown as string);
@@ -188,7 +189,7 @@ function ProfileSummary({
     <div className="flex flex-col gap-8 lg:flex-row">
       <div className="shrink-0">
         <div className="relative h-48 w-48 overflow-hidden rounded-[28px] shadow-[0_30px_90px_-60px_rgba(15,23,42,0.6)]">
-          <Image src={displayImage} alt={coach.fullName} fill className="object-cover" />
+          <Image src={displayImage} alt={coach.fullName} fill sizes="192px" className="object-cover" />
         </div>
       </div>
       <div className="flex-1 space-y-6">

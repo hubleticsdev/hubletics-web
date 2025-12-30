@@ -2,9 +2,10 @@ import Link from 'next/link';
 import Image from 'next/image';
 import { CoachSearchResult } from '@/actions/coaches/search';
 import { getReputationDisplay } from '@/lib/reputation';
+import { getHighResImageUrl } from '@/lib/utils';
 
 export function CoachCard({ coach }: { coach: CoachSearchResult }) {
-  const displayImage = coach.profilePhoto || coach.user.image || '/placeholder-avatar.png';
+  const displayImage = getHighResImageUrl(coach.profilePhoto || coach.user.image);
   const reputation = getReputationDisplay(coach.reputationScore, coach.totalReviews || 0);
   const rating = reputation.averageRating;
   const coachHourlyRate = parseFloat(coach.hourlyRate);
@@ -20,6 +21,7 @@ export function CoachCard({ coach }: { coach: CoachSearchResult }) {
           src={displayImage}
           alt={coach.fullName}
           fill
+          sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw"
           className="object-cover group-hover:scale-105 transition-transform duration-200"
         />
         <div className="absolute top-4 right-4 bg-white/95 backdrop-blur-sm px-3 py-1 rounded-full shadow-md">

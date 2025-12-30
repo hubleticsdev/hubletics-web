@@ -1,9 +1,10 @@
 import Link from 'next/link';
 import Image from 'next/image';
 import { AthleteSearchResult } from '@/actions/athletes/search';
+import { getHighResImageUrl } from '@/lib/utils';
 
 export function AthleteCard({ athlete }: { athlete: AthleteSearchResult }) {
-  const displayImage = athlete.profilePhoto || '/placeholder-avatar.png';
+  const displayImage = getHighResImageUrl(athlete.profilePhoto || athlete.user.image);
   const locationDisplay = `${athlete.location.city}, ${athlete.location.state}`;
 
   const budgetDisplay = (() => {
@@ -26,6 +27,7 @@ export function AthleteCard({ athlete }: { athlete: AthleteSearchResult }) {
           src={displayImage}
           alt={athlete.fullName}
           fill
+          sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw"
           className="object-cover group-hover:scale-105 transition-transform duration-200"
         />
         <div className="absolute top-4 right-4 bg-white/95 backdrop-blur-sm px-3 py-1 rounded-full shadow-md">

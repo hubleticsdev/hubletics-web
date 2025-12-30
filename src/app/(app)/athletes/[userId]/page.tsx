@@ -6,6 +6,7 @@ import { db } from '@/lib/db';
 import { athleteProfile } from '@/lib/db/schema';
 import { eq } from 'drizzle-orm';
 import { getSession } from '@/lib/auth/session';
+import { getHighResImageUrl } from '@/lib/utils';
 
 type Athlete = NonNullable<
   Awaited<ReturnType<typeof db.query.athleteProfile.findFirst>>
@@ -38,7 +39,8 @@ export default async function AthleteProfilePage({
     notFound();
   }
 
-  const displayImage = athlete.profilePhoto || athlete.user.image || '/placeholder-avatar.png';
+
+  const displayImage = getHighResImageUrl(athlete.profilePhoto || athlete.user.image);
   const isOwner = !!session && session.user.id === userId;
   const isCoach = !!session && session.user.role === 'coach';
   const isAdmin = !!session && session.user.role === 'admin';
@@ -93,7 +95,7 @@ export default async function AthleteProfilePage({
           <div className="flex flex-col gap-8 lg:flex-row lg:items-start">
             <div className="shrink-0">
               <div className="relative h-48 w-48 overflow-hidden rounded-[28px] shadow-[0_30px_90px_-60px_rgba(15,23,42,0.6)]">
-                <Image src={displayImage} alt={athlete.fullName} fill className="object-cover" />
+                <Image src={displayImage} alt={athlete.fullName} fill sizes="192px" className="object-cover" />
               </div>
             </div>
 
