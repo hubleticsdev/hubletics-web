@@ -65,7 +65,7 @@ export function getPaymentReminder12HoursEmailTemplate(
   };
 }
 
-export function getPaymentReminder30MinutesEmailTemplate(
+export function getPaymentReminder1HourEmailTemplate(
   clientName: string,
   coachName: string,
   lessonDate: string,
@@ -77,13 +77,13 @@ export function getPaymentReminder30MinutesEmailTemplate(
   const safeCoachName = sanitizeName(coachName);
 
   return {
-    subject: '🚨 URGENT: Payment Due in 30 Minutes',
+    subject: '⏰ URGENT: Payment Due in 1 Hour',
     html: `
-      <h2>🚨 Final Payment Reminder</h2>
+      <h2>⏰ Final Payment Reminder</h2>
       <p>Hi ${safeClientName},</p>
-      <p><strong>This is your final reminder</strong> - payment for your lesson is due in <strong>30 minutes</strong>!</p>
+      <p><strong>This is your final reminder</strong> - payment for your lesson is due in <strong>1 hour</strong>!</p>
 
-      <div style="background-color: #fee2e2; padding: 15px; border-left: 4px solid #dc2626; margin: 20px 0;">
+      <div style="background-color: #fef3c7; padding: 15px; border-left: 4px solid #f59e0b; margin: 20px 0;">
         <p><strong>Lesson:</strong> ${lessonDate} at ${lessonTime}</p>
         <p><strong>Amount:</strong> $${amount}</p>
         <p><strong>Payment Deadline:</strong> ${paymentDeadline}</p>
@@ -97,8 +97,8 @@ export function getPaymentReminder30MinutesEmailTemplate(
         </a>
       </p>
 
-      <p style="color: #dc2626; font-weight: 600;">
-        ⚠️ If payment is not received within 30 minutes, this booking will be cancelled.
+      <p style="color: #f59e0b; font-weight: 600;">
+        ⚠️ If payment is not received within 1 hour, this booking will be cancelled.
       </p>
 
       <p>Best regards,<br>The Hubletics Team</p>

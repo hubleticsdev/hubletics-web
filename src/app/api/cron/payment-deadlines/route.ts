@@ -7,7 +7,7 @@ import { isIndividualBooking, isPrivateGroupBooking } from '@/lib/booking-type-g
 import { sendEmail } from '@/lib/email/resend';
 import {
   getBookingCancelledDueToPaymentEmailTemplate,
-  getPaymentReminder30MinutesEmailTemplate
+  getPaymentReminder1HourEmailTemplate
 } from '@/lib/email/templates/payment-notifications';
 import { validateCronAuth } from '@/lib/cron/auth';
 import { formatDateOnly, formatTimeOnly } from '@/lib/utils/date';
@@ -23,7 +23,7 @@ export async function GET(request: NextRequest) {
     console.log(`[CRON] Payment deadlines job started at ${now.toISOString()}`);
 
     const results = {
-      reminders30m: 0,
+      reminders1h: 0,
       cancelled: 0,
       errors: [] as string[],
     };
@@ -165,8 +165,8 @@ export async function GET(request: NextRequest) {
           continue;
         }
 
-        // Check for 30-minute reminder
-        if (minutesUntilDue <= 30 && minutesUntilDue > 25 && !reminderSentAt) {
+        // Check for 1-hour reminder
+        if (minutesUntilDue <= 60 && minutesUntilDue > 45 && !reminderSentAt) {
           const startDate = new Date(bookingRecord.scheduledStartAt);
           const clientTimezone = client.timezone || 'America/Chicago';
           const lessonDate = formatDateOnly(startDate, clientTimezone);
@@ -177,7 +177,7 @@ export async function GET(request: NextRequest) {
             timeZone: clientTimezone
           });
 
-          const emailTemplate = getPaymentReminder30MinutesEmailTemplate(
+          const emailTemplate = getPaymentReminder1HourEmailTemplate(
             client.name,
             bookingRecord.coach.name,
             lessonDate,
@@ -210,8 +210,8 @@ export async function GET(request: NextRequest) {
               .where(eq(privateGroupBookingDetails.bookingId, bookingRecord.id));
           }
 
-          console.log(`[CRON] Sent 30m payment reminder for booking ${bookingRecord.id}`);
-          results.reminders30m++;
+          console.log(`[CRON] Sent 1h payment reminder for booking ${bookingRecord.id}`);
+          results.reminders1h++;
         }
 
       } catch (error) {

@@ -1,9 +1,12 @@
 import { logger, schedules } from "@trigger.dev/sdk/v3";
+import { db } from "@/lib/db";
+import { booking } from "@/lib/db/schema";
+import { and, isNotNull, lt, sql } from "drizzle-orm";
 
 /**
  * Cleanup Locks Scheduled Task
  * 
- * Runs every 5 minutes to:
+ * Runs every 10 minutes to:
  * - Clear expired `lockedUntil` timestamps on booking records
  * - This releases time slots that were locked during booking attempts
  * 
@@ -13,47 +16,65 @@ import { logger, schedules } from "@trigger.dev/sdk/v3";
  */
 export const cleanupLocksTask = schedules.task({
     id: "cleanup-locks",
-    cron: "*/5 * * * *", // Every 5 minutes
+    cron: "*/10 * * * *", // Every 10 minutes
     maxDuration: 60, // 1 minute max
     run: async (payload) => {
-        const appUrl = process.env.NEXT_PUBLIC_URL || process.env.APP_URL;
-        const cronSecret = process.env.CRON_SECRET;
-
-        if (!appUrl || !cronSecret) {
-            logger.error("Missing required environment variables", {
-                hasAppUrl: !!appUrl,
-                hasCronSecret: !!cronSecret
-            });
-            throw new Error("Missing APP_URL or CRON_SECRET environment variable");
-        }
+        const now = new Date();
 
         logger.info("Starting cleanup locks", {
             timestamp: payload.timestamp.toISOString(),
             lastRun: payload.lastTimestamp?.toISOString(),
         });
 
-        const response = await fetch(`${appUrl}/api/cron/cleanup-locks`, {
-            method: "GET",
-            headers: {
-                Authorization: `Bearer ${cronSecret}`,
-            },
-        });
+        const results = {
+            cleaned: 0,
+            errors: [] as string[],
+        };
 
-        if (!response.ok) {
-            const errorText = await response.text();
-            logger.error("Cleanup locks API call failed", {
-                status: response.status,
-                error: errorText,
+        try {
+            const expiredLocks = await db.query.booking.findMany({
+                where: and(isNotNull(booking.lockedUntil), lt(booking.lockedUntil, now)),
+                columns: {
+                    id: true,
+                    lockedUntil: true,
+                },
             });
-            throw new Error(`API call failed with status ${response.status}: ${errorText}`);
+
+            logger.info(`Found ${expiredLocks.length} expired locks to clean up`);
+
+            for (const bookingRecord of expiredLocks) {
+                try {
+                    await db
+                        .update(booking)
+                        .set({
+                            lockedUntil: null,
+                            updatedAt: now,
+                        })
+                        .where(and(sql`id = ${bookingRecord.id}`, lt(booking.lockedUntil, now)));
+
+                    logger.info(`Cleared expired lock for booking ${bookingRecord.id}`);
+                    results.cleaned++;
+                } catch (error) {
+                    logger.error(`Failed to clear lock for booking ${bookingRecord.id}`, { error });
+                    results.errors.push(
+                        `${bookingRecord.id}: ${error instanceof Error ? error.message : "Unknown error"}`
+                    );
+                }
+            }
+
+            logger.info("Cleanup locks completed", {
+                cleaned: results.cleaned,
+                errors: results.errors.length,
+            });
+
+            return {
+                success: true,
+                timestamp: now.toISOString(),
+                results,
+            };
+        } catch (error) {
+            logger.error("Lock cleanup job failed", { error });
+            throw error;
         }
-
-        const result = await response.json();
-
-        logger.info("Cleanup locks completed", {
-            cleared: result.results?.cleared || 0,
-        });
-
-        return result;
     },
 });
