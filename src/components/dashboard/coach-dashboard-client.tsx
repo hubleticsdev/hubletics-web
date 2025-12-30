@@ -17,13 +17,26 @@ import {
   UserCog,
   Users,
   Settings,
+  Trash2,
 } from 'lucide-react';
 import { format } from 'date-fns';
 import { useState } from 'react';
+import { cancelRecurringTemplate } from '@/actions/group-bookings/cancel-recurring';
+import { toast } from 'sonner';
 
 import { CoachBookingCard } from '@/components/bookings/coach-booking-card';
 import { GroupBookingCard } from '@/components/bookings/group-booking-card';
 import { EditRecurringLessonModal } from '@/components/group-bookings/edit-recurring-lesson-modal';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
 import { cn } from '@/lib/utils';
 import type { UiBookingStatus } from '@/lib/booking-status';
 
@@ -134,6 +147,9 @@ export function CoachDashboardClient({
 }: CoachDashboardClientProps) {
   const [editLessonModalOpen, setEditLessonModalOpen] = useState(false);
   const [selectedLesson, setSelectedLesson] = useState<RecurringLesson | null>(null);
+  const [deletingLessonId, setDeletingLessonId] = useState<string | null>(null);
+  const [cancelDialogOpen, setCancelDialogOpen] = useState(false);
+  const [lessonToCancel, setLessonToCancel] = useState<RecurringLesson | null>(null);
 
   const reputation = getReputationDisplay(coach.reputationScore, coach.totalReviews || 0);
   const reputationScoreValue = reputation.averageRating;
@@ -225,13 +241,13 @@ export function CoachDashboardClient({
     },
     ...(coach.allowPublicGroups
       ? [
-          {
-            href: '/dashboard/create-group-lesson',
-            title: 'Create group lesson',
-            description: 'Set up a public group lesson that athletes can join.',
-            icon: Users,
-          },
-        ]
+        {
+          href: '/dashboard/create-group-lesson',
+          title: 'Create group lesson',
+          description: 'Set up a public group lesson that athletes can join.',
+          icon: Users,
+        },
+      ]
       : []),
     {
       href: '/dashboard/messages',
@@ -264,6 +280,33 @@ export function CoachDashboardClient({
   const handleEditLesson = (lesson: RecurringLesson) => {
     setSelectedLesson(lesson);
     setEditLessonModalOpen(true);
+  };
+
+  const handleCancelClick = (lesson: RecurringLesson) => {
+    setLessonToCancel(lesson);
+    setCancelDialogOpen(true);
+  };
+
+  const handleConfirmCancel = async () => {
+    if (!lessonToCancel) return;
+
+    setDeletingLessonId(lessonToCancel.id);
+    setCancelDialogOpen(false);
+
+    try {
+      const result = await cancelRecurringTemplate(lessonToCancel.id);
+      if (result.success) {
+        toast.success('Recurring lesson cancelled successfully');
+        window.location.reload();
+      } else {
+        toast.error(result.error || 'Failed to cancel recurring lesson');
+      }
+    } catch (error) {
+      toast.error('Failed to cancel recurring lesson');
+    } finally {
+      setDeletingLessonId(null);
+      setLessonToCancel(null);
+    }
   };
 
   return (
@@ -381,13 +424,23 @@ export function CoachDashboardClient({
                     </div>
                   </div>
 
-                  <button
-                    onClick={() => handleEditLesson(lesson)}
-                    className="p-2 text-gray-400 hover:text-[#FF6B4A] transition-colors"
-                    title="Edit lesson"
-                  >
-                    <Settings className="h-5 w-5" />
-                  </button>
+                  <div className="flex items-center gap-2">
+                    <button
+                      onClick={() => handleEditLesson(lesson)}
+                      className="p-2 text-gray-400 hover:text-[#FF6B4A] transition-colors"
+                      title="Edit lesson"
+                    >
+                      <Settings className="h-5 w-5" />
+                    </button>
+                    <button
+                      onClick={() => handleCancelClick(lesson)}
+                      disabled={deletingLessonId === lesson.id}
+                      className="p-2 text-gray-400 hover:text-red-500 transition-colors disabled:opacity-50"
+                      title="Cancel recurring lesson"
+                    >
+                      <Trash2 className="h-5 w-5" />
+                    </button>
+                  </div>
                 </div>
               </div>
             </div>
@@ -410,6 +463,26 @@ export function CoachDashboardClient({
           }}
         />
       )}
+
+      <AlertDialog open={cancelDialogOpen} onOpenChange={setCancelDialogOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Cancel Recurring Lesson?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Are you sure you want to cancel &quot;{lessonToCancel?.title}&quot;? This will deactivate the template and stop creating new bookings. Existing bookings with participants will not be affected.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel onClick={() => setLessonToCancel(null)}>Keep Lesson</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleConfirmCancel}
+              className="bg-red-600 hover:bg-red-700 focus:ring-red-600"
+            >
+              Cancel Lesson
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

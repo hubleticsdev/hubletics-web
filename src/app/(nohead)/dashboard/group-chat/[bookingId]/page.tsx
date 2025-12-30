@@ -113,7 +113,6 @@ export default async function GroupChatPage({
         conversationId={conversation.id}
         initialMessages={messages}
         currentUserId={session.user.id}
-        participantCount={participants.length}
       />
     </div>
   );
