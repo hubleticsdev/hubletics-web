@@ -115,28 +115,16 @@ export async function createPrivateGroupBooking(input: PrivateGroupBookingInput)
         ),
         or(
           eq(booking.approvalStatus, 'pending_review'),
-          eq(booking.approvalStatus, 'accepted'),
-          sql`${booking.lockedUntil} > ${now}`
+          eq(booking.approvalStatus, 'accepted')
         )
       ),
       columns: {
         id: true,
-        lockedUntil: true,
         approvalStatus: true,
       },
     });
 
     if (conflicts.length > 0) {
-      // Check if any conflicts are due to locks
-      const lockedConflicts = conflicts.filter(c => c.lockedUntil && new Date(c.lockedUntil) > now);
-      
-      if (lockedConflicts.length > 0) {
-        return { 
-          success: false, 
-          error: 'This time slot is temporarily reserved by another user. Please try again in a few moments or select a different time.' 
-        };
-      }
-      
       return { success: false, error: 'Time slot no longer available. Please select a different time.' };
     }
 
@@ -205,7 +193,6 @@ export async function createPrivateGroupBooking(input: PrivateGroupBookingInput)
         approvalStatus: 'pending_review',
         fulfillmentStatus: 'scheduled',
         idempotencyKey,
-        lockedUntil: new Date(Date.now() + 5 * 60 * 1000),
       });
 
       // Create private group booking details

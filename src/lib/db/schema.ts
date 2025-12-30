@@ -406,8 +406,6 @@ export const booking = pgTable(
 
     idempotencyKey: varchar('idempotencyKey', { length: 255 }).unique(),
 
-    lockedUntil: timestamp('lockedUntil'),
-
     createdAt: timestamp('createdAt').notNull().defaultNow(),
     updatedAt: timestamp('updatedAt').notNull().defaultNow(),
   },

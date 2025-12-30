@@ -260,7 +260,6 @@ export async function confirmBookingPayment(bookingId: string) {
     await db
       .update(booking)
       .set({
-        lockedUntil: null,
         fulfillmentStatus: 'scheduled',
       })
       .where(eq(booking.id, validatedBookingId));
@@ -378,7 +377,6 @@ export async function confirmPrivateGroupBookingPayment(bookingId: string) {
     await db
       .update(booking)
       .set({
-        lockedUntil: null,
         fulfillmentStatus: 'scheduled',
       })
       .where(eq(booking.id, validatedBookingId));

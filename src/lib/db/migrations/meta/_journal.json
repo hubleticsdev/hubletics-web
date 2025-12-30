@@ -85,6 +85,13 @@
       "when": 1765965025750,
       "tag": "0011_spotty_red_ghost",
       "breakpoints": true
+    },
+    {
+      "idx": 12,
+      "version": "7",
+      "when": 1767077207189,
+      "tag": "0012_fat_serpent_society",
+      "breakpoints": true
     }
   ]
 }

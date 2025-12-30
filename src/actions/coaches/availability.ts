@@ -2,7 +2,7 @@
 
 import { db } from '@/lib/db';
 import { booking, coachProfile, coachAllowedDurations } from '@/lib/db/schema';
-import { eq, and, gte } from 'drizzle-orm';
+import { eq, and, gte, or } from 'drizzle-orm';
 import { getSession } from '@/lib/auth/session';
 import { withTransaction } from '@/lib/db/transactions';
 
@@ -13,7 +13,10 @@ export async function getCoachBookings(coachId: string) {
     const bookings = await db.query.booking.findMany({
       where: and(
         eq(booking.coachId, coachId),
-        eq(booking.approvalStatus, 'accepted'),
+        or(
+          eq(booking.approvalStatus, 'pending_review'),
+          eq(booking.approvalStatus, 'accepted')
+        ),
         gte(booking.scheduledStartAt, now)
       ),
       columns: {

@@ -1,7 +1,7 @@
 import { logger, schedules } from "@trigger.dev/sdk/v3";
 import { db } from "@/lib/db";
 import { booking, individualBookingDetails, privateGroupBookingDetails } from "@/lib/db/schema";
-import { eq, or } from "drizzle-orm";
+import { eq, or, and, lte, gte, isNull } from "drizzle-orm";
 import type { BookingWithDetails } from "@/lib/booking-type-guards";
 import { isIndividualBooking, isPrivateGroupBooking } from "@/lib/booking-type-guards";
 import { sendEmail } from "./lib/email";
@@ -14,20 +14,22 @@ import { formatDateOnly, formatTimeOnly } from "@/lib/utils/date";
 /**
  * Payment Deadlines Scheduled Task
  * 
- * Runs every 15 minutes to:
- * - Send 1-hour payment reminders
+ * Runs every 30 minutes to:
+ * - Send 1-hour payment reminders (when 30-90 mins remain)
  * - Cancel bookings that have exceeded the 24-hour payment deadline
  * 
  * This is time-sensitive because:
- * - 1-hour reminders need precise timing
  * - Payment deadlines should be enforced promptly
+ * - Runs at 30-min intervals to balance accuracy with cost
  */
 export const paymentDeadlinesTask = schedules.task({
     id: "payment-deadlines",
-    cron: "*/15 * * * *", // Every 15 minutes
+    cron: "*/30 * * * *", // Every 30 minutes
     maxDuration: 120, // 2 minutes max
     run: async (payload) => {
         const now = new Date();
+        const reminderWindowEnd = new Date(now.getTime() + 90 * 60 * 1000);
+        const reminderWindowStart = new Date(now.getTime() + 30 * 60 * 1000);
 
         logger.info("Starting payment deadlines check", {
             timestamp: payload.timestamp.toISOString(),
@@ -41,11 +43,13 @@ export const paymentDeadlinesTask = schedules.task({
         };
 
         try {
-            // Fetch individual and private group bookings with payment status
-            const allBookings = await db.query.booking.findMany({
-                where: or(
-                    eq(booking.bookingType, "individual"),
-                    eq(booking.bookingType, "private_group")
+            const awaitingPaymentBookings = await db.query.booking.findMany({
+                where: and(
+                    or(
+                        eq(booking.bookingType, "individual"),
+                        eq(booking.bookingType, "private_group")
+                    ),
+                    eq(booking.approvalStatus, "accepted")
                 ),
                 with: {
                     coach: {
@@ -78,20 +82,34 @@ export const paymentDeadlinesTask = schedules.task({
                 },
             });
 
-            // Filter to only bookings with awaiting_client_payment status
-            const awaitingPaymentBookings = allBookings.filter((b) => {
+            const filteredBookings = awaitingPaymentBookings.filter((b) => {
                 const bookingWithDetails = b as BookingWithDetails;
+
                 if (isIndividualBooking(bookingWithDetails)) {
-                    return bookingWithDetails.individualDetails.paymentStatus === "awaiting_client_payment";
+                    const details = bookingWithDetails.individualDetails;
+                    if (details.paymentStatus !== "awaiting_client_payment") return false;
+                    if (!details.paymentDueAt) return false;
+
+                    const dueAt = new Date(details.paymentDueAt);
+                    return dueAt <= now ||
+                        (dueAt >= reminderWindowStart && dueAt <= reminderWindowEnd && !details.paymentFinalReminderSentAt);
+
                 } else if (isPrivateGroupBooking(bookingWithDetails)) {
-                    return bookingWithDetails.privateGroupDetails.paymentStatus === "awaiting_client_payment";
+                    const details = bookingWithDetails.privateGroupDetails;
+                    if (details.paymentStatus !== "awaiting_client_payment") return false;
+                    if (!details.paymentDueAt) return false;
+
+                    const dueAt = new Date(details.paymentDueAt);
+                    return dueAt <= now ||
+                        (dueAt >= reminderWindowStart && dueAt <= reminderWindowEnd && !details.paymentFinalReminderSentAt);
                 }
+
                 return false;
             });
 
-            logger.info(`Found ${awaitingPaymentBookings.length} bookings awaiting payment`);
+            logger.info(`Found ${filteredBookings.length} bookings requiring action`);
 
-            for (const bookingRecord of awaitingPaymentBookings) {
+            for (const bookingRecord of filteredBookings) {
                 try {
                     const bookingWithDetails = bookingRecord as BookingWithDetails;
                     let paymentDueAt: Date | null = null;
@@ -178,8 +196,8 @@ export const paymentDeadlinesTask = schedules.task({
                         continue;
                     }
 
-                    // Check for 1-hour reminder (45-60 minute window)
-                    if (minutesUntilDue <= 60 && minutesUntilDue > 45 && !reminderSentAt) {
+                    // Check for 1-hour reminder (30-90 minute window to account for 30-min cron frequency)
+                    if (minutesUntilDue <= 90 && minutesUntilDue > 30 && !reminderSentAt) {
                         const startDate = new Date(bookingRecord.scheduledStartAt);
                         const clientTimezone = client.timezone || "America/Chicago";
                         const lessonDate = formatDateOnly(startDate, clientTimezone);
@@ -196,7 +214,8 @@ export const paymentDeadlinesTask = schedules.task({
                             lessonDate,
                             lessonTime,
                             (expectedGrossCents / 100).toFixed(2),
-                            paymentDeadline
+                            paymentDeadline,
+                            Math.round(minutesUntilDue)
                         );
 
                         await sendEmail({

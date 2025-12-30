@@ -71,17 +71,25 @@ export function getPaymentReminder1HourEmailTemplate(
   lessonDate: string,
   lessonTime: string,
   amount: string,
-  paymentDeadline: string
+  paymentDeadline: string,
+  minutesRemaining?: number
 ) {
   const safeClientName = sanitizeName(clientName);
   const safeCoachName = sanitizeName(coachName);
+  
+  // Format time remaining dynamically
+  const timeRemaining = minutesRemaining
+    ? minutesRemaining > 60
+      ? `${Math.floor(minutesRemaining / 60)} hour${Math.floor(minutesRemaining / 60) > 1 ? 's' : ''} ${minutesRemaining % 60 > 0 ? `and ${minutesRemaining % 60} minutes` : ''}`
+      : `${Math.round(minutesRemaining)} minutes`
+    : '1 hour';
 
   return {
-    subject: '⏰ URGENT: Payment Due in 1 Hour',
+    subject: `⏰ URGENT: Payment Due in ${timeRemaining}`,
     html: `
       <h2>⏰ Final Payment Reminder</h2>
       <p>Hi ${safeClientName},</p>
-      <p><strong>This is your final reminder</strong> - payment for your lesson is due in <strong>1 hour</strong>!</p>
+      <p><strong>This is your final reminder</strong> - payment for your lesson is due in <strong>${timeRemaining}</strong>!</p>
 
       <div style="background-color: #fef3c7; padding: 15px; border-left: 4px solid #f59e0b; margin: 20px 0;">
         <p><strong>Lesson:</strong> ${lessonDate} at ${lessonTime}</p>
@@ -98,7 +106,7 @@ export function getPaymentReminder1HourEmailTemplate(
       </p>
 
       <p style="color: #f59e0b; font-weight: 600;">
-        ⚠️ If payment is not received within 1 hour, this booking will be cancelled.
+        ⚠️ If payment is not received within ${timeRemaining}, this booking will be cancelled.
       </p>
 
       <p>Best regards,<br>The Hubletics Team</p>

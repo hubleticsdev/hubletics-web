@@ -77,30 +77,16 @@ export async function createBooking(input: CreateBookingInput) {
             gte(booking.scheduledEndAt, validatedInput.scheduledEndAt)
           )
         ),
-        or(
-          sql`${booking.approvalStatus} IN ('pending_review', 'accepted')`,
-          sql`${booking.lockedUntil} > ${now}`
-        )
+        sql`${booking.approvalStatus} IN ('pending_review', 'accepted')`
       ),
       columns: {
         id: true,
-        lockedUntil: true,
         approvalStatus: true,
       },
     });
 
     if (conflicts.length > 0) {
-      // Check if any conflicts are due to locks (more specific error message)
-      const lockedConflicts = conflicts.filter(c => c.lockedUntil && new Date(c.lockedUntil) > now);
-      
       console.log(`[CONFLICT] Time slot conflict for coach ${validatedInput.coachId}:`, conflicts);
-      
-      if (lockedConflicts.length > 0) {
-        return {
-          success: false,
-          error: 'This time slot is temporarily reserved by another user. Please try again in a few moments or select a different time.',
-        };
-      }
       
       return {
         success: false,
@@ -165,7 +151,6 @@ export async function createBooking(input: CreateBookingInput) {
       approvalStatus: 'pending_review',
       fulfillmentStatus: 'scheduled',
       idempotencyKey,
-      lockedUntil: new Date(Date.now() + 5 * 60 * 1000),
     });
 
     // Create individual booking details

@@ -88,28 +88,16 @@ export async function createPublicGroupLesson(input: PublicLessonInput) {
         ),
         or(
           eq(booking.approvalStatus, 'pending_review'),
-          eq(booking.approvalStatus, 'accepted'),
-          sql`${booking.lockedUntil} > ${now}`
+          eq(booking.approvalStatus, 'accepted')
         )
       ),
       columns: {
         id: true,
-        lockedUntil: true,
         approvalStatus: true,
       },
     });
 
     if (conflicts.length > 0) {
-      // Check if any conflicts are due to locks
-      const lockedConflicts = conflicts.filter(c => c.lockedUntil && new Date(c.lockedUntil) > now);
-      
-      if (lockedConflicts.length > 0) {
-        return { 
-          success: false, 
-          error: 'This time slot is temporarily reserved. Please try again in a few moments or select a different time.' 
-        };
-      }
-      
       return { success: false, error: 'Time slot conflict detected. Please select a different time.' };
     }
 
