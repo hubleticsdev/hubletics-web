@@ -15,7 +15,8 @@ export async function getUserConversations() {
     throw new Error('Unauthorized');
   }
 
-  const conversations = await db.query.conversation.findMany({
+  // Fetch individual conversations
+  const individualConvs = await db.query.conversation.findMany({
     where: (conversations, { or, eq }) =>
       or(eq(conversations.clientId, session.user.id), eq(conversations.coachId, session.user.id)),
     with: {
@@ -45,15 +46,92 @@ export async function getUserConversations() {
     orderBy: [desc(conversation.lastMessageAt)],
   });
 
-  return conversations.map((conv) => {
+  // Fetch group conversations where user is a participant
+  const { groupConversation, groupConversationParticipant, groupMessage, booking: bookingTable } =
+    await import('@/lib/db/schema');
+
+  const groupConvs = await db.query.groupConversation.findMany({
+    where: (gc, { exists, and, eq: eqFunc }) =>
+      exists(
+        db
+          .select()
+          .from(groupConversationParticipant)
+          .where(
+            and(
+              eqFunc(groupConversationParticipant.conversationId, gc.id),
+              eqFunc(groupConversationParticipant.userId, session.user.id)
+            )
+          )
+      ),
+    with: {
+      booking: {
+        columns: {
+          scheduledStartAt: true,
+        },
+        with: {
+          coach: {
+            columns: {
+              name: true,
+              image: true,
+            },
+          },
+        },
+      },
+      messages: {
+        orderBy: (messages, { desc: descFunc }) => [descFunc(messages.createdAt)],
+        limit: 1,
+      },
+      participants: true,
+    },
+    orderBy: [desc(groupConversation.lastMessageAt)],
+  });
+
+  // Format individual conversations
+  const formattedIndividual = individualConvs.map((conv) => {
     const otherParticipant =
       conv.clientId === session.user.id ? conv.coach : conv.client;
     return {
       ...conv,
+      type: 'individual' as const,
       otherParticipant,
       lastMessage: conv.messages[0] || null,
     };
   });
+
+  // Format group conversations
+  const formattedGroups = groupConvs.map((gc) => {
+    const sessionDate = new Date(gc.booking.scheduledStartAt);
+    const formattedDate = sessionDate.toLocaleDateString('en-US', {
+      month: 'short',
+      day: 'numeric',
+    });
+    const formattedTime = sessionDate.toLocaleTimeString('en-US', {
+      hour: 'numeric',
+      minute: '2-digit',
+    });
+
+    return {
+      id: gc.id,
+      type: 'group' as const,
+      bookingId: gc.bookingId,
+      createdAt: gc.createdAt,
+      updatedAt: gc.updatedAt,
+      lastMessageAt: gc.lastMessageAt,
+      displayName: `Group: ${gc.booking.coach.name} - ${formattedDate} @ ${formattedTime}`,
+      groupImage: gc.booking.coach.image,
+      participantCount: gc.participants.length,
+      lastMessage: gc.messages[0] || null,
+    };
+  });
+
+  // Merge and sort by lastMessageAt
+  const allConversations = [...formattedIndividual, ...formattedGroups].sort((a, b) => {
+    const aTime = a.lastMessageAt?.getTime() || 0;
+    const bTime = b.lastMessageAt?.getTime() || 0;
+    return bTime - aTime;
+  });
+
+  return allConversations;
 }
 
 export async function getOrCreateConversation(otherUserId: string) {

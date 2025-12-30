@@ -30,6 +30,11 @@ export default async function ConversationPage({
     notFound();
   }
 
+  // Only individual conversations are shown on this page
+  if (currentConversation.type !== 'individual') {
+    notFound();
+  }
+
   return (
     <div className="flex h-full">
       <div className="hidden md:block w-96 border-r border-gray-200 bg-white overflow-y-auto">
@@ -38,7 +43,7 @@ export default async function ConversationPage({
         </div>
         <ConversationList initialConversations={conversations} currentUserId={session.user.id} />
       </div>
-  
+
       <div className="flex-1 flex flex-col bg-white">
         <div className="md:hidden p-2 border-b border-gray-200">
           <Link

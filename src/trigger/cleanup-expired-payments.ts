@@ -8,19 +8,17 @@ import { sendEmail } from "./lib/email";
 /**
  * Cleanup Expired Payments Scheduled Task
  * 
- * Runs every 30 minutes to:
+ * Runs every hour to:
  * - Cancel Stripe PaymentIntents for group lesson participants whose payment authorization has expired
  * - Update participant status to cancelled
  * - Decrement participant counts in public group lesson details
  * - Send notification emails to participants
  * 
- * This is time-sensitive because:
- * - Expired authorizations should be cancelled promptly to release funds
- * - Slot availability needs to be updated for other users
+ * This is cleanup work and doesn't need to be time-critical.
  */
 export const cleanupExpiredPaymentsTask = schedules.task({
     id: "cleanup-expired-payments",
-    cron: "*/30 * * * *", // Every 30 minutes
+    cron: "0 * * * *", // Every hour (at :00)
     maxDuration: 120, // 2 minutes max
     run: async (payload) => {
         const now = new Date();

@@ -6,8 +6,9 @@ import Image from 'next/image';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 
-type Conversation = {
+type IndividualConversation = {
   id: string;
+  type: 'individual';
   otherParticipant: {
     id: string;
     name: string;
@@ -21,6 +22,23 @@ type Conversation = {
   } | null;
   lastMessageAt: Date | null;
 };
+
+type GroupConversation = {
+  id: string;
+  type: 'group';
+  bookingId: string;
+  displayName: string;
+  groupImage: string | null;
+  participantCount: number;
+  lastMessage: {
+    content: string;
+    createdAt: Date;
+    senderId: string | null;
+  } | null;
+  lastMessageAt: Date | null;
+};
+
+type Conversation = IndividualConversation | GroupConversation;
 
 interface ConversationListProps {
   initialConversations: Conversation[];
@@ -105,35 +123,57 @@ export function ConversationList({ initialConversations, currentUserId }: Conver
   return (
     <div className="divide-y divide-gray-200">
       {conversations.map((conv) => {
-        const isActive = pathname === `/messages/${conv.id}`;
-        const displayImage = conv.otherParticipant.image || '/placeholder-avatar.png';
+        const isGroup = conv.type === 'group';
+        const href = isGroup
+          ? `/dashboard/group-chat/${conv.bookingId}`
+          : `/dashboard/messages/${conv.id}`;
+
+        const isActive = pathname === href;
+
+        const displayName = isGroup
+          ? conv.displayName
+          : conv.otherParticipant.name;
+
+        const displayImage = isGroup
+          ? conv.groupImage || '/placeholder-avatar.png'
+          : conv.otherParticipant.image || '/placeholder-avatar.png';
+
         const lastMessagePreview = conv.lastMessage
           ? conv.lastMessage.content.slice(0, 60) + (conv.lastMessage.content.length > 60 ? '...' : '')
           : 'No messages yet';
+
         const isOwnMessage = conv.lastMessage?.senderId === currentUserId;
 
         return (
           <Link
             key={conv.id}
-            href={`/dashboard/messages/${conv.id}`}
+            href={href}
             className={`flex items-center gap-4 p-4 hover:bg-gray-50 transition-colors ${isActive ? 'bg-orange-50 border-l-4 border-[#FF6B4A]' : ''
               }`}
           >
             <div className="relative shrink-0">
-              <div className="w-12 h-12 rounded-full overflow-hidden bg-gray-200">
-                <Image
-                  src={displayImage}
-                  alt={conv.otherParticipant.name}
-                  width={48}
-                  height={48}
-                  className="object-cover"
-                />
-              </div>
+              {isGroup ? (
+                <div className="w-12 h-12 rounded-full bg-orange-100 flex items-center justify-center">
+                  <svg className="w-6 h-6 text-[#FF6B4A]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
+                  </svg>
+                </div>
+              ) : (
+                <div className="w-12 h-12 rounded-full overflow-hidden bg-gray-200">
+                  <Image
+                    src={displayImage}
+                    alt={displayName}
+                    width={48}
+                    height={48}
+                    className="object-cover"
+                  />
+                </div>
+              )}
             </div>
             <div className="flex-1 min-w-0">
               <div className="flex items-center justify-between mb-1">
                 <h3 className="font-semibold text-gray-900 truncate">
-                  {conv.otherParticipant.name}
+                  {displayName}
                 </h3>
                 {conv.lastMessageAt && (
                   <span className="text-xs text-gray-500 shrink-0 ml-2">
@@ -141,10 +181,17 @@ export function ConversationList({ initialConversations, currentUserId }: Conver
                   </span>
                 )}
               </div>
-              <p className="text-sm text-gray-600 truncate">
-                {isOwnMessage && <span className="text-gray-500">You: </span>}
-                {lastMessagePreview}
-              </p>
+              <div className="flex items-center gap-2">
+                <p className="text-sm text-gray-600 truncate flex-1">
+                  {isOwnMessage && <span className="text-gray-500">You: </span>}
+                  {lastMessagePreview}
+                </p>
+                {isGroup && (
+                  <span className="text-xs text-gray-500 shrink-0">
+                    {conv.participantCount} {conv.participantCount === 1 ? 'person' : 'people'}
+                  </span>
+                )}
+              </div>
             </div>
           </Link>
         );
