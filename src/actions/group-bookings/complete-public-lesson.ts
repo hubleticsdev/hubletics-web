@@ -10,7 +10,6 @@ import { revalidatePath } from 'next/cache';
 import { formatDateOnly } from '@/lib/utils/date';
 import { recordStateTransition } from '@/lib/booking-audit';
 import { incrementCoachLessonsCompleted } from '@/lib/coach-stats';
-import { calculateCoachEarnings } from '@/lib/pricing';
 
 // Aggregates all captured participant payments and creates a single transfer to the coach.
 export async function completePublicLesson(bookingId: string) {
@@ -35,6 +34,7 @@ export async function completePublicLesson(bookingId: string) {
             timezone: true,
           },
         },
+        publicGroupDetails: true,
       },
     });
 
@@ -89,18 +89,15 @@ export async function completePublicLesson(bookingId: string) {
       return { success: false, error: 'Coach Stripe account not configured' };
     }
 
-    const platformFeePercentage = coach.user?.platformFeePercentage
-      ? parseFloat(coach.user.platformFeePercentage as unknown as string)
-      : 15;
-
-    let totalCoachPayoutCents = 0;
-    for (const participant of capturedParticipants) {
-      const amountDollars = (participant.amountCents ?? 0) / 100;
-      const earnings = calculateCoachEarnings(amountDollars, platformFeePercentage);
-      totalCoachPayoutCents += earnings.coachPayoutCents;
+    if (!lesson.publicGroupDetails?.pricePerPerson) {
+      return { success: false, error: 'Lesson pricing not configured' };
     }
 
-    const coachPayoutCents = totalCoachPayoutCents;
+    const coachRatePerPerson = parseFloat(lesson.publicGroupDetails.pricePerPerson);
+    const participantCount = capturedParticipants.length;
+    const coachPayoutCents = Math.round(coachRatePerPerson * 100 * participantCount);
+
+    console.log(`[COMPLETE_PUBLIC] Coach payout: $${coachRatePerPerson} × ${participantCount} participants = $${coachPayoutCents / 100}`);
 
     const transfer = await transferToCoach(
       coachPayoutCents / 100,

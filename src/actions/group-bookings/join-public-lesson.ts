@@ -10,7 +10,6 @@ import { getNewParticipantRequestEmailTemplate } from '@/lib/email/templates/gro
 import { revalidatePath } from 'next/cache';
 import { formatDateOnly, formatTimeOnly } from '@/lib/utils/date';
 import { recordPaymentEvent } from '@/lib/payment-audit';
-import { calculateCoachEarnings } from '@/lib/pricing';
 
 export async function joinPublicLesson(lessonId: string) {
   try {
@@ -87,15 +86,21 @@ export async function joinPublicLesson(lessonId: string) {
       return { success: false, error: 'This lesson is now full' };
     }
 
-    const pricePerPerson = parseFloat(lesson.publicGroupDetails.pricePerPerson);
-    
+    const coachRatePerPerson = parseFloat(lesson.publicGroupDetails.pricePerPerson);
+
     const platformFee = coach.user?.platformFeePercentage
       ? parseFloat(coach.user.platformFeePercentage as unknown as string)
       : 15;
-    const earnings = calculateCoachEarnings(pricePerPerson, platformFee);
+
+    // use calculateGroupTotals to get the marked-up client price
+    const { calculateGroupTotals } = await import('@/lib/pricing');
+    const groupPricing = calculateGroupTotals(coachRatePerPerson, 1, platformFee);
+
+    const clientPaysPerPerson = groupPricing.pricePerPerson;
+    const stripeFeeCentsPerPerson = Math.round(groupPricing.stripeFeeCents);
 
     const paymentIntent = await createBookingPaymentIntent(
-      pricePerPerson,
+      clientPaysPerPerson,
       coach.stripeAccountId,
       {
         bookingId: lessonId,
@@ -114,9 +119,9 @@ export async function joinPublicLesson(lessonId: string) {
       role: 'participant',
       status: 'awaiting_payment',
       paymentStatus: 'requires_payment_method',
-      amountPaid: pricePerPerson.toString(),
-      amountCents: Math.round(pricePerPerson * 100),
-      stripeFeeCents: earnings.stripeFeeCents,
+      amountPaid: clientPaysPerPerson.toString(),
+      amountCents: Math.round(clientPaysPerPerson * 100),
+      stripeFeeCents: stripeFeeCentsPerPerson,
       stripePaymentIntentId: paymentIntent.id,
       expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000),
     }).returning({ id: bookingParticipant.id });
@@ -125,7 +130,7 @@ export async function joinPublicLesson(lessonId: string) {
       bookingId: lessonId,
       participantId: insertedParticipant.id,
       stripePaymentIntentId: paymentIntent.id,
-      amountCents: Math.round(pricePerPerson * 100),
+      amountCents: Math.round(clientPaysPerPerson * 100),
       status: 'created',
       captureMethod: 'manual',
     });
@@ -156,7 +161,7 @@ export async function joinPublicLesson(lessonId: string) {
         session.user.name,
         lessonDate,
         lessonTime,
-        Math.round(pricePerPerson * 100)
+        Math.round(clientPaysPerPerson * 100)
       );
 
       await sendEmail({
@@ -175,7 +180,7 @@ export async function joinPublicLesson(lessonId: string) {
     return {
       success: true,
       clientSecret: paymentIntent.client_secret,
-      amount: pricePerPerson,
+      amount: clientPaysPerPerson,
     };
   } catch (error) {
     console.error('Join public lesson error:', error);

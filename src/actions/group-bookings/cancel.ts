@@ -76,17 +76,27 @@ export async function leavePublicLesson(lessonId: string) {
         eq(bookingParticipant.userId, session.user.id)
       ));
 
-    if (lesson.publicGroupDetails && lesson.publicGroupDetails.currentParticipants > 0) {
+    if (lesson.publicGroupDetails && participantCaptured) {
+      const newCurrentParticipants = Math.max(0, lesson.publicGroupDetails.currentParticipants - 1);
+      const newCapturedParticipants = Math.max(0, lesson.publicGroupDetails.capturedParticipants - 1);
+
+      // Revert capacity status to 'open' if lesson was full
+      const wasFullNowHasSpace =
+        lesson.publicGroupDetails.capacityStatus === 'full' &&
+        newCurrentParticipants < lesson.publicGroupDetails.maxParticipants;
+
       await db
         .update(publicGroupLessonDetails)
         .set({
-          currentParticipants: lesson.publicGroupDetails.currentParticipants - 1,
-          capturedParticipants:
-            participantCaptured && lesson.publicGroupDetails.capturedParticipants > 0
-              ? lesson.publicGroupDetails.capturedParticipants - 1
-              : lesson.publicGroupDetails.capturedParticipants,
+          currentParticipants: newCurrentParticipants,
+          capturedParticipants: newCapturedParticipants,
+          ...(wasFullNowHasSpace ? { capacityStatus: 'open' } : {}),
         })
         .where(eq(publicGroupLessonDetails.bookingId, lessonId));
+
+      if (wasFullNowHasSpace) {
+        console.log(`[LEAVE_PUBLIC] Lesson ${lessonId} capacity reopened (${newCurrentParticipants}/${lesson.publicGroupDetails.maxParticipants})`);
+      }
     }
 
     console.log(`User ${session.user.id} left public lesson ${lessonId}`);
@@ -295,8 +305,8 @@ export async function coachCancelGroupLesson(lessonId: string) {
     });
 
     const oldApprovalStatus = lesson.approvalStatus;
-    const oldPaymentStatus = lesson.bookingType === 'private_group' 
-      ? lesson.privateGroupDetails?.paymentStatus 
+    const oldPaymentStatus = lesson.bookingType === 'private_group'
+      ? lesson.privateGroupDetails?.paymentStatus
       : null; // Public groups don't have booking-level payment status
 
     for (const participant of participants) {

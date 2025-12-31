@@ -26,6 +26,7 @@ import { toast } from 'sonner';
 
 import { CoachBookingCard } from '@/components/bookings/coach-booking-card';
 import { GroupBookingCard } from '@/components/bookings/group-booking-card';
+import { PublicGroupLessonCard } from '@/components/bookings/public-group-lesson-card';
 import { EditRecurringLessonModal } from '@/components/group-bookings/edit-recurring-lesson-modal';
 import {
   AlertDialog,
@@ -364,6 +365,21 @@ export function CoachDashboardClient({
             'Secure more bookings by updating availability and responding quickly to new requests.',
         }}
         renderItem={(booking) => {
+          // Route public group lessons to dedicated card
+          if (booking.bookingType === 'public_group') {
+            const normalizedStatus = (booking.status ?? 'open') as UiBookingStatus;
+            return (
+              <PublicGroupLessonCard
+                key={booking.id}
+                booking={{
+                  ...booking,
+                  status: normalizedStatus,
+                  description: booking.clientMessage || undefined,
+                }}
+                timezone={timezone}
+              />
+            );
+          }
           const normalizedStatus = (booking.status ?? 'awaiting_coach') as UiBookingStatus;
           return <CoachBookingCard key={booking.id} booking={{ ...booking, status: normalizedStatus }} timezone={timezone} />;
         }}

@@ -210,8 +210,8 @@ export const athleteProfile = pgTable('athlete_profile', {
   >(),
   availability: jsonb('availability').notNull().$type<
     Record<string, Array<{ start: string; end: string }>>
-    >(),
-    bio: text('bio'),
+  >(),
+  bio: text('bio'),
   createdAt: timestamp('createdAt').notNull().defaultNow(),
   updatedAt: timestamp('updatedAt').notNull().defaultNow(),
 });
@@ -272,11 +272,11 @@ export const coachProfile = pgTable(
     totalLessonsCompleted: integer('totalLessonsCompleted')
       .notNull()
       .default(0),
-    
+
     groupBookingsEnabled: boolean('groupBookingsEnabled').notNull().default(false),
     allowPrivateGroups: boolean('allowPrivateGroups').notNull().default(false),
     allowPublicGroups: boolean('allowPublicGroups').notNull().default(false),
-    
+
     createdAt: timestamp('createdAt').notNull().defaultNow(),
     updatedAt: timestamp('updatedAt').notNull().defaultNow(),
 
@@ -652,6 +652,7 @@ export const recurringGroupLesson = pgTable('recurring_group_lesson', {
   isActive: boolean('isActive').notNull().default(true),
   startDate: date('startDate', { mode: 'string' }).notNull(),
   endDate: date('endDate', { mode: 'string' }),
+  timezone: text('timezone').notNull().default('America/Chicago'),
   createdAt: timestamp('createdAt').notNull().defaultNow(),
   updatedAt: timestamp('updatedAt').notNull().defaultNow(),
 });

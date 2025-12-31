@@ -44,7 +44,7 @@ export function getBookingAcceptedEmailTemplate(
       </p>
 
       <p style="color: #666; font-size: 14px;">
-        You'll receive a reminder email 30 minutes before the deadline.
+        You'll receive a reminder email about 30-60 minutes before the deadline.
       </p>
 
       <p>Best regards,<br>The Hubletics Team</p>

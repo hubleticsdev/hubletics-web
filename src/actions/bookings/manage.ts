@@ -17,7 +17,6 @@ import { recordStateTransition, recordMultipleTransitions } from '@/lib/booking-
 import { recordPaymentEvent } from '@/lib/payment-audit';
 import { revalidatePath } from 'next/cache';
 import { formatDateOnly, formatTimeOnly, formatDateWithTimezone } from '@/lib/utils/date';
-import { calculateCoachEarnings } from '@/lib/pricing';
 
 export async function processCoachPayoutSafely(bookingId: string): Promise<{ success: boolean; error?: string }> {
   try {
@@ -50,10 +49,6 @@ export async function processCoachPayoutSafely(bookingId: string): Promise<{ suc
       return { success: false, error: 'Coach Stripe account not configured' };
     }
 
-    const platformFeePercentage = coach.user?.platformFeePercentage
-      ? parseFloat(coach.user.platformFeePercentage as unknown as string)
-      : 15;
-
     let paymentIntentId: string | null = null;
     let coachPayoutAmount = 0;
 
@@ -79,8 +74,10 @@ export async function processCoachPayoutSafely(bookingId: string): Promise<{ suc
         return { success: true };
       }
 
-      // For public groups, calculate aggregate payout from all captured participants
-      // Use proper pricing calculation, not hardcoded percentage
+      if (!bookingRecord.publicGroupDetails.pricePerPerson) {
+        return { success: false, error: 'Lesson pricing not configured' };
+      }
+
       const capturedParticipants = await db.query.bookingParticipant.findMany({
         where: and(
           eq(bookingParticipant.bookingId, bookingId),
@@ -88,16 +85,10 @@ export async function processCoachPayoutSafely(bookingId: string): Promise<{ suc
         ),
       });
 
-      for (const participant of capturedParticipants) {
-        if (participant.amountCents) {
-          // Use proper pricing calculation from pricing.ts
-          const earnings = calculateCoachEarnings(
-            participant.amountCents / 100,
-            platformFeePercentage
-          );
-          coachPayoutAmount += earnings.coachPayout;
-        }
-      }
+      const coachRatePerPerson = parseFloat(bookingRecord.publicGroupDetails.pricePerPerson);
+      coachPayoutAmount = coachRatePerPerson * capturedParticipants.length;
+
+      console.log(`[TRANSFER] Public group payout: $${coachRatePerPerson} × ${capturedParticipants.length} = $${coachPayoutAmount}`);
 
       paymentIntentId = 'aggregate'; // Special case for aggregate transfers
 

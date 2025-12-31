@@ -1,0 +1,1 @@
+ALTER TABLE "recurring_group_lesson" ADD COLUMN "timezone" text DEFAULT 'America/Chicago' NOT NULL;

@@ -26,6 +26,7 @@ export function CreateGroupLessonForm({ preferredLocations }: CreateGroupLessonF
   const [recurringDuration, setRecurringDuration] = useState(60);
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
+  const [timezone, setTimezone] = useState('America/Chicago');
 
   const [locationIndex, setLocationIndex] = useState(0);
   const [customLocation, setCustomLocation] = useState({ name: '', address: '', notes: '' });
@@ -112,6 +113,7 @@ export function CreateGroupLessonForm({ preferredLocations }: CreateGroupLessonF
           pricePerPerson: parseFloat(pricePerPerson),
           startDate,
           endDate: endDate || undefined,
+          timezone,
         });
 
         if (result.success) {
@@ -315,6 +317,26 @@ export function CreateGroupLessonForm({ preferredLocations }: CreateGroupLessonF
               />
               <p className="mt-1 text-xs text-gray-500">Leave empty for indefinite</p>
             </div>
+          </div>
+
+          <div>
+            <label htmlFor="timezone" className="block text-sm font-medium text-gray-700 mb-1">
+              Timezone
+            </label>
+            <select
+              id="timezone"
+              value={timezone}
+              onChange={(e) => setTimezone(e.target.value)}
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#FF6B4A] focus:border-transparent"
+            >
+              <option value="America/Chicago">Central Time (CST/CDT)</option>
+              <option value="America/New_York">Eastern Time (EST/EDT)</option>
+              <option value="America/Denver">Mountain Time (MST/MDT)</option>
+              <option value="America/Los_Angeles">Pacific Time (PST/PDT)</option>
+              <option value="America/Anchorage">Alaska Time (AKST/AKDT)</option>
+              <option value="Pacific/Honolulu">Hawaii Time (HST)</option>
+            </select>
+            <p className="mt-1 text-xs text-gray-500">Times will be interpreted in this timezone</p>
           </div>
         </>
       )}

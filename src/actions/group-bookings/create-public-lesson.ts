@@ -159,6 +159,7 @@ interface RecurringLessonInput {
   pricePerPerson: number;
   startDate: string;
   endDate?: string;
+  timezone?: string;
 }
 
 export async function createRecurringGroupLesson(input: RecurringLessonInput) {
@@ -225,6 +226,7 @@ export async function createRecurringGroupLesson(input: RecurringLessonInput) {
       isActive: true,
       startDate: input.startDate,
       endDate: input.endDate || null,
+      timezone: input.timezone || 'America/Chicago',
     });
 
     console.log(`Recurring group lesson template created: ${recurringId}`);
