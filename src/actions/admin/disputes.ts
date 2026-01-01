@@ -480,7 +480,7 @@ export async function processRefund(
               from: 'Hubletics <noreply@hubletics.com>',
               to: participant.user.email,
               subject: `Refund Processed - ${bookingRecord.coach.name}`,
-            html: `
+              html: `
               <h2>Refund Processed</h2>
               <p>Hi ${participant.user.name},</p>
               <p>Your refund of <strong>$${(participantRefundAmount / 100).toFixed(2)}</strong> has been processed for your public group lesson.</p>
@@ -624,8 +624,8 @@ export async function markDisputeResolved(bookingId: string, resolution: string)
       bookingRecord.bookingType === 'individual' && bookingRecord.individualDetails?.client
         ? bookingRecord.individualDetails.client
         : bookingRecord.bookingType === 'private_group' && bookingRecord.privateGroupDetails?.organizer
-        ? bookingRecord.privateGroupDetails.organizer
-        : null;
+          ? bookingRecord.privateGroupDetails.organizer
+          : null;
 
     if (clientInfo) {
       await resend.emails.send({
@@ -742,8 +742,8 @@ export async function initiateDispute(bookingId: string, reason: string, initiat
         (bookingRecord.bookingType === 'individual' && bookingRecord.individualDetails
           ? bookingRecord.individualDetails.clientId === session.user.id
           : bookingRecord.bookingType === 'private_group' && bookingRecord.privateGroupDetails
-          ? bookingRecord.privateGroupDetails.organizerId === session.user.id
-          : false)) ||
+            ? bookingRecord.privateGroupDetails.organizerId === session.user.id
+            : false)) ||
       (validated.initiatedBy === 'coach' && bookingRecord.coachId === session.user.id);
 
     if (!isAuthorized) {
@@ -763,15 +763,15 @@ export async function initiateDispute(bookingId: string, reason: string, initiat
       bookingRecord.bookingType === 'individual' && bookingRecord.individualDetails?.client
         ? bookingRecord.individualDetails.client
         : bookingRecord.bookingType === 'private_group' && bookingRecord.privateGroupDetails?.organizer
-        ? bookingRecord.privateGroupDetails.organizer
-        : null;
+          ? bookingRecord.privateGroupDetails.organizer
+          : null;
 
     const amountCents =
       bookingRecord.bookingType === 'individual' && bookingRecord.individualDetails
         ? bookingRecord.individualDetails.clientPaysCents
         : bookingRecord.bookingType === 'private_group' && bookingRecord.privateGroupDetails
-        ? bookingRecord.privateGroupDetails.totalGrossCents
-        : null;
+          ? bookingRecord.privateGroupDetails.totalGrossCents
+          : null;
 
     const initiatorName =
       validated.initiatedBy === 'client'
@@ -793,7 +793,7 @@ export async function initiateDispute(bookingId: string, reason: string, initiat
           ${amountCents ? `<li>Amount: $${(amountCents / 100).toFixed(2)}</li>` : ''}
         </ul>
         <p><strong>Reason:</strong> ${validated.reason}</p>
-        <p><a href="${process.env.NEXT_PUBLIC_URL}/admin/disputes">View in Admin Panel</a></p>
+        <p><a href="${process.env.NEXT_PUBLIC_APP_URL}/admin/disputes">View in Admin Panel</a></p>
       `,
       text: `New dispute initiated by ${validated.initiatedBy} for booking between ${bookingRecord.coach.name} and ${clientInfo?.name || 'Unknown'}. Reason: ${validated.reason}`,
     });
@@ -812,7 +812,7 @@ export async function initiateDispute(bookingId: string, reason: string, initiat
           <p>A dispute has been initiated for your booking on ${formatDateOnly(new Date(bookingRecord.scheduledStartAt), otherParty.timezone || 'America/Chicago')}.</p>
           <p><strong>Reason:</strong> ${validated.reason}</p>
           <p>Our support team will review this case and contact you if additional information is needed.</p>
-          <p><a href="${process.env.NEXT_PUBLIC_URL}/dashboard/bookings">View Booking</a></p>
+          <p><a href="${process.env.NEXT_PUBLIC_APP_URL}/dashboard/bookings">View Booking</a></p>
         `,
         text: `A dispute has been initiated for your booking on ${formatDateOnly(new Date(bookingRecord.scheduledStartAt), otherParty.timezone || 'America/Chicago')}. Our support team will review this case.`,
       });

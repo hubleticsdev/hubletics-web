@@ -180,7 +180,7 @@ export async function completePublicLesson(bookingId: string) {
             <p>Your group lesson on <strong>${lessonDate}</strong> with ${lesson.coach.name} has been marked as complete.</p>
             <p>Thank you for using Hubletics!</p>
             <p style="margin: 30px 0; text-align: center;">
-              <a href="${process.env.NEXT_PUBLIC_URL}/coaches/${lesson.coachId}"
+              <a href="${process.env.NEXT_PUBLIC_APP_URL}/coaches/${lesson.coachId}"
                  style="background: linear-gradient(to right, #FF6B4A, #FF8C5A); color: white; padding: 12px 32px; text-decoration: none; border-radius: 6px; font-weight: 600; display: inline-block;">
                 Book Again
               </a>

@@ -644,7 +644,7 @@ export async function POST(request: NextRequest) {
                 <tr><td style="padding: 8px; border: 1px solid #ddd;"><strong>Payment Intent:</strong></td><td style="padding: 8px; border: 1px solid #ddd;">${dispute.payment_intent}</td></tr>
               </table>
               <p style="margin-top: 16px;"><a href="https://dashboard.stripe.com/disputes/${dispute.id}" style="background: #4f46e5; color: white; padding: 10px 20px; text-decoration: none; border-radius: 6px;">View in Stripe Dashboard</a></p>
-              <p style="margin-top: 16px;"><a href="${process.env.NEXT_PUBLIC_URL}/admin/disputes">View in Admin Panel</a></p>
+              <p style="margin-top: 16px;"><a href="${process.env.NEXT_PUBLIC_APP_URL}/admin/disputes">View in Admin Panel</a></p>
             `,
             text: `URGENT: Stripe Chargeback - $${(dispute.amount / 100).toFixed(2)}. Reason: ${dispute.reason}. View at https://dashboard.stripe.com/disputes/${dispute.id}`,
           });

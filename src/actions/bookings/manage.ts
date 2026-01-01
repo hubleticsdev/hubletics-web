@@ -736,7 +736,7 @@ export async function markBookingComplete(bookingId: string) {
             <p>${bookingRecord.coach.name} has marked your lesson on <strong>${formatDateOnly(startDate, emailRecipient.timezone)}</strong> as complete.</p>
             <p>Please confirm that the lesson was completed successfully:</p>
             <p style="margin: 30px 0; text-align: center;">
-              <a href="${process.env.NEXT_PUBLIC_URL}/dashboard/bookings"
+              <a href="${process.env.NEXT_PUBLIC_APP_URL}/dashboard/bookings"
                  style="background: linear-gradient(to right, #FF6B4A, #FF8C5A); color: white; padding: 12px 32px; text-decoration: none; border-radius: 6px; font-weight: 600; display: inline-block;">
                 Confirm Completion
               </a>
@@ -746,7 +746,7 @@ export async function markBookingComplete(bookingId: string) {
             </p>
           </div>
         `,
-        text: `Hi ${emailRecipient.name}, ${bookingRecord.coach.name} has marked your lesson on ${formatDateOnly(startDate, emailRecipient.timezone)} as complete. Please log in to confirm at ${process.env.NEXT_PUBLIC_URL}/dashboard/bookings or contact support if there was an issue.`,
+        text: `Hi ${emailRecipient.name}, ${bookingRecord.coach.name} has marked your lesson on ${formatDateOnly(startDate, emailRecipient.timezone)} as complete. Please log in to confirm at ${process.env.NEXT_PUBLIC_APP_URL}/dashboard/bookings or contact support if there was an issue.`,
       });
 
       console.log(`Completion confirmation email sent to: ${emailRecipient.email}`);
