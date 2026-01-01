@@ -97,7 +97,7 @@ export function UserButton({ user }: UserButtonProps) {
         </DropdownMenuItem>
 
         <DropdownMenuItem
-          onClick={() => router.push('/dashboard/bookings')}
+          onClick={() => router.push(isAdmin ? '/admin/bookings' : '/dashboard/bookings')}
           className="group py-2 font-medium cursor-pointer"
         >
           <CalendarClock

@@ -122,7 +122,7 @@ export function PublicGroupLessonCard({
             {/* Actions */}
             <div className="flex flex-wrap gap-2 pt-4 border-t border-gray-200">
                 {booking.status !== 'cancelled' && (
-                    <Link href={`/dashboard/group-chat/${booking.id}`} className="flex-1">
+                    <Link href={`/dashboard/messages/group/${booking.id}`} className="flex-1">
                         <Button
                             type="button"
                             variant="outline"

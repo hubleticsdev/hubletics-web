@@ -702,7 +702,7 @@ export function BookingsList({ bookings, userRole, userId }: BookingsListProps) 
                       {booking.isGroupBooking && (
                         <>
                           {booking.status !== 'cancelled' && (
-                            <Link href={`/dashboard/group-chat/${booking.id}`}>
+                            <Link href={`/dashboard/messages/group/${booking.id}`}>
                               <Button
                                 type="button"
                                 variant="outline"

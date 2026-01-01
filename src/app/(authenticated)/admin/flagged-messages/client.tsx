@@ -48,11 +48,11 @@ export function FlaggedMessagesClient({ initialMessages }: FlaggedMessagesClient
         prev.map(msg =>
           msg.id === selectedMessage.id
             ? {
-                ...msg,
-                action,
-                reviewedAt: new Date(),
-                adminNotes: adminNotes.trim() || null
-              }
+              ...msg,
+              action,
+              reviewedAt: new Date(),
+              adminNotes: adminNotes.trim() || null
+            }
             : msg
         )
       );
@@ -130,64 +130,53 @@ export function FlaggedMessagesClient({ initialMessages }: FlaggedMessagesClient
       {/* Pending Messages */}
       {pendingMessages.length > 0 && (
         <div>
-          <h2 className="text-xl font-semibold text-gray-900 mb-4">Pending Review</h2>
-          <div className="space-y-4">
+          <h2 className="text-xl font-semibold text-gray-900 mb-4 flex items-center gap-2">
+            <span className="inline-flex items-center justify-center w-6 h-6 bg-red-100 text-red-700 rounded-full text-sm font-bold">
+              {pendingMessages.length}
+            </span>
+            Pending Review
+          </h2>
+          <div className="grid gap-4">
             {pendingMessages.map((msg) => (
-              <div key={msg.id} className="bg-white border border-gray-200 rounded-lg border-l-4 border-l-red-500">
-                <div className="p-6">
-                  <div className="flex items-start justify-between">
-                    <div className="flex items-start space-x-3">
-                      <Flag className="h-5 w-5 text-red-500 mt-0.5" />
-                      <div>
-                        <h3 className="text-lg font-semibold text-gray-900">
-                          {msg.messageType === 'group' ? 'Group ' : ''}Message from {(msg.messageType === 'regular' ? msg.message?.sender?.name : msg.groupMessage?.sender?.name) || 'Unknown User'}
-                        </h3>
-                        <p className="text-sm text-gray-600 mt-1">
-                          Reported {new Date(msg.createdAt).toLocaleDateString()}
-                        </p>
+              <div key={msg.id} className="bg-white border border-gray-200 rounded-xl shadow-sm hover:shadow-md transition-shadow overflow-hidden">
+                <div className="border-l-4 border-l-red-500">
+                  <div className="p-5">
+                    <div className="flex items-start justify-between gap-4">
+                      <div className="flex items-start gap-3 min-w-0">
+                        <div className="w-10 h-10 rounded-full bg-red-100 flex items-center justify-center flex-shrink-0">
+                          <Flag className="h-5 w-5 text-red-600" />
+                        </div>
+                        <div className="min-w-0">
+                          <h3 className="font-semibold text-gray-900 truncate">
+                            {msg.messageType === 'group' ? 'Group ' : ''}Message from {(msg.messageType === 'regular' ? msg.message?.sender?.name : msg.groupMessage?.sender?.name) || 'Unknown User'}
+                          </h3>
+                          <p className="text-xs text-gray-500 mt-0.5">
+                            {new Date(msg.createdAt).toLocaleDateString()} • {msg.messageType === 'group'
+                              ? `Group with ${msg.groupConversation?.booking?.coach?.name || 'Coach'}`
+                              : `${msg.conversation?.client?.name} ↔ ${msg.conversation?.coach?.name}`
+                            }
+                          </p>
+                        </div>
                       </div>
-                    </div>
-                    <Button
-                      onClick={() => openReviewDialog(msg)}
-                      className="bg-red-600 hover:bg-red-700"
-                    >
-                      Review
-                    </Button>
-                  </div>
-                </div>
-                <div className="px-6 pb-6">
-                  <div className="space-y-4">
-                    <div>
-                      <Label className="text-sm font-medium">Flagged Content:</Label>
-                      <div className="mt-1 p-3 bg-red-50 rounded-md border">
-                        <p className="text-sm text-gray-900">{msg.content}</p>
-                      </div>
+                      <Button
+                        onClick={() => openReviewDialog(msg)}
+                        size="sm"
+                        className="bg-gradient-to-r from-red-500 to-red-600 hover:from-red-600 hover:to-red-700 flex-shrink-0"
+                      >
+                        Review
+                      </Button>
                     </div>
 
-                    <div>
-                      <Label className="text-sm font-medium">Violations:</Label>
-                      <div className="mt-1 flex flex-wrap gap-2">
-                        {msg.violations.map((violation, index) => (
-                          <span key={index} className={`px-2 py-1 rounded-full text-xs font-medium ${getSeverityColor([violation])}`}>
-                            {violation}
-                          </span>
-                        ))}
-                      </div>
+                    <div className="mt-4 bg-red-50 rounded-lg p-3 border border-red-100">
+                      <p className="text-sm text-gray-900 line-clamp-2">{msg.content}</p>
                     </div>
 
-                    {msg.adminNotes && (
-                      <div>
-                        <Label className="text-sm font-medium">User Report:</Label>
-                        <p className="mt-1 text-sm text-gray-600">{msg.adminNotes}</p>
-                      </div>
-                    )}
-
-                    <div className="flex items-center text-sm text-gray-500">
-                      <User className="h-4 w-4 mr-1" />
-                      {msg.messageType === 'group'
-                        ? `Group with ${msg.groupConversation?.booking?.coach?.name || 'Coach'}`
-                        : `${msg.conversation?.client?.name} ↔ ${msg.conversation?.coach?.name}`
-                      }
+                    <div className="mt-3 flex flex-wrap gap-2">
+                      {msg.violations.map((violation, index) => (
+                        <span key={index} className={`px-2.5 py-1 rounded-full text-xs font-semibold ${getSeverityColor([violation])}`}>
+                          {violation}
+                        </span>
+                      ))}
                     </div>
                   </div>
                 </div>
@@ -247,9 +236,9 @@ export function FlaggedMessagesClient({ initialMessages }: FlaggedMessagesClient
 
       {messages.length === 0 && (
         <div className="bg-white border border-gray-200 rounded-lg p-8 text-center">
-            <Flag className="h-12 w-12 text-gray-400 mx-auto mb-4" />
-            <h3 className="text-lg font-medium text-gray-900 mb-2">No flagged messages</h3>
-            <p className="text-gray-600">All messages are clean and safe.</p>
+          <Flag className="h-12 w-12 text-gray-400 mx-auto mb-4" />
+          <h3 className="text-lg font-medium text-gray-900 mb-2">No flagged messages</h3>
+          <p className="text-gray-600">All messages are clean and safe.</p>
         </div>
       )}
 

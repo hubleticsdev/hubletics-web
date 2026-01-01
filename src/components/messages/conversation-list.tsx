@@ -125,7 +125,7 @@ export function ConversationList({ initialConversations, currentUserId }: Conver
       {conversations.map((conv) => {
         const isGroup = conv.type === 'group';
         const href = isGroup
-          ? `/dashboard/group-chat/${conv.bookingId}`
+          ? `/dashboard/messages/group/${conv.bookingId}`
           : `/dashboard/messages/${conv.id}`;
 
         const isActive = pathname === href;
