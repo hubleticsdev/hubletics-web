@@ -1,5 +1,5 @@
 import { requireRole } from '@/lib/auth/session';
-import { getCoachEarningsSummary, getCoachBookingEarnings } from '@/actions/coach/earnings';
+import { getCoachEarningsSummary, getCoachBookingEarnings, getCoachPayoutHistory } from '@/actions/coach/earnings';
 import { StripeDashboardButton } from '@/components/coach/StripeDashboardButton';
 import Link from 'next/link';
 import { formatUiBookingStatus, UiBookingStatus } from '@/lib/booking-status';
@@ -9,8 +9,11 @@ export const dynamic = 'force-dynamic';
 export default async function CoachEarningsPage() {
   await requireRole('coach');
 
-  const summary = await getCoachEarningsSummary();
-  const bookings = await getCoachBookingEarnings();
+  const [summary, bookings, payouts] = await Promise.all([
+    getCoachEarningsSummary(),
+    getCoachBookingEarnings(),
+    getCoachPayoutHistory(),
+  ]);
 
   const statusBadgeClass = (status: UiBookingStatus) => {
     switch (status) {
@@ -176,6 +179,66 @@ export default async function CoachEarningsPage() {
             <div className="sm:shrink-0">
               <StripeDashboardButton />
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* Payout History Section */}
+      {payouts.length > 0 && (
+        <div className="mb-8 bg-white rounded-lg shadow overflow-hidden">
+          <div className="px-6 py-4 border-b border-gray-200">
+            <h2 className="text-xl font-semibold text-gray-900">Bank Payouts</h2>
+            <p className="text-sm text-gray-600 mt-1">Deposits to your bank account</p>
+          </div>
+          <div className="divide-y divide-gray-200">
+            {payouts.map((payout) => (
+              <div key={payout.id} className="px-6 py-4 flex items-center justify-between">
+                <div className="flex items-center gap-4">
+                  <div className={`w-10 h-10 rounded-full flex items-center justify-center ${payout.status === 'paid' ? 'bg-green-100' :
+                    payout.status === 'failed' ? 'bg-red-100' :
+                      'bg-orange-100'
+                    }`}>
+                    {payout.status === 'paid' ? (
+                      <svg className="w-5 h-5 text-green-600" fill="currentColor" viewBox="0 0 20 20">
+                        <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+                      </svg>
+                    ) : payout.status === 'failed' ? (
+                      <svg className="w-5 h-5 text-red-600" fill="currentColor" viewBox="0 0 20 20">
+                        <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
+                      </svg>
+                    ) : (
+                      <svg className="w-5 h-5 text-orange-600" fill="currentColor" viewBox="0 0 20 20">
+                        <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm1-12a1 1 0 10-2 0v4a1 1 0 00.293.707l2.828 2.829a1 1 0 101.415-1.415L11 9.586V6z" clipRule="evenodd" />
+                      </svg>
+                    )}
+                  </div>
+                  <div>
+                    <p className="font-semibold text-gray-900">
+                      ${(payout.amountCents / 100).toFixed(2)} {payout.currency.toUpperCase()}
+                    </p>
+                    <p className="text-sm text-gray-500">
+                      {payout.status === 'paid' && payout.arrivalDate
+                        ? `Deposited ${new Date(payout.arrivalDate).toLocaleDateString()}`
+                        : payout.status === 'in_transit' && payout.arrivalDate
+                          ? `Arriving ${new Date(payout.arrivalDate).toLocaleDateString()}`
+                          : payout.status === 'failed'
+                            ? payout.failedReason || 'Failed'
+                            : 'Processing'}
+                    </p>
+                  </div>
+                </div>
+                <span className={`px-2 py-1 text-xs font-semibold rounded-full ${payout.status === 'paid' ? 'bg-green-100 text-green-800' :
+                  payout.status === 'failed' ? 'bg-red-100 text-red-800' :
+                    payout.status === 'in_transit' ? 'bg-blue-100 text-blue-800' :
+                      'bg-gray-100 text-gray-800'
+                  }`}>
+                  {payout.status === 'paid' ? 'Deposited' :
+                    payout.status === 'in_transit' ? 'In Transit' :
+                      payout.status === 'failed' ? 'Failed' :
+                        payout.status.charAt(0).toUpperCase() + payout.status.slice(1)}
+                </span>
+              </div>
+            ))}
           </div>
         </div>
       )}

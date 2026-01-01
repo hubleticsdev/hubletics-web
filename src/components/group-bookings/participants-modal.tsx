@@ -27,7 +27,7 @@ export function ParticipantsModal({ bookingId, isOpen, onClose }: ParticipantsMo
     email: string;
     image: string | null;
     username: string | null;
-    paymentStatus: 'requires_payment_method' | 'authorized' | 'captured' | 'refunded' | 'cancelled';
+    paymentStatus: 'requires_payment_method' | 'authorized' | 'captured' | 'refunded' | 'cancelled' | 'disputed';
     status: 'requested' | 'awaiting_payment' | 'awaiting_coach' | 'accepted' | 'declined' | 'cancelled' | 'completed';
     amountCents: number | null;
     joinedAt: Date;

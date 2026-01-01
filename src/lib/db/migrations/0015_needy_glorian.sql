@@ -1,0 +1,1 @@
+ALTER TYPE "public"."participant_payment_status" ADD VALUE 'disputed';

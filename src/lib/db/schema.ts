@@ -69,6 +69,7 @@ export const participantPaymentStatusEnum = pgEnum('participant_payment_status',
   'captured',
   'refunded',
   'cancelled',
+  'disputed',
 ]);
 export const refundReasonEnum = pgEnum('refund_reason', [
   'coach_no_show',
@@ -717,6 +718,40 @@ export const refundRequest = pgTable('refund_request', {
 
   createdAt: timestamp('createdAt').notNull().defaultNow(),
 });
+
+export const payoutStatusEnum = pgEnum('payout_status', [
+  'pending',
+  'in_transit',
+  'paid',
+  'failed',
+  'canceled',
+]);
+
+export const coachPayout = pgTable(
+  'coach_payout',
+  {
+    id: text('id')
+      .primaryKey()
+      .$defaultFn(() => crypto.randomUUID()),
+    coachId: text('coachId')
+      .notNull()
+      .references(() => user.id),
+    stripePayoutId: varchar('stripePayoutId', { length: 255 }).notNull().unique(),
+    stripeAccountId: varchar('stripeAccountId', { length: 255 }).notNull(),
+    amountCents: integer('amountCents').notNull(),
+    currency: varchar('currency', { length: 3 }).notNull().default('usd'),
+    status: payoutStatusEnum('status').notNull().default('pending'),
+    arrivalDate: timestamp('arrivalDate'),
+    failedReason: text('failedReason'),
+    createdAt: timestamp('createdAt').notNull().defaultNow(),
+    updatedAt: timestamp('updatedAt').notNull().defaultNow(),
+  },
+  (table) => [
+    index('coach_payout_coach_idx').on(table.coachId),
+    index('coach_payout_account_idx').on(table.stripeAccountId),
+    uniqueIndex('coach_payout_stripe_idx').on(table.stripePayoutId),
+  ]
+);
 
 export const adminAction = pgTable('admin_action', {
   id: text('id')

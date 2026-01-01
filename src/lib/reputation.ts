@@ -78,9 +78,13 @@ export function isValidRating(rating: number): boolean {
   return Number.isInteger(rating) && rating >= 1 && rating <= 5;
 }
 
+export function isValidAverageRating(rating: number): boolean {
+  return Number.isFinite(rating) && rating >= 1 && rating <= 5;
+}
+
 export function formatReputationScoreForStorage(rating: number): string {
-  if (!isValidRating(rating)) {
-    throw new Error('Invalid rating: must be integer 1-5');
+  if (!isValidAverageRating(rating)) {
+    throw new Error('Invalid rating: must be between 1 and 5');
   }
   return rating.toFixed(2);
 }

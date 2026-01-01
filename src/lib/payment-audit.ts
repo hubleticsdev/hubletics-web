@@ -10,7 +10,8 @@ export type PaymentEventStatus =
   | 'captured'
   | 'cancelled'
   | 'refunded'
-  | 'failed';
+  | 'failed'
+  | 'disputed';
 
 interface RecordPaymentEventParams {
   bookingId: string;

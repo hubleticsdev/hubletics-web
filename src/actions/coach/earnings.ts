@@ -2,13 +2,12 @@
 
 import { requireRole } from '@/lib/auth/session';
 import { db } from '@/lib/db';
-import { booking, coachProfile, bookingParticipant, user } from '@/lib/db/schema';
+import { booking, coachProfile, bookingParticipant, coachPayout } from '@/lib/db/schema';
 import { eq, and, inArray } from 'drizzle-orm';
 import { stripe } from '@/lib/stripe';
 import { deriveUiBookingStatusFromBooking } from '@/lib/booking-status';
 import type { BookingWithDetails } from '@/lib/booking-type-guards';
 import { isIndividualBooking, isPrivateGroupBooking, isPublicGroupBooking } from '@/lib/booking-type-guards';
-import { calculateCoachEarnings } from '@/lib/pricing';
 
 export type EarningsSummary = {
   totalEarnings: number;
@@ -55,17 +54,6 @@ export async function getCoachEarningsSummary(): Promise<EarningsSummary> {
     },
   });
 
-  // Get platform fee percentage for public group calculations
-  const coachUser = await db.query.user.findFirst({
-    where: eq(user.id, coachId),
-    columns: {
-      platformFeePercentage: true,
-    },
-  });
-  const platformFeePercentage = coachUser?.platformFeePercentage
-    ? parseFloat(coachUser.platformFeePercentage as unknown as string)
-    : 15;
-
   const publicGroupBookingIds = completedBookings
     .filter(b => b.bookingType === 'public_group')
     .map(b => b.id);
@@ -73,11 +61,11 @@ export async function getCoachEarningsSummary(): Promise<EarningsSummary> {
   // Batch-load all captured participants
   const allCapturedParticipants = publicGroupBookingIds.length > 0
     ? await db.query.bookingParticipant.findMany({
-        where: and(
-          inArray(bookingParticipant.bookingId, publicGroupBookingIds),
-          eq(bookingParticipant.paymentStatus, 'captured')
-        ),
-      })
+      where: and(
+        inArray(bookingParticipant.bookingId, publicGroupBookingIds),
+        eq(bookingParticipant.paymentStatus, 'captured')
+      ),
+    })
     : [];
 
   const participantsByBookingId = allCapturedParticipants.reduce((acc, p) => {
@@ -105,16 +93,8 @@ export async function getCoachEarningsSummary(): Promise<EarningsSummary> {
       stripeTransferId = b.privateGroupDetails.stripeTransferId ?? null;
     } else if (isPublicGroupBooking(b)) {
       const capturedParticipants = participantsByBookingId[b.id] || [];
-
-      for (const participant of capturedParticipants) {
-        if (participant.amountCents) {
-          const earnings = calculateCoachEarnings(
-            participant.amountCents / 100,
-            platformFeePercentage
-          );
-          coachPayoutCents += earnings.coachPayoutCents;
-        }
-      }
+      const coachRatePerPerson = parseFloat(b.publicGroupDetails.pricePerPerson);
+      coachPayoutCents = Math.round(coachRatePerPerson * 100 * capturedParticipants.length);
 
       stripeTransferId = b.publicGroupDetails.stripeTransferId ?? null;
     }
@@ -178,28 +158,17 @@ export async function getCoachBookingEarnings(): Promise<BookingEarning[]> {
     limit: 50,
   });
 
-  // Get platform fee for public group calculations
-  const coachUserForList = await db.query.user.findFirst({
-    where: eq(user.id, coachId),
-    columns: {
-      platformFeePercentage: true,
-    },
-  });
-  const platformFeePercentageForList = coachUserForList?.platformFeePercentage
-    ? parseFloat(coachUserForList.platformFeePercentage as unknown as string)
-    : 15;
-
   const publicGroupIds = bookings
     .filter(b => b.bookingType === 'public_group')
     .map(b => b.id);
 
   const publicGroupParticipants = publicGroupIds.length > 0
     ? await db.query.bookingParticipant.findMany({
-        where: and(
-          inArray(bookingParticipant.bookingId, publicGroupIds),
-          eq(bookingParticipant.paymentStatus, 'captured')
-        ),
-      })
+      where: and(
+        inArray(bookingParticipant.bookingId, publicGroupIds),
+        eq(bookingParticipant.paymentStatus, 'captured')
+      ),
+    })
     : [];
 
   // Group participants by booking ID
@@ -229,20 +198,12 @@ export async function getCoachBookingEarnings(): Promise<BookingEarning[]> {
       coachPayoutCents = details.coachPayoutCents;
       stripeTransferId = details.stripeTransferId ?? null;
     } else if (bookingRecord.bookingType === 'public_group' && bookingRecord.publicGroupDetails) {
-      clientName = `Group Lesson (${bookingRecord.publicGroupDetails.capturedParticipants} participants)`;
-      stripeTransferId = bookingRecord.publicGroupDetails.stripeTransferId ?? null;
-      
-      // Calculate payout from captured participants
       const participants = participantsByBooking[bookingRecord.id] || [];
-      for (const participant of participants) {
-        if (participant.amountCents) {
-          const earnings = calculateCoachEarnings(
-            participant.amountCents / 100,
-            platformFeePercentageForList
-          );
-          coachPayoutCents += earnings.coachPayoutCents;
-        }
-      }
+      clientName = `Group Lesson (${participants.length} participants)`;
+      stripeTransferId = bookingRecord.publicGroupDetails.stripeTransferId ?? null;
+
+      const coachRatePerPerson = parseFloat(bookingRecord.publicGroupDetails.pricePerPerson);
+      coachPayoutCents = Math.round(coachRatePerPerson * 100 * participants.length);
     }
 
     return {
@@ -261,7 +222,7 @@ export async function getStripeLoginLink(): Promise<{ url: string } | { error: s
   try {
     const session = await requireRole('coach');
     const coachId = session.user.id;
-  
+
     const profile = await db.query.coachProfile.findFirst({
       where: eq(coachProfile.userId, coachId),
       columns: {
@@ -285,4 +246,44 @@ export async function getStripeLoginLink(): Promise<{ url: string } | { error: s
     console.error('Error creating Stripe login link:', error);
     return { error: 'Failed to create Stripe dashboard link' };
   }
+}
+
+export type PayoutRecord = {
+  id: string;
+  amountCents: number;
+  currency: string;
+  status: 'pending' | 'in_transit' | 'paid' | 'failed' | 'canceled';
+  arrivalDate: Date | null;
+  failedReason: string | null;
+  createdAt: Date;
+};
+
+export async function getCoachPayoutHistory(limit: number = 10): Promise<PayoutRecord[]> {
+  const session = await requireRole('coach');
+  const coachId = session.user.id;
+
+  const payouts = await db.query.coachPayout.findMany({
+    where: eq(coachPayout.coachId, coachId),
+    orderBy: (payouts, { desc }) => [desc(payouts.createdAt)],
+    limit,
+    columns: {
+      id: true,
+      amountCents: true,
+      currency: true,
+      status: true,
+      arrivalDate: true,
+      failedReason: true,
+      createdAt: true,
+    },
+  });
+
+  return payouts.map(p => ({
+    id: p.id,
+    amountCents: p.amountCents,
+    currency: p.currency,
+    status: p.status,
+    arrivalDate: p.arrivalDate,
+    failedReason: p.failedReason,
+    createdAt: p.createdAt,
+  }));
 }
